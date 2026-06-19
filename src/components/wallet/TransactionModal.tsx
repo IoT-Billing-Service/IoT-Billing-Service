@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useWallet } from '@/components/providers/WalletProvider';
-import { formatCurrency } from '@/utils/currencyFormatter';
 import { ErrorDecoder } from '@/utils/errorDecoder';
 import { useTxRetryQueue } from '@/hooks/useTxRetryQueue';
 import { TxStatusList } from './TxStatusPill';
+import { GasEstimator } from './GasEstimator';
+import { useGasEstimate } from '@/hooks/useGasEstimate';
 
 function ErrorBanner({ decoded, raw }: { decoded: string; raw: string }) {
   const [expanded, setExpanded] = useState(false);
@@ -47,41 +48,36 @@ export function TransactionModal({
 }: TransactionModalProps) {
   const { metrics } = useWallet();
   const [amount, setAmount] = useState('');
-  const [gasEstimate, setGasEstimate] = useState<string | null>(null);
-  const [estimating, setEstimating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [txError, setTxError] = useState<{ decoded: string; raw: string } | null>(null);
+
+  const {
+    feeBreakdown,
+    estimating,
+    simulationError,
+    estimate: estimateGas,
+    reset: resetGasEstimate,
+  } = useGasEstimate();
 
   // Initialize retry queue with persistence
   const { pendingTransactions, enqueue, clearCompleted } = useTxRetryQueue(10, 'escrow-queue');
 
   const isDeposit = type === 'escrow_deposit';
 
-  const estimateGas = async () => {
+  const handleEstimateGas = async () => {
     if (!amount || !metrics?.publicKey) return;
-    setEstimating(true);
-    try {
-      const response = await fetch('/api/escrow/estimate-gas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contractId,
-          amount,
-          asset,
-          publicKey: metrics.publicKey,
-          operation: type,
-        }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setGasEstimate(data.estimatedFee as string);
-      }
-    } catch {
-      setGasEstimate('Unknown');
-    } finally {
-      setEstimating(false);
-    }
+    await estimateGas({
+      contractId,
+      amount,
+      asset,
+      publicKey: metrics.publicKey,
+      operation: type,
+    });
   };
+
+  useEffect(() => {
+    resetGasEstimate();
+  }, [amount, resetGasEstimate]);
 
   const handleSubmit = async () => {
     if (!amount || !metrics?.publicKey) return;
@@ -152,19 +148,18 @@ export function TransactionModal({
           </div>
 
           <button
-            onClick={estimateGas}
+            onClick={handleEstimateGas}
             disabled={!amount || estimating}
             className="w-full rounded bg-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-600 disabled:opacity-50"
           >
             {estimating ? 'Estimating...' : 'Estimate Gas Fee'}
           </button>
 
-          {gasEstimate && (
-            <div className="rounded bg-gray-800 p-2 text-xs text-gray-400">
-              Estimated fee:{' '}
-              <span className="font-mono text-green-400">{formatCurrency(gasEstimate)} XLM</span>
-            </div>
-          )}
+          <GasEstimator
+            feeBreakdown={feeBreakdown}
+            estimating={estimating}
+            error={simulationError}
+          />
         </div>
 
         {txError && <ErrorBanner decoded={txError.decoded} raw={txError.raw} />}
@@ -188,7 +183,7 @@ export function TransactionModal({
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!amount || submitting}
+            disabled={!amount || submitting || (simulationError !== null && feeBreakdown === null)}
             className="flex-1 rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50"
           >
             {submitting ? 'Submitting...' : isDeposit ? 'Deposit' : 'Withdraw'}

@@ -170,6 +170,49 @@ const RPC_ERROR_MAP: Record<string, string> = {
   ),
 };
 
+const SIMULATION_ERROR_PATTERNS: [RegExp, string][] = [
+  [
+    /hostError.*budget exceeded/i,
+    t('simulation.budget', 'Contract budget exceeded during simulation. Reduce the operation scope.'),
+  ],
+  [
+    /hostError.*cpu limit/i,
+    t('simulation.cpu', 'CPU instruction limit reached during simulation. Try a simpler transaction.'),
+  ],
+  [
+    /hostError.*linear memory/i,
+    t('simulation.memory', 'Linear memory limit exceeded during simulation. Try a smaller payload.'),
+  ],
+  [
+    /contract.*not found/i,
+    t('simulation.contract_not_found', 'Contract not found on network. Verify the contract ID and network.'),
+  ],
+  [
+    /insufficient.*resource/i,
+    t('simulation.insufficient_resource', 'Insufficient resources allocated for simulation. Increase the fee budget.'),
+  ],
+  [
+    /sequence.*mismatch/i,
+    t('simulation.seq_mismatch', 'Sequence number mismatch. Refresh and try again.'),
+  ],
+  [
+    /footprint.*overlap/i,
+    t('simulation.footprint_overlap', 'Ledger entry footprint overlaps with an existing transaction. Wait and retry.'),
+  ],
+  [
+    /expired.*entry/i,
+    t('simulation.expired_entry', 'Simulation referenced an expired ledger entry. The contract state may need restoration.'),
+  ],
+  [
+    /restore.*required/i,
+    t('simulation.restore_required', 'Ledger entry restoration is required before this transaction can be simulated.'),
+  ],
+  [
+    /classic.*fee.*exceed/i,
+    t('simulation.classic_fee_exceeded', 'The classic (inclusion) fee exceeds the configured maximum. Increase the fee cap.'),
+  ],
+];
+
 export class ErrorDecoder {
   private contractRegistries: Map<string, Record<number, string>>;
 
@@ -216,6 +259,12 @@ export class ErrorDecoder {
       const contractId = typeof obj.contractId === 'string' ? obj.contractId : undefined;
       const hostMatch = this.tryDecodeSorobanHost(code, contractId);
       if (hostMatch) return hostMatch;
+    }
+
+    const errorStr = obj.error;
+    if (typeof errorStr === 'string') {
+      const simMatch = this.tryDecodeSimulationError(errorStr);
+      if (simMatch) return simMatch;
     }
 
     const msg = obj.message;
@@ -289,7 +338,19 @@ export class ErrorDecoder {
       if (hostMatch) return hostMatch;
     }
 
+    const simMatch = this.tryDecodeSimulationError(raw);
+    if (simMatch) return simMatch;
+
     return this.tryDecodeGeneric(raw);
+  }
+
+  private tryDecodeSimulationError(raw: string): string | null {
+    for (const [pattern, message] of SIMULATION_ERROR_PATTERNS) {
+      if (pattern.test(raw)) {
+        return message;
+      }
+    }
+    return null;
   }
 
   private tryDecodeGeneric(raw: string): string {

@@ -48,6 +48,22 @@ async function withdrawEscrow(params: {
   return response.json();
 }
 
+async function simulateContract(params: {
+  contractId: string;
+  amount: string;
+  asset: string;
+  publicKey: string;
+  operation: 'escrow_deposit' | 'escrow_withdrawal';
+}) {
+  const response = await fetch('/api/escrow/simulate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!response.ok) throw new Error('Simulation failed');
+  return response.json();
+}
+
 export function useEscrowContract(contractId: string) {
   const queryClient = useQueryClient();
 
@@ -119,5 +135,5 @@ export function useEscrowContract(contractId: string) {
     },
   });
 
-  return { depositMutation, withdrawMutation };
+  return { depositMutation, withdrawMutation, simulateContract };
 }
