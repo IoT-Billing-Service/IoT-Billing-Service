@@ -16,6 +16,7 @@ import {
   getNetwork as freighterGetNetwork,
 } from '@stellar/freighter-api';
 import type { WalletMetrics, AssetBalance } from '@/types';
+import { cacheDelete } from '@/services/indexedDbCache';
 
 interface WalletContextValue {
   metrics: WalletMetrics | null;
@@ -24,6 +25,7 @@ interface WalletContextValue {
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   refreshBalances: (publicKey: string) => Promise<void>;
+  onWalletDisconnected?: () => void;
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
@@ -52,21 +54,60 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const generationRef = useRef(0);
   const publicKeyRef = useRef<string | null>(null);
+  const disconnectCallbackRef = useRef<(() => void) | null>(null);
 
+  // Instant wallet disconnection detection using WatchWalletChanges
   useEffect(() => {
-    const watcher = new WatchWalletChanges(2000);
-    watcher.watch((params) => {
-      if (params.address && params.address !== publicKeyRef.current) {
+    const watcher = new WatchWalletChanges(1000); // Poll every 1 second for instant detection
+
+    watcher.watch((event) => {
+      // Handle wallet lock, disconnection, or account change
+      // If no address or different address, wallet was disconnected/changed
+      if (!event.address || event.address !== publicKeyRef.current) {
+        const previousKey = publicKeyRef.current;
+
         generationRef.current += 1;
         abortControllerRef.current?.abort();
         abortControllerRef.current = null;
-        publicKeyRef.current = params.address;
+        publicKeyRef.current = null;
+        setMetrics(null);
+        setError(null);
+        setIsConnecting(false);
+
+        // Immediately clear all cached data
+        queryClient.clear();
+
+        // Logout from backend if we had a session
+        if (previousKey) {
+          void (async () => {
+            try {
+              await fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ publicKey: previousKey }),
+              });
+              await cacheDelete('authSession', previousKey);
+            } catch {
+              // best-effort cleanup
+            }
+          })();
+
+          // Trigger callback for session monitor
+          disconnectCallbackRef.current?.();
+        }
+      } else if (event.address && event.address !== publicKeyRef.current) {
+        // Account changed to a different address
+        generationRef.current += 1;
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
+        publicKeyRef.current = event.address;
         setMetrics(null);
         setError(null);
         setIsConnecting(false);
         queryClient.clear();
       }
     });
+
     return () => {
       watcher.stop();
     };
@@ -118,6 +159,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const disconnect = useCallback(async () => {
+    const previousKey = publicKeyRef.current;
+
     generationRef.current += 1;
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
@@ -125,10 +168,39 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setMetrics(null);
     setError(null);
     queryClient.clear();
+
+    // Logout from backend
+    if (previousKey) {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ publicKey: previousKey }),
+        });
+        await cacheDelete('authSession', previousKey);
+      } catch {
+        // best-effort cleanup
+      }
+    }
   }, [queryClient]);
 
+  // Cleanup on unmount and tab close
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      const pk = publicKeyRef.current;
+      if (pk) {
+        // Use sendBeacon for reliable cleanup on tab close
+        const blob = new Blob([JSON.stringify({ publicKey: pk })], {
+          type: 'application/json',
+        });
+        navigator.sendBeacon('/api/auth/logout', blob);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       abortControllerRef.current?.abort();
     };
   }, []);

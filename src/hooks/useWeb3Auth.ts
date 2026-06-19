@@ -1,8 +1,10 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import type { Web3AuthSession } from '@/types';
 import { cachePut, cacheGet, cacheDelete } from '@/services/indexedDbCache';
+import { startSessionMonitor, stopSessionMonitor } from '@/services/sessionMonitor';
 
 async function fetchNonce(publicKey: string): Promise<string> {
   const response = await fetch(`/api/auth/nonce?publicKey=${publicKey}`);
@@ -47,6 +49,16 @@ export function useWeb3Auth() {
       const signedChallenge = await signChallenge(publicKey, nonce);
       const session = await verifySignature({ publicKey, signedChallenge, nonce });
       await cachePut('authSession', publicKey, session);
+
+      // Start session monitor with heartbeat
+      startSessionMonitor(publicKey, {
+        onExpired: () => {
+          queryClient.setQueryData(['authSession'], null);
+          queryClient.clear();
+        },
+        queryClient,
+      });
+
       return session;
     },
     onSuccess: (session) => {
@@ -56,17 +68,27 @@ export function useWeb3Auth() {
 
   const logoutMutation = useMutation({
     mutationFn: async (publicKey: string) => {
+      stopSessionMonitor();
+
       await fetch('/api/auth/logout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ publicKey }),
       });
       await cacheDelete('authSession', publicKey);
+      queryClient.clear();
     },
     onSuccess: () => {
       queryClient.setQueryData(['authSession'], null);
     },
   });
+
+  // Cleanup session monitor on unmount
+  useEffect(() => {
+    return () => {
+      stopSessionMonitor();
+    };
+  }, []);
 
   return {
     authenticate: authenticateMutation,
