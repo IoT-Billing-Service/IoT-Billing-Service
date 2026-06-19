@@ -29,15 +29,16 @@ function getFleetRegion(fleet: DisplayFleet): string {
     return fleet.region;
   }
   const nameParts = fleet.name.split(/[-_ ]/);
-  if (nameParts.length > 1 && nameParts[0].length >= 2 && nameParts[0].length <= 5) {
-    return nameParts[0];
+  const firstPart = nameParts[0] ?? '';
+  if (nameParts.length > 1 && firstPart.length >= 2 && firstPart.length <= 5) {
+    return firstPart;
   }
-  const regions = ['North America', 'Europe', 'Asia-Pacific', 'South America', 'Africa'];
+  const regions: string[] = ['North America', 'Europe', 'Asia-Pacific', 'South America', 'Africa'];
   let hash = 0;
   for (let i = 0; i < fleet.fleetId.length; i++) {
     hash = fleet.fleetId.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return regions[Math.abs(hash) % regions.length];
+  return regions[Math.abs(hash) % regions.length] ?? 'Unknown';
 }
 
 export function FleetCanvasGrid({ fleets, cellSize = 80 }: FleetCanvasGridProps) {

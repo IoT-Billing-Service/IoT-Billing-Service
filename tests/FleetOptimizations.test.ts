@@ -110,6 +110,8 @@ describe('Web Worker Viewport Culling Coordinates Calculation', () => {
 
     // Verify first cell coordinates (row 1, col 1)
     const firstCell = visible[0];
+    expect(firstCell).toBeDefined();
+    if (!firstCell) throw new Error('firstCell is undefined');
     expect(firstCell.col).toBe(1);
     expect(firstCell.row).toBe(1);
     expect(firstCell.x).toBe(80);
@@ -118,6 +120,8 @@ describe('Web Worker Viewport Culling Coordinates Calculation', () => {
 
     // Verify last cell coordinates (row 3, col 3)
     const lastCell = visible[visible.length - 1];
+    expect(lastCell).toBeDefined();
+    if (!lastCell) throw new Error('lastCell is undefined');
     expect(lastCell.col).toBe(3);
     expect(lastCell.row).toBe(3);
     expect(lastCell.x).toBe(240);
