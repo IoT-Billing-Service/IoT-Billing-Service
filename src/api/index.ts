@@ -1,7 +1,9 @@
+import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { getEnv } from '../config/env.js';
+import { registerAuthRoutes } from './routes/auth.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const env = getEnv();
@@ -20,6 +22,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     return { status: 'ok', timestamp: Date.now() };
   });
 
+  registerAuthRoutes(app);
+
   return app;
 }
 
@@ -36,4 +40,9 @@ async function start(): Promise<void> {
   }
 }
 
-void start();
+const isDirectEntry =
+  process.argv[1] !== undefined && process.argv[1] === fileURLToPath(import.meta.url);
+
+if (isDirectEntry) {
+  void start();
+}

@@ -33,6 +33,7 @@
     "@opentelemetry/exporter-prometheus": "^0.57.2",
     "@opentelemetry/sdk-node": "^0.57.2",
     "@prisma/client": "^6.6.0",
+    "@stellar/stellar-sdk": "^16.0.1",
     "async-mutex": "^0.5.0",
     "dotenv": "^16.4.7",
     "ed2curve": "^0.3.0",
