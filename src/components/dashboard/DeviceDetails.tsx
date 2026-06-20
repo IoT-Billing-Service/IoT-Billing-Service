@@ -2,17 +2,12 @@
 
 import { useMemo } from 'react';
 import type { DeviceTelemetry } from '@/types';
-
-function sanitizePlainText(input: string): string {
-  const div = document.createElement('div');
-  div.textContent = input;
-  return div.innerHTML;
-}
+import { sanitizeHtml } from '@/utils/sanitizer';
 
 function sanitizeMetadata(meta: Record<string, string>): Record<string, string> {
   const sanitized: Record<string, string> = {};
   for (const [key, value] of Object.entries(meta)) {
-    sanitized[key] = sanitizePlainText(value);
+    sanitized[sanitizeHtml(key)] = sanitizeHtml(value);
   }
   return sanitized;
 }
@@ -30,7 +25,7 @@ export function DeviceDetails({ device }: DeviceDetailsProps) {
   return (
     <div className="rounded-lg border border-gray-700 bg-gray-900 p-4">
       <h3 className="text-lg font-semibold text-green-400">
-        Device: {sanitizePlainText(device.deviceId)}
+        Device: {sanitizeHtml(device.deviceId)}
       </h3>
       <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
         <div>
@@ -56,7 +51,7 @@ export function DeviceDetails({ device }: DeviceDetailsProps) {
           <div className="space-y-1">
             {Object.entries(safeMetadata).map(([key, value]) => (
               <div key={key} className="flex text-xs">
-                <span className="w-24 text-gray-500">{sanitizePlainText(key)}:</span>
+                <span className="w-24 text-gray-500">{key}:</span>
                 <span className="text-gray-300">{value}</span>
               </div>
             ))}
