@@ -22,8 +22,16 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (pool && dbAvailable && manager) {
-    await manager.releaseAll();
-    await pool.end();
+    try {
+      await manager.releaseAll();
+    } catch (e) {
+      console.error(e);
+    }
+    try {
+      await pool.end();
+    } catch (e) {
+      console.error(e);
+    }
   }
 });
 

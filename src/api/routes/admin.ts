@@ -178,4 +178,64 @@ export function registerAdminRoutes(app: FastifyInstance): void {
       return reply.send(response);
     },
   );
+
+  /**
+   * PATCH /api/admin/certificates/:serial/revoke
+   * Revokes a hardware certificate by serial and triggers hot-reload via NOTIFY.
+   */
+  app.patch<{ Params: { serial: string } }>(
+    '/api/admin/certificates/:serial/revoke',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          properties: {
+            serial: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      if (!verifyAdminAuth(request, reply)) return;
+
+      const { serial } = request.params;
+
+      const { PrismaClient } = await import('@prisma/client');
+      const prisma = new PrismaClient();
+
+      try {
+        const cert = await prisma.hardwareCertificate.findUnique({
+          where: { serial },
+        });
+
+        if (!cert) {
+          return await reply.status(404).send({ success: false, error: 'Certificate not found' });
+        }
+
+        if (cert.revoked) {
+          return await reply
+            .status(400)
+            .send({ success: false, error: 'Certificate is already revoked' });
+        }
+
+        await prisma.$transaction(async (tx) => {
+          await tx.hardwareCertificate.update({
+            where: { serial },
+            data: { revoked: true },
+          });
+
+          // Trigger NOTIFY
+          const payload = JSON.stringify({ serial });
+          await tx.$executeRawUnsafe(`NOTIFY cert_updates, '${payload}'`);
+        });
+
+        return await reply.send({ success: true, serial, action: 'revoke', timestamp: Date.now() });
+      } catch (err) {
+        request.log.error(err);
+        return await reply.status(500).send({ success: false, error: 'Internal server error' });
+      } finally {
+        await prisma.$disconnect();
+      }
+    },
+  );
 }

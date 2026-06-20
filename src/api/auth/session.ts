@@ -117,8 +117,13 @@ export class ChallengeStore {
    */
   async consume(walletAddress: string): Promise<string | null> {
     const key = this.key(walletAddress);
-    const nonce = await this.redis.getdel(key);
-    return nonce;
+    const results = await this.redis.multi().get(key).del(key).exec();
+    if (!results || results.length === 0) return null;
+    const firstResult = results[0];
+    if (!firstResult) return null;
+    const [getErr, getVal] = firstResult;
+    if (getErr) return null;
+    return getVal as string | null;
   }
 
   getTtlSeconds(): number {

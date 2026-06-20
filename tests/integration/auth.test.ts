@@ -68,10 +68,16 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (app !== null) {
-    await app.close();
+  try {
+    if (app !== null) await app.close();
+  } catch (e) {
+    console.error(e);
   }
-  await closeRedis();
+  try {
+    await closeRedis();
+  } catch (e) {
+    console.error(e);
+  }
 });
 
 async function flushAuthKeys(): Promise<void> {

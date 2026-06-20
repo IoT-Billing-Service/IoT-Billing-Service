@@ -83,6 +83,9 @@ jobs:
       - run: npm run db:generate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iot_billing
+      - run: npx prisma db push --accept-data-loss
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iot_billing
       - run: npm run test:integration
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/iot_billing
