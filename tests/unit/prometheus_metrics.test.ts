@@ -132,7 +132,6 @@ describe('GET /metrics endpoint', () => {
     const minStr = minMs.toFixed(2);
     const maxStr = maxMs.toFixed(2);
     const totalStr = totalScrapes.toString();
-    // eslint-disable-next-line no-console
     console.log(
       `/metrics: per-scrape avg=${avgMs}ms min=${minStr} max=${maxStr} over ${totalStr} scrapes`,
     );

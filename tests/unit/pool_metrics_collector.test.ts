@@ -30,7 +30,7 @@ function makeSource(stats: Record<string, PoolStatsRecord>): {
 
 async function readGauge(gauge: promClient.Gauge, pool: string): Promise<number> {
   const data = await gauge.get();
-  const entry = data.values.find((v) => v.labels?.['pool'] === pool);
+  const entry = data.values.find((v) => v.labels['pool'] === pool);
   return entry?.value ?? 0;
 }
 
