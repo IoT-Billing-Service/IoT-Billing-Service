@@ -60,6 +60,8 @@ describe('Load runner (HTTP mode)', () => {
     });
   }
 
+  // 30s per-test slack: profiles run ~3s (1s wall-clock + 2s worker
+  // grace) locally and CI cold-start + scheduling can add ~5-10s.
   it('steady_state profile completes at least the wall-clock duration', async () => {
     const metrics = await runOnce('steady_state', 1);
     expect(metrics.accepted).toBeGreaterThan(0);
@@ -67,7 +69,7 @@ describe('Load runner (HTTP mode)', () => {
     expect(metrics.targets.durationMet).toBe(true);
     const stats = server.stats();
     expect(stats.accepted).toBeGreaterThan(0);
-  }, 15_000);
+  }, 30_000);
 
   it('reports P99 latency within the micro-scale ceiling', async () => {
     // At 8 concurrent Node clients, P99 occasionally spikes to
@@ -77,7 +79,7 @@ describe('Load runner (HTTP mode)', () => {
     const metrics = await runOnce('steady_state', 1);
     expect(metrics.latency.p99Ms).toBeLessThan(2000);
     expect(metrics.latency.p99Ms).toBeGreaterThanOrEqual(metrics.latency.p50Ms);
-  }, 15_000);
+  }, 30_000);
 
   it('records JSON metrics with the documented schema', async () => {
     const metrics = await runOnce('burst', 1);
@@ -90,7 +92,7 @@ describe('Load runner (HTTP mode)', () => {
     expect(metrics.faultInjection.malformedRate).toBe(0.01);
     expect(metrics.faultInjection.expiredRate).toBe(0.005);
     expect(metrics.faultInjection.duplicateRate).toBe(0.001);
-  }, 15_000);
+  }, 30_000);
 });
 
 describe('Local mode (legacy) smoke test', () => {
@@ -99,5 +101,5 @@ describe('Local mode (legacy) smoke test', () => {
     const metrics = await runSimulation(5, 1);
     expect(metrics.accepted).toBeGreaterThan(0);
     expect(metrics.throughputPerSec).toBeGreaterThan(0);
-  }, 15_000);
+  }, 30_000);
 });

@@ -21,6 +21,11 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.sql'],
     },
+    // 10s global default keeps the failure signal loud for any
+    // non-load test that genuinely hangs. The load suite under
+    // tests/unit/load/** applies per-test 30s overrides in
+    // simulation_runner.test.ts since the AbortController-capped
+    // load profiles still incur CI cold-start overhead.
     testTimeout: 10000,
   },
 });
