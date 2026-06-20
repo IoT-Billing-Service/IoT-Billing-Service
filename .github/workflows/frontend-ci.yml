@@ -63,9 +63,8 @@ jobs:
       - name: Production build (required for size check)
         run: npm run build
       - name: Check initial route bundle size (< 200 KB gzipped)
-        # Next.js 16 writes a build-manifest.json under .next.
-        # We sum the gzipped sizes of all JS chunks belonging to the / page
-        # and fail if the total exceeds 200 KB.
+        # Next.js 16 / Turbopack uses rootMainFiles + polyfillFiles in build-manifest.json.
+        # Fall back to pages['/'] for older Webpack-based builds.
         run: |
           echo "=== Checking initial / route bundle size ==="
           node - <<'EOF'
@@ -80,13 +79,25 @@ jobs:
           }
 
           const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-          const rootChunks =
+
+          // Turbopack (Next.js 16) uses rootMainFiles + polyfillFiles
+          // Webpack uses pages['/']
+          let rootChunks =
             manifest.pages?.['/'] ??
             manifest.pages?.['index'] ??
             [];
 
           if (rootChunks.length === 0) {
-            console.log('No chunks found for / page — skipping check');
+            // Turbopack mode — use rootManFiles + polyfillFiles
+            rootChunks = [
+              ...(manifest.rootMainFiles ?? []),
+              ...(manifest.polyfillFiles ?? []),
+            ];
+            console.log('Turbopack manifest detected — using rootMainFiles + polyfillFiles');
+          }
+
+          if (rootChunks.length === 0) {
+            console.log('No chunks found — skipping check');
             process.exit(0);
           }
 
@@ -120,8 +131,8 @@ jobs:
           EOF
       - name: Run Turbopack bundle analyzer
         # next experimental-analyze generates an interactive report under .next/analyze/
-        # It exits 0 even when no webpack report is generated (Turbopack mode).
-        run: npx next experimental-analyze 2>&1 || true
+        # and may start an HTTP server. Timeout after 30s to avoid hanging CI.
+        run: timeout 30 npx next experimental-analyze 2>&1 || true
       - name: Upload bundle report artifacts
         uses: actions/upload-artifact@v4
         if: always()
