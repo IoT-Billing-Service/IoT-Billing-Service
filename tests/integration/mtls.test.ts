@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client';
 import { closeRedis } from '../../src/database/redis.js';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
@@ -94,20 +94,32 @@ describe('mTLS Gateway Verifier Integration', () => {
 
   function generateCert(serialHex: string): string {
     const tmpDir = os.tmpdir();
-    const extFile = path.join(tmpDir, `ext-${serialHex}.ext`);
     const crtFile = path.join(tmpDir, `cert-${serialHex}.crt`);
     const keyFile = path.join(tmpDir, `key-${serialHex}.key`);
 
-    fs.writeFileSync(extFile, `authorityInfoAccess = OCSP;URI:${ocspUrl}\n`);
-
-    execSync(
-      `openssl req -x509 -newkey rsa:2048 -keyout ${keyFile} -out ${crtFile} -days 365 -nodes -subj "/CN=TestDevice" -set_serial 0x${serialHex} -extfile ${extFile}`,
-    );
+    execFileSync('openssl', [
+      'req',
+      '-x509',
+      '-newkey',
+      'rsa:2048',
+      '-keyout',
+      keyFile,
+      '-out',
+      crtFile,
+      '-days',
+      '365',
+      '-nodes',
+      '-subj',
+      '/CN=TestDevice',
+      '-set_serial',
+      `0x${serialHex}`,
+      '-addext',
+      `authorityInfoAccess=OCSP;URI:${ocspUrl}`,
+    ]);
 
     const cert = fs.readFileSync(crtFile, 'utf-8');
     fs.unlinkSync(keyFile);
     fs.unlinkSync(crtFile);
-    fs.unlinkSync(extFile);
     return cert;
   }
 
