@@ -21,6 +21,12 @@ const DEFAULT_CONFIG: CircuitBreakerConfig = {
   timeoutMs: 30_000,
 };
 
+interface QueuedRequest {
+  fn: () => Promise<{ hash: string; status: string }>;
+  resolve: (value: { hash: string; status: string }) => void;
+  reject: (reason?: Error) => void;
+}
+
 export class SorobanRpcClient {
   private state: CircuitState = CircuitState.CLOSED;
   private failureCount = 0;
@@ -30,11 +36,7 @@ export class SorobanRpcClient {
   private tracer = getDiagnosticsTracer();
 
   private readonly maxQueueSize = 10_000;
-  private requestQueue: {
-    fn: () => Promise<any>;
-    resolve: (value: any) => void;
-    reject: (reason?: any) => void;
-  }[] = [];
+  private requestQueue: QueuedRequest[] = [];
 
   private processing = false;
   private backoff = new BackoffCalculator();
@@ -108,13 +110,16 @@ export class SorobanRpcClient {
         }
       }
 
-      const { fn, resolve, reject } = this.requestQueue.shift()!;
+      const queuedRequest = this.requestQueue.shift();
+      if (!queuedRequest) continue;
+
+      const { fn, resolve, reject } = queuedRequest;
       circuitBreakerQueueDepth.set({ client: this.clientLabel }, this.requestQueue.length);
       try {
         const result = await fn();
         resolve(result);
       } catch (e) {
-        reject(e);
+        reject(e as Error);
       }
 
       if (this.state === CircuitState.OPEN) {

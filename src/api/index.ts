@@ -34,6 +34,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerAuthRoutes(app);
   registerAnalyticsRoutes(app);
+  registerCircuitHealth(app);
 
   return app;
 }
