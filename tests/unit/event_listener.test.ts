@@ -1,26 +1,24 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unnecessary-type-assertion */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { MockInstance, Mock } from 'vitest';
+import type { MockInstance } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { LedgerEventSynchronizer } from '../../src/core/blockchain/event_listener.js';
 import { registerAdminRoutes } from '../../src/api/routes/admin.js';
 import { clearEnvCache } from '../../src/config/env.js';
 
+import { PrismaClient } from '@prisma/client';
+
 // ─── Prisma mock factory ───────────────────────────────────────────────────
 
-interface PrismaMock {
-  ledgerSyncState: {
-    findUnique: Mock;
-    upsert: Mock;
-  };
-}
-
-function makePrismaMock(foundRow: { lastSyncedLedger: number } | null = null): PrismaMock {
+function makePrismaMock(
+  foundRow: { lastSyncedLedger: number } | null = null,
+): PrismaClient {
   return {
     ledgerSyncState: {
       findUnique: vi.fn().mockResolvedValue(foundRow),
       upsert: vi.fn().mockResolvedValue(undefined),
     },
-  };
+  } as unknown as PrismaClient;
 }
 
 // ─── Fetch mock helpers ────────────────────────────────────────────────────

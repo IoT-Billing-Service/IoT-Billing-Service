@@ -129,9 +129,9 @@ export class MtlsGatewayVerifier {
         // Proceed to OCSP
       } else {
         // Query DB
-        const hwCert = await this.prisma.hardwareCertificate.findUnique({
+        const hwCert = (await this.prisma.hardwareCertificate.findUnique({
           where: { serial },
-        }) as { revoked: boolean } | null;
+        })) as { revoked: boolean } | null;
 
         if (!hwCert) {
           return {
