@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useCallback, useState } from 'react';
+import { useTheme } from '@/components/providers/ThemeProvider';
 
 interface MetricsFrame {
   timestamp: number;
@@ -16,9 +17,9 @@ interface LiveMetricsCanvasProps {
 const RING_CAPACITY = 10_000;
 const FULL_REDRAW_MS = 500;
 const RATE_WARN_THRESHOLD = 3000;
-const COLORS = ['#00ff88', '#ff8800', '#4488ff', '#ff4488', '#88ff44'];
 
 export function LiveMetricsCanvas({ stream, metrics, height = 300 }: LiveMetricsCanvasProps) {
+  const { chartPalette, prefersReducedMotion } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ringRef = useRef<MetricsFrame[]>(new Array(RING_CAPACITY));
@@ -171,8 +172,11 @@ export function LiveMetricsCanvas({ stream, metrics, height = 300 }: LiveMetrics
 
       ctx.clearRect(0, 0, w, h);
 
+      // Use the theme-aware chart palette instead of hardcoded COLORS
+      const colors = chartPalette.length >= metrics.length ? chartPalette : ['#5ec962', '#fca50a', '#21918c', '#932667', '#fcffa4'];
+
       metrics.forEach((metric, idx) => {
-        const color = COLORS[idx % COLORS.length] ?? '#ffffff';
+        const color = colors[idx % colors.length] ?? '#ffffff';
         const { min, max } = computeRange(metric);
         const rng = max - min || 1;
 
@@ -213,7 +217,7 @@ export function LiveMetricsCanvas({ stream, metrics, height = 300 }: LiveMetrics
 
       lastDrawnHead.current = head + count;
     },
-    [height, metrics, computeRange],
+    [height, metrics, computeRange, chartPalette],
   );
 
   useEffect(() => {
@@ -235,6 +239,25 @@ export function LiveMetricsCanvas({ stream, metrics, height = 300 }: LiveMetrics
       rafRef.current = requestAnimationFrame(loop);
     };
 
+    // Respect reduced motion: use a longer interval instead of rAF
+    const delay = prefersReducedMotion ? 250 : 0;
+
+    if (prefersReducedMotion) {
+      const intervalId = setInterval(() => {
+        if (!running) return;
+        if (!isPageVisible.current) return;
+        if (lastFrameTime.current > 0 && performance.now() - lastFrameTime.current > 5000) {
+          lastFullRedraw.current = 0;
+        }
+        lastFrameTime.current = performance.now();
+        drawFrame(performance.now());
+      }, delay);
+      return () => {
+        running = false;
+        clearInterval(intervalId);
+      };
+    }
+
     rafRef.current = requestAnimationFrame(loop);
 
     return () => {
@@ -242,7 +265,7 @@ export function LiveMetricsCanvas({ stream, metrics, height = 300 }: LiveMetrics
       cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
     };
-  }, [drawFrame]);
+  }, [drawFrame, prefersReducedMotion]);
 
   return (
     <div ref={containerRef} className="relative w-full">

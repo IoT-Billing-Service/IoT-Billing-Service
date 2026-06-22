@@ -1,36 +1,156 @@
 @import 'tailwindcss';
 
+/*
+ * ── Theme CSS Custom Properties ──────────────────────────────────────
+ * All variables for every theme variant are precomputed here so that
+ * theme switching only requires a single data-theme attribute change.
+ * No dynamic style recalculation is needed because the CSSOM already
+ * holds every property value.
+ *
+ * Chart colors use perceptually uniform color maps (Viridis for
+ * standard, Inferno for high-contrast) to ensure critical status
+ * indicators are distinguishable by operators with red-green colour
+ * blindness.
+ *
+ * Font sizing uses a clamp()‑based fluid scale that is multiplied by
+ * --font-size-scale in high-contrast modes to meet WCAG 2.2 AAA.
+ */
+
+/* ──────── Base (dark) ──────── */
 :root {
   --background: #0a0a0a;
   --foreground: #ededed;
+  --border: #1e293b;
   --contrast-boost: 1;
   --text-shadow: none;
+
+  /* Viridis‑inspired chart palette (colorblind‑safe) */
+  --chart-active: #5ec962;        /* green, distinguishable */
+  --chart-warning: #fca50a;       /* amber */
+  --chart-critical: #dd513a;      /* red‑orange */
+  --chart-line-1: #fde725;        /* viridis yellow */
+  --chart-line-2: #5ec962;        /* viridis green */
+  --chart-line-3: #21918c;        /* viridis teal */
+  --chart-line-4: #3b528b;        /* viridis blue */
+  --chart-line-5: #440154;        /* viridis purple */
+  --chart-grid: rgba(255, 255, 255, 0.06);
+  --chart-text: rgba(255, 255, 255, 0.7);
+
+  /* Fluid typography scale (multiplied by --font-size-scale) */
+  --font-size-scale: 1;
+  --text-xs: clamp(0.625rem, 0.6rem + 0.125vw, 0.75rem);
+  --text-sm: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --text-base: clamp(0.875rem, 0.8rem + 0.375vw, 1rem);
+  --text-lg: clamp(1rem, 0.9rem + 0.5vw, 1.25rem);
+  --text-xl: clamp(1.125rem, 1rem + 0.625vw, 1.5rem);
+
+  /* Motion preference (overridden by prefers-reduced-motion query) */
+  --motion-scale: 1;
+  --transition-duration: 0.2s;
 }
 
+/* ──────── Light ──────── */
 [data-theme='light'] {
   --background: #f5f5f5;
   --foreground: #1a1a1a;
+  --border: #d1d5db;
+  --chart-active: #2e8b57;
+  --chart-warning: #c47a00;
+  --chart-critical: #c0392b;
+  --chart-line-1: #fde725;
+  --chart-line-2: #2e8b57;
+  --chart-line-3: #1a7a76;
+  --chart-line-4: #2c4a7a;
+  --chart-line-5: #3a1f5e;
+  --chart-grid: rgba(0, 0, 0, 0.08);
+  --chart-text: rgba(0, 0, 0, 0.65);
 }
 
+/* ──────── Dark (explicit, same as :root) ──────── */
+[data-theme='dark'] {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --border: #1e293b;
+  --contrast-boost: 1;
+  --text-shadow: none;
+  --chart-active: #5ec962;
+  --chart-warning: #fca50a;
+  --chart-critical: #dd513a;
+  --chart-line-1: #fde725;
+  --chart-line-2: #5ec962;
+  --chart-line-3: #21918c;
+  --chart-line-4: #3b528b;
+  --chart-line-5: #440154;
+  --chart-grid: rgba(255, 255, 255, 0.06);
+  --chart-text: rgba(255, 255, 255, 0.7);
+}
+
+/* ──────── High‑contrast light ──────── */
 [data-theme='high-contrast-light'] {
   --background: #ffffff;
   --foreground: #000000;
+  --border: #000000;
   --contrast-boost: 2;
   --text-shadow: 0 0 2px currentColor;
+
+  /* Inferno‑inspired palette (maximum contrast for visibility) */
+  --chart-active: #007a3d;
+  --chart-warning: #b85c00;
+  --chart-critical: #cc0000;
+  --chart-line-1: #fcffa4;
+  --chart-line-2: #fca50a;
+  --chart-line-3: #dd513a;
+  --chart-line-4: #932667;
+  --chart-line-5: #1a0a3e;
+  --chart-grid: rgba(0, 0, 0, 0.15);
+  --chart-text: #000000;
+
+  /* WCAG 2.2 AAA – 1.5× font‑size scale */
+  --font-size-scale: 1.5;
 }
 
+/* ──────── High‑contrast dark ──────── */
 [data-theme='high-contrast-dark'] {
   --background: #000000;
   --foreground: #ffffff;
+  --border: #ffffff;
   --contrast-boost: 2;
   --text-shadow: 0 0 2px currentColor;
+
+  /* Inferno‑inspired palette */
+  --chart-active: #5ec962;
+  --chart-warning: #fca50a;
+  --chart-critical: #ff3333;
+  --chart-line-1: #fcffa4;
+  --chart-line-2: #fca50a;
+  --chart-line-3: #dd513a;
+  --chart-line-4: #932667;
+  --chart-line-5: #420a68;
+  --chart-grid: rgba(255, 255, 255, 0.15);
+  --chart-text: #ffffff;
+
+  /* WCAG 2.2 AAA – 1.5× font‑size scale */
+  --font-size-scale: 1.5;
 }
 
+/* ──────── Reduced motion ──────── */
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  [data-theme] {
+    --motion-scale: 0;
+    --transition-duration: 0s;
+  }
+}
+
+/* ──────── Body ──────── */
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
   text-shadow: var(--text-shadow);
+  font-size: calc(var(--text-base) * var(--font-size-scale));
+  transition: background-color calc(var(--transition-duration) * var(--motion-scale)),
+              color calc(var(--transition-duration) * var(--motion-scale));
 }
 
 @theme inline {

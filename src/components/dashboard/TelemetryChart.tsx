@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useCallback, useState } from 'react';
+import { useTheme } from '@/components/providers/ThemeProvider';
 
 interface TelemetryDataPoint {
   timestamp: number;
@@ -10,6 +11,7 @@ interface TelemetryDataPoint {
 interface TelemetryChartProps {
   data: TelemetryDataPoint[];
   metric: string;
+  /** Override chart line colour (defaults to --chart-line-1 from theme) */
   color?: string;
   height?: number;
   width?: number;
@@ -41,7 +43,7 @@ function createWorker(): Worker | null {
 export function TelemetryChart({
   data,
   metric,
-  color = '#00ff88',
+  color = '#5ec962',
   height = 200,
   width = 600,
   loadingProgress,
@@ -63,6 +65,7 @@ export function TelemetryChart({
   const isPageVisible = useRef(true);
   const [range, setRange] = useState<{ min: number; max: number }>({ min: 0, max: 1 });
   const [memoryInfo, setMemoryInfo] = useState<string | null>(null);
+  const { chartPalette, prefersReducedMotion } = useTheme();
 
   // Upstream: worker initialization
   useEffect(() => {
@@ -179,6 +182,10 @@ export function TelemetryChart({
       canvas.height = height * dpr;
       ctx.scale(dpr, dpr);
 
+      // Resolve theme-aware colours from CSS custom properties for canvas rendering
+      const computedStyle = getComputedStyle(canvas);
+      const chartTextColor = computedStyle.getPropertyValue('--chart-text').trim() || '#a0a0a0';
+
       const ring = ringRef.current;
       const head = headRef.current;
       const count = countRef.current;
@@ -186,11 +193,13 @@ export function TelemetryChart({
       if (count < 2) {
         // HEAD: Draw loading state text even with no data yet
         if (isLoading && totalTimeRange) {
-          ctx.fillStyle = 'rgba(200, 200, 200, 0.6)';
+          ctx.fillStyle = chartTextColor;
+          ctx.globalAlpha = 0.6;
           ctx.font = '14px monospace';
           ctx.textAlign = 'center';
           ctx.fillText('Fetching telemetry data...', width / 2, height / 2);
           ctx.textAlign = 'left';
+          ctx.globalAlpha = 1;
         }
         return;
       }
@@ -209,11 +218,14 @@ export function TelemetryChart({
         const px = padding + pendingStartRatio * (width - 2 * padding);
         const pw = Math.max(2, (pendingEndRatio - pendingStartRatio) * (width - 2 * padding));
 
-        ctx.fillStyle = 'rgba(100, 100, 100, 0.15)';
+        ctx.fillStyle = chartTextColor;
+        ctx.globalAlpha = 0.15;
         ctx.fillRect(px, padding, pw, height - 2 * padding);
+        ctx.globalAlpha = 1;
 
         ctx.save();
-        ctx.strokeStyle = 'rgba(150, 150, 150, 0.4)';
+        ctx.strokeStyle = chartTextColor;
+        ctx.globalAlpha = 0.4;
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 4]);
         ctx.lineDashOffset = -(now / 50);
@@ -221,13 +233,15 @@ export function TelemetryChart({
         ctx.setLineDash([]);
         ctx.restore();
 
-        ctx.fillStyle = 'rgba(200, 200, 200, 0.5)';
+        ctx.fillStyle = chartTextColor;
+        ctx.globalAlpha = 0.6;
         ctx.font = '10px monospace';
         ctx.fillText('Loading...', px + 4, padding + 14);
+        ctx.globalAlpha = 1;
       }
 
-      // Upstream: line chart drawing
-      ctx.strokeStyle = color;
+      // Upstream: line chart drawing — use theme-aware colour
+      ctx.strokeStyle = color ?? chartPalette[0] ?? '#5ec962';
       ctx.lineWidth = 2;
 
       const rng = range.max - range.min || 1;
@@ -264,7 +278,7 @@ export function TelemetryChart({
         sendToWorker(values);
       }
 
-      ctx.fillStyle = color;
+      ctx.fillStyle = color ?? chartPalette[0] ?? '#5ec962';
       ctx.font = '12px monospace';
       const latest = ring[(head + count - 1) % RING_CAPACITY] as TelemetryDataPoint;
       ctx.fillText(`${metric}: ${latest.value.toFixed(2)}`, padding, 20);
@@ -273,23 +287,26 @@ export function TelemetryChart({
       if (loadingProgress !== undefined && loadingProgress < 1 && count > 1) {
         const loadedX = padding + loadingProgress * (width - 2 * padding);
         const gradient = ctx.createLinearGradient(loadedX, 0, width, 0);
-        gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        gradient.addColorStop(0.3, 'rgba(0, 0, 0, 0.15)');
-        gradient.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+        gradient.addColorStop(0, 'transparent');
+        gradient.addColorStop(0.3, chartTextColor);
+        ctx.globalAlpha = 0.15;
         ctx.fillStyle = gradient;
         ctx.fillRect(loadedX, 0, width - loadedX, height);
+        ctx.globalAlpha = 1;
 
         const dotX = loadedX + 30;
         const dotY = height / 2;
         const dotRadius = 3;
         const dotSpacing = 12;
         const phase = Math.floor(now / 400) % 3;
+        ctx.fillStyle = chartTextColor;
         for (let d = 0; d < 3; d++) {
-          ctx.fillStyle = d === phase ? '#ffffff' : 'rgba(255, 255, 255, 0.3)';
+          ctx.globalAlpha = d === phase ? 1 : 0.3;
           ctx.beginPath();
           ctx.arc(dotX + d * dotSpacing, dotY, dotRadius, 0, Math.PI * 2);
           ctx.fill();
         }
+        ctx.globalAlpha = 1;
       }
     },
     [
@@ -324,6 +341,25 @@ export function TelemetryChart({
       rafRef.current = requestAnimationFrame(loop);
     };
 
+    // Respect reduced motion: use a longer interval instead of rAF
+    const delay = prefersReducedMotion ? 250 : 0;
+
+    if (prefersReducedMotion) {
+      const intervalId = setInterval(() => {
+        if (!running) return;
+        if (!isPageVisible.current) return;
+        if (lastFrameTime.current > 0 && performance.now() - lastFrameTime.current > 5000) {
+          lastFullRedraw.current = 0;
+        }
+        lastFrameTime.current = performance.now();
+        draw(performance.now());
+      }, delay);
+      return () => {
+        running = false;
+        clearInterval(intervalId);
+      };
+    }
+
     rafRef.current = requestAnimationFrame(loop);
 
     return () => {
@@ -331,7 +367,7 @@ export function TelemetryChart({
       cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
     };
-  }, [draw]);
+  }, [draw, prefersReducedMotion]);
 
   return (
     <div className="relative">

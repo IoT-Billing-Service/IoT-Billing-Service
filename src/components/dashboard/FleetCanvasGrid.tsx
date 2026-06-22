@@ -4,6 +4,7 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import type { FleetView } from '@/types';
 import type { PositionResult } from '@/workers/fleetPosition.worker';
 
+
 interface FleetCanvasGridProps {
   fleets: FleetView[];
   cellSize?: number;
@@ -243,14 +244,20 @@ export function FleetCanvasGrid({ fleets, cellSize = 80 }: FleetCanvasGridProps)
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(xMin, yMin, xMax - xMin, yMax - yMin);
 
+    // Resolve theme-aware status colours from CSS custom properties
+    const style = getComputedStyle(canvas);
+    const activeColor = style.getPropertyValue('--chart-active').trim() || '#5ec962';
+    const warningColor = style.getPropertyValue('--chart-warning').trim() || '#fca50a';
+    const criticalColor = style.getPropertyValue('--chart-critical').trim() || '#dd513a';
+
     // Group cells by status color to minimize fillStyle/strokeStyle context changes
     const cellsByColor: Record<
       string,
       { cell: PositionResult; fleet: DisplayFleet; isHovered: boolean }[]
     > = {
-      '#00ff88': [], // Active
-      '#ffaa00': [], // Degraded
-      '#ff4444': [], // Inactive
+      [activeColor]: [],  // Active
+      [warningColor]: [], // Degraded
+      [criticalColor]: [], // Inactive
     };
 
     visibleCells.forEach((cell) => {
@@ -269,7 +276,11 @@ export function FleetCanvasGrid({ fleets, cellSize = 80 }: FleetCanvasGridProps)
       }
 
       const statusColor =
-        fleet.status === 'active' ? '#00ff88' : fleet.status === 'degraded' ? '#ffaa00' : '#ff4444';
+        fleet.status === 'active'
+          ? activeColor
+          : fleet.status === 'degraded'
+            ? warningColor
+            : criticalColor;
 
       if (!cellsByColor[statusColor]) {
         cellsByColor[statusColor] = [];
