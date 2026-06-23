@@ -211,6 +211,8 @@ mod streaming_invariant_tests;
 #[cfg(test)]
 mod stroop_fuzz_tests;
 #[cfg(test)]
+mod flow_rate_overflow_fuzz;
+#[cfg(test)]
 mod tariff_oracle_tests;
 #[cfg(test)]
 mod temporary_storage_tests;
@@ -307,6 +309,7 @@ pub mod nonce_sync;
 pub mod secure_call_interface;
 pub mod tariff_oracle;
 pub mod temporary_storage;
+pub mod u256;
 pub mod velocity_limit;
 
 #[cfg(test)]
