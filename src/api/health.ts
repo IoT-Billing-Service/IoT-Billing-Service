@@ -39,7 +39,7 @@ export function registerReadinessHealthCheck(app: FastifyInstance): void {
 
     const maxLag = 1000;
     const lagMetric = await eventLoopLag.get();
-    const currentLag = lagMetric.values[0]?.value || 0;
+    const currentLag = lagMetric.values[0]?.value ?? 0;
     if (currentLag > maxLag) {
       void reply.header('X-Health-Degraded', 'gc-pause');
       return reply.status(503).send({ status: 'error', reason: 'event_loop_lag_exceeded' });
@@ -76,10 +76,10 @@ export function registerReadinessHealthCheck(app: FastifyInstance): void {
       await healthDbPool.query('SELECT 1');
       await healthRedisClient.ping();
       healthCache = { status: 'ok', timestamp: Date.now() };
-      return reply.send({ status: 'ok' });
-    } catch (err) {
+      return await reply.send({ status: 'ok' });
+    } catch {
       healthCache = { status: 'error', timestamp: Date.now() };
-      return reply.status(503).send({ status: 'error' });
+      return await reply.status(503).send({ status: 'error' });
     }
   });
 }

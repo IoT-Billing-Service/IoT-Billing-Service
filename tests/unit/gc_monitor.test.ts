@@ -43,11 +43,7 @@ vi.mock('node:perf_hooks', async () => {
 });
 
 import { GcPauseMonitor } from '../../src/api/metrics/gc_monitor.js';
-import {
-  gcPauseDuration,
-  GC_PAUSE_BUCKETS_MS,
-  eventLoopLag,
-} from '../../src/api/metrics/prometheus.js';
+import { gcPauseDuration, GC_PAUSE_BUCKETS_MS } from '../../src/api/metrics/prometheus.js';
 import Fastify from 'fastify';
 import { registerReadinessHealthCheck } from '../../src/api/health.js';
 
@@ -169,7 +165,8 @@ describe('Health Check GC Simulation', () => {
     // Initial request to populate cache
     const res1 = await app.inject({ method: 'GET', url: '/health' });
     expect(res1.statusCode).toBe(200);
-    expect(JSON.parse(res1.payload).status).toBe('ok');
+    const res1Body = JSON.parse(res1.payload) as { status: string };
+    expect(res1Body.status).toBe('ok');
 
     const startTime = Date.now();
 
@@ -185,7 +182,7 @@ describe('Health Check GC Simulation', () => {
 
     expect(duration).toBeLessThan(200);
     expect(res2.statusCode).toBe(200);
-    const body = JSON.parse(res2.payload);
+    const body = JSON.parse(res2.payload) as { cached: boolean };
     expect(body.cached).toBe(true);
   });
 });
