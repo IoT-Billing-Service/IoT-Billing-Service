@@ -1,5 +1,21 @@
 import { PerformanceObserver, monitorEventLoopDelay } from 'node:perf_hooks';
-import { recordGcPause } from './prometheus.js';
+import { recordGcPause, eventLoopLag } from './prometheus.js';
+
+export let lastHealthCheckAt = 0;
+let forcedGcTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function reportHealthCheckCompleted(): void {
+  lastHealthCheckAt = Date.now();
+  if (forcedGcTimer !== null) {
+    clearTimeout(forcedGcTimer);
+  }
+  forcedGcTimer = setTimeout(() => {
+    if (global.gc) {
+      global.gc();
+    }
+  }, 2000);
+  forcedGcTimer.unref();
+}
 
 /**
  * The minimum sampling resolution (in milliseconds) of the event-loop monitor.
@@ -162,7 +178,9 @@ export class GcPauseMonitor {
     const maxNs = this.loopDelay.max;
     // `max` is initially +Infinity before any sample is taken; treat as no-op.
     if (Number.isFinite(maxNs) && maxNs > 0) {
-      recordGcPause(maxNs / 1_000_000);
+      const lagMs = maxNs / 1_000_000;
+      recordGcPause(lagMs);
+      eventLoopLag.set(lagMs);
     }
     this.loopDelay.reset();
   }

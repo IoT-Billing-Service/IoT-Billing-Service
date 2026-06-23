@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import { compactPath, formatZodIssues } from '../core/utils/zod_path.js';
 
 dotenv.config();
 
@@ -16,6 +17,7 @@ const envSchema = z.object({
   ADMIN_SECRET_KEY: z.string().optional(),
   JWT_SECRET: z.string().min(32),
   JWT_EXPIRES_IN: z.string().default('15m'),
+  JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   OTEL_SERVICE_NAME: z.string().default('iot-billing-backend'),
@@ -33,15 +35,37 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+/** One environment-validation failure, preserving the field, code, and reason. */
+export interface EnvValidationIssue {
+  path: string;
+  code: string;
+  message: string;
+}
+
+/**
+ * Convert a {@link z.ZodError} into one structured entry per issue.
+ *
+ * Unlike `error.flatten()`, this preserves the issue `code` and the full,
+ * compacted path for *every* failure, so no failing field is collapsed away or
+ * hidden behind truncation. Callers can log each entry as its own structured
+ * record. Built on the shared {@link formatZodIssues} helper.
+ */
+export function formatEnvIssues(error: z.ZodError): EnvValidationIssue[] {
+  return formatZodIssues(error).map(({ path, code, message }) => ({ path, code, message }));
+}
+
+// Re-exported so existing callers (and tests) can import the path helper here.
+export { compactPath };
+
 let cachedEnv: Env | null = null;
 
 export function loadEnv(): Env {
   if (cachedEnv) return cachedEnv;
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
-    throw new Error(
-      `Environment validation failed: ${JSON.stringify(parsed.error.flatten().fieldErrors)}`,
-    );
+    const issues = formatEnvIssues(parsed.error);
+    const detail = issues.map((issue) => `  ${issue.path}: ${issue.message} (${issue.code})`);
+    throw new Error(['Environment validation failed:', ...detail].join('\n'));
   }
   cachedEnv = parsed.data;
   return cachedEnv;

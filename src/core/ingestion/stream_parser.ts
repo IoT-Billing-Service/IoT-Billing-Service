@@ -61,3 +61,12 @@ export class TelemetryStreamParser {
     this.offset = 0;
   }
 }
+
+/**
+ * Helper to generate a sliding window ACK message for WebSocket clients.
+ */
+export const AckProtocol = {
+  createAckMessage(sequence: number): string {
+    return JSON.stringify({ type: 'ack', seq: sequence });
+  },
+};

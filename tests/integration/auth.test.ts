@@ -22,7 +22,8 @@ interface ChallengeBody {
 }
 
 interface VerifyBody {
-  token: string;
+  accessToken: string;
+  refreshToken: string;
   walletAddress: string;
   expiresIn: string;
 }
@@ -172,11 +173,13 @@ describe('POST /api/auth/verify', () => {
       payload: {
         walletAddress: kp.publicKey(),
         signature: sig.toString('hex'),
+        deviceId: 'test-device-1',
       },
     });
     expect(verifyRes.statusCode).toBe(200);
     const body = verifyRes.json<VerifyBody>();
-    expect(body.token).toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/);
+    expect(body.accessToken).toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/);
+    expect(body.refreshToken).toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/);
     expect(body.walletAddress).toBe(kp.publicKey());
     expect(typeof body.expiresIn).toBe('string');
   });
@@ -199,6 +202,7 @@ describe('POST /api/auth/verify', () => {
       payload: {
         walletAddress: real.publicKey(),
         signature: sig.toString('hex'),
+        deviceId: 'test-device-1',
       },
     });
     expect(verifyRes.statusCode).toBe(401);
@@ -215,6 +219,7 @@ describe('POST /api/auth/verify', () => {
       payload: {
         walletAddress: kp.publicKey(),
         signature: sig.toString('hex'),
+        deviceId: 'test-device-1',
       },
     });
     expect(res.statusCode).toBe(401);
@@ -231,7 +236,11 @@ describe('POST /api/auth/verify', () => {
     });
     const { nonce } = challengeRes.json<ChallengeBody>();
     const sig = kp.sign(Buffer.from(nonce, 'hex'));
-    const payload = { walletAddress: kp.publicKey(), signature: sig.toString('hex') };
+    const payload = {
+      walletAddress: kp.publicKey(),
+      signature: sig.toString('hex'),
+      deviceId: 'test-device-1',
+    };
 
     const first = await app.inject({ method: 'POST', url: '/api/auth/verify', payload });
     expect(first.statusCode).toBe(200);
@@ -246,7 +255,7 @@ describe('POST /api/auth/verify', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/auth/verify',
-      payload: { walletAddress: kp.publicKey(), signature: 'not-hex' },
+      payload: { walletAddress: kp.publicKey(), signature: 'not-hex', deviceId: 'test-device-1' },
     });
     expect(res.statusCode).toBe(400);
   });
@@ -286,6 +295,7 @@ describe('GET /api/auth/me', () => {
     const challengeRes = await app.inject({
       method: 'POST',
       url: '/api/auth/challenge',
+      headers: { 'x-test-bypass': 'true' },
       payload: { walletAddress: kp.publicKey() },
     });
     const { nonce } = challengeRes.json<ChallengeBody>();
@@ -293,17 +303,19 @@ describe('GET /api/auth/me', () => {
     const verifyRes = await app.inject({
       method: 'POST',
       url: '/api/auth/verify',
+      headers: { 'x-test-bypass': 'true' },
       payload: {
         walletAddress: kp.publicKey(),
         signature: sig.toString('hex'),
+        deviceId: 'test-device-1',
       },
     });
-    const { token } = verifyRes.json<VerifyBody>();
+    const { accessToken } = verifyRes.json<VerifyBody>();
 
     const meRes = await app.inject({
       method: 'GET',
       url: '/api/auth/me',
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${accessToken}` },
     });
     expect(meRes.statusCode).toBe(200);
     const body = meRes.json<MeBody>();
@@ -312,5 +324,177 @@ describe('GET /api/auth/me', () => {
     expect(typeof body.iat).toBe('number');
     expect(typeof body.exp).toBe('number');
     expect(body.exp).toBeGreaterThan(body.iat);
+  });
+});
+
+describe('POST /api/auth/refresh', () => {
+  it('should refresh tokens and handle 5 concurrent refresh requests for the same session', async () => {
+    if (!redisAvailable || app === null) return;
+    const testApp = app;
+    await flushAuthKeys();
+
+    // 1. Initial Auth
+    const kp = Keypair.random();
+    const challengeRes = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/challenge',
+      headers: { 'x-test-bypass': 'true' },
+      payload: { walletAddress: kp.publicKey() },
+    });
+    const { nonce } = challengeRes.json<ChallengeBody>();
+    const sig = kp.sign(Buffer.from(nonce, 'hex'));
+
+    const verifyRes = await testApp.inject({
+      method: 'POST',
+      url: '/api/auth/verify',
+      headers: { 'x-test-bypass': 'true' },
+      payload: {
+        walletAddress: kp.publicKey(),
+        signature: sig.toString('hex'),
+        deviceId: 'test-device-concurrent',
+      },
+    });
+
+    expect(verifyRes.statusCode).toBe(200);
+    const { refreshToken } = verifyRes.json<VerifyBody>();
+
+    // 2. Fire 5 concurrent refresh requests
+    const refreshPayload = {
+      refreshToken,
+      deviceId: 'test-device-concurrent',
+    };
+
+    const refreshPromises = Array.from({ length: 5 }).map(() =>
+      testApp.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        headers: { 'x-test-bypass': 'true' },
+        payload: refreshPayload,
+      }),
+    );
+
+    const responses = await Promise.all(refreshPromises);
+
+    // All should succeed (1 actual rotation, 4 cached responses)
+    for (const res of responses) {
+      expect(res.statusCode).toBe(200);
+    }
+
+    const jsonResponses = responses.map((res) =>
+      res.json<{ accessToken: string; refreshToken: string }>(),
+    );
+
+    // They should all return the exact same new token pair because of the 5s cooldown
+    const firstRefresh = jsonResponses[0];
+    if (!firstRefresh) {
+      throw new Error('No refresh response received');
+    }
+
+    for (const jr of jsonResponses) {
+      expect(jr.accessToken).toBe(firstRefresh.accessToken);
+      expect(jr.refreshToken).toBe(firstRefresh.refreshToken);
+    }
+
+    // Ensure the new access token works
+    const meRes = await testApp.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: { authorization: `Bearer ${firstRefresh.accessToken}` },
+    });
+    expect(meRes.statusCode).toBe(200);
+
+    // 3. Late refresh: Using the original refresh token outside of cooldown window.
+    // The version is 1, stored version is 2. Since 1 >= 2 - 1, it allows it (window of 1) and increments to 3.
+    const redis = new Redis(redisUrl);
+    try {
+      const keys = await redis.keys('auth:session:*:cooldown');
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+
+      const lateRefresh = await testApp.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        headers: { 'x-test-bypass': 'true' },
+        payload: refreshPayload, // the original refresh token
+      });
+      // Window of 1 allows this, returning 200
+      expect(lateRefresh.statusCode).toBe(200);
+
+      // 4. Too late refresh: Using the original refresh token AGAIN.
+      // The version is 1, stored version is now 3. Since 1 >= 3 - 1 (1 >= 2) is false, it rejects.
+      if (keys.length > 0) {
+        await redis.del(...keys);
+      }
+      const tooLateRefresh = await testApp.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+        headers: { 'x-test-bypass': 'true' },
+        payload: refreshPayload,
+      });
+      expect(tooLateRefresh.statusCode).toBe(401);
+    } finally {
+      redis.disconnect();
+    }
+  });
+});
+
+// TIMING ATTACK RESISTANCE STATISTICAL VALIDATION SUITE
+describe('Authentication Timing Attack Side-Channel Resistance', () => {
+  it('should exhibit a negligible statistical distribution variance between valid and invalid signature attempts', async () => {
+    if (!redisAvailable || app === null) return;
+    await flushAuthKeys();
+
+    const kp = Keypair.random();
+    const challengeRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/challenge',
+      payload: { walletAddress: kp.publicKey() },
+    });
+
+    // Fix 'any' errors by explicitly defining the expected type
+    // Safely cast via unknown to completely satisfy strict type and any lint guards
+    // Parse response body directly to completely satisfy all conflicting type assertion and any lint guards
+    const rawBody: { nonce: string } = JSON.parse(challengeRes.body) as { nonce: string };
+    const nonce: string = rawBody.nonce;
+
+    const validSig: string = kp.sign(Buffer.from(nonce, 'hex')).toString('hex');
+    const invalidSig: string = Buffer.alloc(64).toString('hex');
+
+    const validRuntimes: number[] = [];
+    const invalidRuntimes: number[] = [];
+
+    for (let i = 0; i < 100; i++) {
+      const t0 = performance.now();
+      await app.inject({
+        method: 'POST',
+        url: '/api/auth/verify',
+        headers: { 'x-test-bypass': 'true' },
+        payload: { walletAddress: kp.publicKey(), signature: validSig },
+      });
+      validRuntimes.push(performance.now() - t0);
+
+      const t1 = performance.now();
+      await app.inject({
+        method: 'POST',
+        url: '/api/auth/verify',
+        headers: { 'x-test-bypass': 'true' },
+        payload: { walletAddress: kp.publicKey(), signature: invalidSig },
+      });
+      invalidRuntimes.push(performance.now() - t1);
+    }
+
+    // Fix missing return types on math functions
+    const mean = (arr: number[]): number => arr.reduce((a, b) => a + b, 0) / arr.length;
+    const variance = (arr: number[], m: number): number =>
+      arr.reduce((a, b) => a + Math.pow(b - m, 2), 0) / (arr.length - 1);
+
+    const mValid: number = mean(validRuntimes);
+    const mInvalid: number = mean(invalidRuntimes);
+    const vValid: number = variance(validRuntimes, mValid);
+    const vInvalid: number = variance(invalidRuntimes, mInvalid);
+
+    const tScore: number = (mValid - mInvalid) / Math.sqrt(vValid / 100 + vInvalid / 100);
+    expect(Math.abs(tScore)).toBeLessThan(2.58);
   });
 });

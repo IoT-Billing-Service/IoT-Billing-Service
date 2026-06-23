@@ -44,6 +44,29 @@ vi.mock('node:perf_hooks', async () => {
 
 import { GcPauseMonitor } from '../../src/api/metrics/gc_monitor.js';
 import { gcPauseDuration, GC_PAUSE_BUCKETS_MS } from '../../src/api/metrics/prometheus.js';
+import Fastify from 'fastify';
+import { registerReadinessHealthCheck } from '../../src/api/health.js';
+
+vi.mock('pg', () => ({
+  default: {
+    Pool: vi.fn(() => ({
+      query: vi.fn().mockResolvedValue({}),
+    })),
+  },
+}));
+
+vi.mock('ioredis', () => ({
+  Redis: vi.fn(() => ({
+    ping: vi.fn().mockResolvedValue('PONG'),
+  })),
+}));
+
+vi.mock('../../src/config/env.js', () => ({
+  getEnv: vi.fn(() => ({
+    TIMESCALEDB_URL: 'postgres://localhost/test',
+    REDIS_URL: 'redis://localhost:6379',
+  })),
+}));
 
 describe('GcPauseMonitor', () => {
   let collectSpy: MockInstance;
@@ -131,6 +154,36 @@ describe('GcPauseMonitor', () => {
 
     expect(collectSpy).not.toHaveBeenCalled();
     monitor.stop();
+  });
+});
+
+describe('Health Check GC Simulation', () => {
+  it('forces a GC pause and verifies health check returns within 200ms using cache', async () => {
+    const app = Fastify();
+    registerReadinessHealthCheck(app);
+
+    // Initial request to populate cache
+    const res1 = await app.inject({ method: 'GET', url: '/health' });
+    expect(res1.statusCode).toBe(200);
+    const res1Body = JSON.parse(res1.payload) as { status: string };
+    expect(res1Body.status).toBe('ok');
+
+    const startTime = Date.now();
+
+    // Simulate GC pause by allocating and collecting memory
+    const arr = new Array(1e6).fill('garbage');
+    arr.length = 0;
+    if (global.gc) {
+      global.gc();
+    }
+
+    const res2 = await app.inject({ method: 'GET', url: '/health' });
+    const duration = Date.now() - startTime;
+
+    expect(duration).toBeLessThan(200);
+    expect(res2.statusCode).toBe(200);
+    const body = JSON.parse(res2.payload) as { cached: boolean };
+    expect(body.cached).toBe(true);
   });
 });
 
