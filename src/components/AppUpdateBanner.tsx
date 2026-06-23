@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useFormTracker } from '@/stores/useFormTracker';
 
 export function AppUpdateBanner() {
-  const [pendingReload, setPendingReload] = useState(() => {
+  const [pendingReload] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('pendingReload') === 'true';
   });
