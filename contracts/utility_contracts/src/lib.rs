@@ -213,6 +213,8 @@ mod stroop_fuzz_tests;
 #[cfg(test)]
 mod flow_rate_overflow_fuzz;
 #[cfg(test)]
+mod telemetry_ordering_tests;
+#[cfg(test)]
 mod tariff_oracle_tests;
 #[cfg(test)]
 mod temporary_storage_tests;
@@ -307,6 +309,7 @@ pub mod grant_stream_listener;
 pub mod multi_sig_admin;
 pub mod nonce_sync;
 pub mod secure_call_interface;
+pub mod telemetry_billing;
 pub mod tariff_oracle;
 pub mod temporary_storage;
 pub mod u256;
@@ -1032,6 +1035,9 @@ pub enum DataKey {
     // Issue #22 - Re-org replay protection
     PastNonce(BytesN<32>, u64),
     PendingTelemetryQueue(BytesN<32>),
+    // Issue #19 - Deterministic telemetry ordering
+    TelemetryEvents,
+    TelemetryEventCounter,
     // Issue #261 - Tariff Oracle
     TariffOracleAdmin,
     CurrentTariffSchedule,

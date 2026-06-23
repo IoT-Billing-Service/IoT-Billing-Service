@@ -36,6 +36,23 @@ jobs:
             echo "ℹ️ No fuzz tests found"
           fi
 
+  telemetry-determinism:
+    # Issue #19: guards the billing-ordering invariant billing(E) == billing(pi(E)).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+      - name: Permutation determinism test (randomized seed)
+        env:
+          # Randomized per run so any latent order-sensitivity is shaken out
+          # across CI runs in addition to the exhaustive 8! sweep.
+          PROPTEST_SEED: ${{ github.run_id }}
+        run: |
+          cargo test -p utility_contracts --lib telemetry_ordering_tests -- --nocapture
+
   build-wasm:
     needs: test-and-lint
     runs-on: ubuntu-latest
