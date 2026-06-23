@@ -150,7 +150,10 @@ describe('TelemetryFragmentReassembler', () => {
         connectionId: `conn-${String(i)}`,
         deviceId,
         onBufferSizeChange: (id, bytes): void => {
-          maxObservedBufferByDevice.set(id, Math.max(maxObservedBufferByDevice.get(id) ?? 0, bytes));
+          maxObservedBufferByDevice.set(
+            id,
+            Math.max(maxObservedBufferByDevice.get(id) ?? 0, bytes),
+          );
         },
         onProtocolViolation: (event): void => {
           violations.push(event.connectionId);
