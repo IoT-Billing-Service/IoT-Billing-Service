@@ -2,7 +2,6 @@
 
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useTheme } from '@/components/providers/ThemeProvider';
-import { useTelemetryStore } from '@/stores/useTelemetryStore';
 
 interface TelemetryDataPoint {
   timestamp: number;
@@ -68,13 +67,6 @@ export function TelemetryChart({
   const [memoryInfo, setMemoryInfo] = useState<string | null>(null);
   const { chartPalette, prefersReducedMotion } = useTheme();
 
-  // Zustand Store for Tooltip state synchronization
-  const tooltipDataIndex = useTelemetryStore((s) => s.tooltipDataIndex);
-  const setTooltipDataIndex = useTelemetryStore((s) => s.setTooltipDataIndex);
-  const isTooltipFrozen = useTelemetryStore((s) => s.isTooltipFrozen);
-  const frozenTooltipData = useTelemetryStore((s) => s.frozenTooltipData);
-  const freezeTooltip = useTelemetryStore((s) => s.freezeTooltip);
-
   // Upstream: worker initialization
   useEffect(() => {
     workerRef.current = createWorker();
@@ -106,17 +98,6 @@ export function TelemetryChart({
     const ring = ringRef.current;
     const head = headRef.current;
     const count = countRef.current;
-    const wasAtLimit = count >= RING_CAPACITY;
-
-    // Capture current tooltip data for freezing before update
-    let currentTooltipData = null;
-    if (tooltipDataIndex !== null) {
-      const idx = (head + tooltipDataIndex) % RING_CAPACITY;
-      const pt = ring[idx];
-      if (pt) {
-        currentTooltipData = { value: pt.value, timestamp: pt.timestamp, index: tooltipDataIndex };
-      }
-    }
 
     for (let i = 0; i < newPoints.length; i++) {
       const point = newPoints[i] as TelemetryDataPoint;
@@ -131,17 +112,6 @@ export function TelemetryChart({
     headRef.current = newHead;
     countRef.current = newCount;
 
-    // Freeze tooltip to prevent race condition during re-render/mouse events
-    freezeTooltip(currentTooltipData);
-
-    // Adjust tooltip index if data shifted
-    if (wasAtLimit && tooltipDataIndex !== null) {
-      const shift = newPoints.length;
-      let newIndex = tooltipDataIndex - shift;
-      if (newIndex < 0) newIndex = null;
-      setTooltipDataIndex(newIndex);
-    }
-
     const now = performance.now();
     msgTimestamps.current.push(now);
     const cutoff = now - 1000;
@@ -151,7 +121,7 @@ export function TelemetryChart({
         `[TelemetryChart] High incoming rate: ${msgTimestamps.current.length} msg/s for metric "${metric}". Consider scaling horizontally.`,
       );
     }
-  }, [data, metric, tooltipDataIndex, setTooltipDataIndex, freezeTooltip]);
+  }, [data, metric]);
 
   // HEAD: Visibility change handler — pause/resume rAF loop
   useEffect(() => {
@@ -271,8 +241,7 @@ export function TelemetryChart({
       }
 
       // Upstream: line chart drawing — use theme-aware colour
-      const chartLineColor = color ?? chartPalette[0] ?? '#5ec962';
-      ctx.strokeStyle = chartLineColor;
+      ctx.strokeStyle = color ?? chartPalette[0] ?? '#5ec962';
       ctx.lineWidth = 2;
 
       const rng = range.max - range.min || 1;
@@ -298,56 +267,6 @@ export function TelemetryChart({
         }
       }
       ctx.stroke();
-
-      // Tooltip Rendering Logic
-      const activeDataPoint = isTooltipFrozen && frozenTooltipData ? frozenTooltipData :
-                             (tooltipDataIndex !== null ? ring[(head + tooltipDataIndex) % RING_CAPACITY] : null);
-      const activeIndex = isTooltipFrozen && frozenTooltipData ? frozenTooltipData.index : tooltipDataIndex;
-
-      if (activeIndex !== null && activeDataPoint) {
-        const x = padding + (activeIndex / (count - 1)) * (width - 2 * padding);
-        const y = height - padding - ((activeDataPoint.value - range.min) / rng) * (height - 2 * padding);
-
-        // Tooltip line
-        ctx.setLineDash([5, 5]);
-        ctx.strokeStyle = chartTextColor;
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(x, padding);
-        ctx.lineTo(x, height - padding);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.globalAlpha = 1;
-
-        // Tooltip dot
-        ctx.fillStyle = chartLineColor;
-        ctx.beginPath();
-        ctx.arc(x, y, 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Tooltip box
-        const boxW = 120;
-        const boxH = 45;
-        let boxX = x + 10;
-        if (boxX + boxW > width) boxX = x - boxW - 10;
-
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)'; // Slate-900 with alpha
-        ctx.strokeStyle = chartLineColor;
-        ctx.lineWidth = 1;
-        ctx.roundRect(boxX, y - boxH / 2, boxW, boxH, 4);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 11px monospace';
-        ctx.fillText(`${metric}: ${activeDataPoint.value.toFixed(2)}`, boxX + 8, y - 4);
-        ctx.fillStyle = '#94a3b8'; // Slate-400
-        ctx.font = '9px monospace';
-        ctx.fillText(`${new Date(activeDataPoint.timestamp).toLocaleTimeString()}`, boxX + 8, y + 10);
-      }
 
       if (fullRedraw) {
         lastFullRedraw.current = now;
@@ -402,9 +321,6 @@ export function TelemetryChart({
       sendToWorker,
       totalTimeRange,
       width,
-      tooltipDataIndex,
-      isTooltipFrozen,
-      frozenTooltipData,
     ],
   );
 
@@ -454,43 +370,12 @@ export function TelemetryChart({
     };
   }, [draw, prefersReducedMotion]);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas || countRef.current < 2) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const padding = 20;
-
-    // Calculate index relative to current count
-    const relativeX = (x - padding) / (width - 2 * padding);
-    let index = Math.round(relativeX * (countRef.current - 1));
-    index = Math.max(0, Math.min(countRef.current - 1, index));
-
-    setTooltipDataIndex(index);
-  };
-
-  const handleMouseLeave = () => {
-    setTooltipDataIndex(null);
-  };
-
   return (
     <div className="relative">
-      <canvas
-        ref={canvasRef}
-        style={{ width, height }}
-        aria-label={`${metric} telemetry chart`}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-      />
+      <canvas ref={canvasRef} style={{ width, height }} aria-label={`${metric} telemetry chart`} />
       {memoryInfo && (
         <div className="absolute bottom-1 right-2 rounded bg-black/70 px-2 py-0.5 text-[10px] text-gray-400 font-mono">
           {memoryInfo}
-        </div>
-      )}
-      {isTooltipFrozen && (
-        <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-[8px] text-amber-500 uppercase font-bold tracking-wider">
-          Syncing
         </div>
       )}
     </div>
