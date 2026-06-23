@@ -158,7 +158,8 @@ export function useBillingStream(handler: BillingUpdateHandler) {
           }
 
           const update = message as BillingUpdate;
-          if (isUserInteracting) {
+          const { isUserInteracting: interacting, queueTelemetryUpdate } = useCurrencyPref.getState();
+          if (interacting) {
             // Queue the update — will be flushed when interaction ends
             queueTelemetryUpdate({ deviceId: update.deviceId, amount: update.amount });
           } else {
