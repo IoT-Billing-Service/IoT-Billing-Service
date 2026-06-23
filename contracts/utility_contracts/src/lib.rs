@@ -1026,6 +1026,9 @@ pub enum DataKey {
     DeviceNonce(BytesN<32>),
     NonceResetRequest(u64),
     AuthorizedNonceResetters,
+    // Issue #22 - Re-org replay protection
+    PastNonce(BytesN<32>, u64),
+    PendingTelemetryQueue(BytesN<32>),
     // Issue #261 - Tariff Oracle
     TariffOracleAdmin,
     CurrentTariffSchedule,
@@ -1182,6 +1185,10 @@ pub enum ContractError {
     TimelockNotExpired = 109,
     RateOutOfBounds = 110,
     CircuitBreakerActive = 111,
+    // Issue #22 - Re-org replay protection
+    NonceAlreadyProcessed = 112,
+    TelemetryFromFutureLedger = 113,
+    TelemetryNotConfirmed = 114,
 }
 
 #[contracttype]

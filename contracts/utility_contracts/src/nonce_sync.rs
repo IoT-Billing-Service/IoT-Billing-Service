@@ -838,6 +838,305 @@ impl NonceSyncManager {
     }
 }
 
+// ============================================================================
+// Issue #22: Re-organization replay protection
+// ============================================================================
+//
+// The per-device nonce counter lives in contract state. A Stellar network
+// re-organization rolls the ledger back, reverting that state — the nonce
+// counter resets and a previously processed signed telemetry can be replayed
+// with its now-reused nonce, passing validation again and billing twice.
+//
+// Defence (two-phase commit gated on confirmation depth):
+//
+//   1. `submit_billable_telemetry` records signed telemetry into a per-device
+//      PENDING queue, stamped with the ledger sequence it was observed at. It
+//      bills nothing and does not finalize the nonce. A re-org that reverts a
+//      *pending* entry is harmless — no billing occurred, so resubmission is
+//      benign.
+//   2. `finalize_confirmed_telemetry` processes only entries buried under at
+//      least `MIN_LEDGER_CONFIRMATIONS` ledgers. A finalized (device, nonce)
+//      is recorded in `PastNonce` and can never be billed again. Because it is
+//      deeper than the expected re-org depth, it cannot be rolled back.
+//
+// Invariant: each (device_mac, nonce) maps to at most one billing action.
+
+/// Minimum ledger confirmations required before billable telemetry is
+/// finalized. This MUST exceed the deepest re-organization the network can
+/// produce, or a finalized record could be rolled back and replayed.
+///
+/// Stellar re-orgs are typically 1–2 ledgers (max observed 5). The value below
+/// follows the issue blueprint; operators on chains with deeper re-orgs should
+/// raise it above their worst-case observed depth (e.g. 6 to cover a depth-5
+/// re-org). It is the single tuning knob for the safety/latency trade-off:
+/// higher means safer but delays billing finalization by that many ledgers.
+pub const MIN_LEDGER_CONFIRMATIONS: u32 = 3;
+
+/// Signed billable telemetry submitted by a device. Distinct from the liveness
+/// `SignedHeartbeat`: it carries a billable `reading` and the `ledger_seq` the
+/// device targeted, and flows through the confirmation-gated two-phase path.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SignedTelemetry {
+    /// Unique identifier of the utility meter.
+    pub meter_id: u64,
+    /// MAC address of the IoT device (32-byte hash).
+    pub device_mac: BytesN<32>,
+    /// Strictly incrementing nonce for this telemetry submission.
+    pub nonce: u64,
+    /// Billable reading carried by this telemetry.
+    pub reading: i128,
+    /// Ledger sequence the device targeted when signing. Must not be ahead of
+    /// the current ledger.
+    pub ledger_seq: u32,
+    /// When the telemetry was generated (Unix timestamp).
+    pub timestamp: u64,
+    /// Ed25519 signature covering the fields above.
+    pub signature: BytesN<64>,
+    /// Ed25519 public key of the device.
+    pub public_key: BytesN<32>,
+}
+
+/// A telemetry submission awaiting sufficient confirmations before billing.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PendingTelemetry {
+    pub meter_id: u64,
+    pub device_mac: BytesN<32>,
+    pub nonce: u64,
+    pub reading: i128,
+    /// Ledger sequence at which this entry entered the pending queue.
+    pub observed_seq: u32,
+    pub timestamp: u64,
+}
+
+/// A finalized, confirmation-safe billing action emitted by phase 2.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BillingAction {
+    pub meter_id: u64,
+    pub device_mac: BytesN<32>,
+    pub nonce: u64,
+    pub reading: i128,
+}
+
+/// Pure check: is telemetry observed at `observed_seq` buried under at least
+/// `min_confirmations` ledgers as of `current_seq`?
+///
+/// Uses saturating subtraction so a re-org that rewinds `current_seq` below
+/// `observed_seq` (a sequence rollback) yields "not confirmed" rather than
+/// underflowing — exactly the conservative behaviour we want.
+pub fn has_sufficient_confirmations(
+    current_seq: u32,
+    observed_seq: u32,
+    min_confirmations: u32,
+) -> bool {
+    current_seq.saturating_sub(observed_seq) >= min_confirmations
+}
+
+/// Pure check: does telemetry claim a ledger sequence ahead of the current
+/// ledger? Such telemetry can never be confirmed and is likely forged.
+pub fn is_future_ledger(current_seq: u32, telemetry_seq: u32) -> bool {
+    telemetry_seq > current_seq
+}
+
+#[contractimpl]
+impl NonceSyncManager {
+    /// Phase 1 — record signed billable telemetry without billing it.
+    ///
+    /// Validates the signature and nonce, rejects already-processed nonces and
+    /// future-dated telemetry, then enqueues the submission stamped with the
+    /// current ledger sequence. Nothing is billed and the device nonce is not
+    /// advanced until [`Self::finalize_confirmed_telemetry`] runs after
+    /// `MIN_LEDGER_CONFIRMATIONS` confirmations.
+    pub fn submit_billable_telemetry(
+        env: Env,
+        telemetry: SignedTelemetry,
+    ) -> Result<(), ContractError> {
+        validate_ed25519_signature(&telemetry.signature)?;
+        validate_ed25519_public_key(&telemetry.public_key)?;
+        validate_device_mac_hash(&telemetry.device_mac)?;
+
+        if !Self::verify_telemetry_signature(&env, &telemetry) {
+            return Err(ContractError::InvalidSignature);
+        }
+
+        let current_seq = env.ledger().sequence();
+
+        // Reject telemetry that claims a ledger we have not reached yet.
+        if is_future_ledger(current_seq, telemetry.ledger_seq) {
+            return Err(ContractError::TelemetryFromFutureLedger);
+        }
+
+        // Reject a nonce that has already been finalized for this device — the
+        // core replay guard. Survives within the confirmed window even across
+        // a shallow re-org.
+        if Self::has_processed_nonce(&env, &telemetry.device_mac, telemetry.nonce) {
+            return Err(ContractError::NonceAlreadyProcessed);
+        }
+
+        // Reject a nonce already sitting in the pending queue (double submit
+        // before confirmation).
+        let mut queue = Self::load_pending_queue(&env, &telemetry.device_mac);
+        for entry in queue.iter() {
+            if entry.nonce == telemetry.nonce {
+                return Err(ContractError::NonceAlreadyProcessed);
+            }
+        }
+
+        queue.push_back(PendingTelemetry {
+            meter_id: telemetry.meter_id,
+            device_mac: telemetry.device_mac.clone(),
+            nonce: telemetry.nonce,
+            reading: telemetry.reading,
+            observed_seq: current_seq,
+            timestamp: telemetry.timestamp,
+        });
+        Self::store_pending_queue(&env, &telemetry.device_mac, &queue);
+
+        env.events().publish(
+            (symbol_short!("TPend"),),
+            (telemetry.meter_id, telemetry.device_mac, telemetry.nonce),
+        );
+
+        Ok(())
+    }
+
+    /// Phase 2 — finalize every pending entry for a device that has reached
+    /// `MIN_LEDGER_CONFIRMATIONS`. Returns the billing actions that are now
+    /// safe to charge. Entries not yet deep enough remain queued.
+    pub fn finalize_confirmed_telemetry(
+        env: Env,
+        device_mac: BytesN<32>,
+    ) -> Vec<BillingAction> {
+        let current_seq = env.ledger().sequence();
+        let queue = Self::load_pending_queue(&env, &device_mac);
+
+        let mut finalized: Vec<BillingAction> = Vec::new(&env);
+        let mut remaining: Vec<PendingTelemetry> = Vec::new(&env);
+
+        let device_key = DataKey::DeviceNonce(device_mac.clone());
+        let mut nonce_state: DeviceNonceState = env
+            .storage()
+            .persistent()
+            .get(&device_key)
+            .unwrap_or_else(|| DeviceNonceState::new(0));
+
+        for entry in queue.iter() {
+            if !has_sufficient_confirmations(
+                current_seq,
+                entry.observed_seq,
+                MIN_LEDGER_CONFIRMATIONS,
+            ) {
+                // Not buried deeply enough yet — keep waiting.
+                remaining.push_back(entry);
+                continue;
+            }
+
+            // Idempotency guard: never finalize the same nonce twice.
+            if Self::has_processed_nonce(&env, &device_mac, entry.nonce) {
+                continue;
+            }
+
+            // Mark the (device, nonce) as permanently processed.
+            Self::mark_nonce_processed(&env, &device_mac, entry.nonce);
+
+            // Advance the device nonce monotonically.
+            if entry.nonce + 1 > nonce_state.current_nonce {
+                nonce_state.current_nonce = entry.nonce + 1;
+            }
+            nonce_state.last_heartbeat = entry.timestamp;
+
+            finalized.push_back(BillingAction {
+                meter_id: entry.meter_id,
+                device_mac: device_mac.clone(),
+                nonce: entry.nonce,
+                reading: entry.reading,
+            });
+        }
+
+        env.storage().persistent().set(&device_key, &nonce_state);
+        Self::store_pending_queue(&env, &device_mac, &remaining);
+
+        if finalized.len() > 0 {
+            env.events().publish(
+                (symbol_short!("TFinal"),),
+                (device_mac, finalized.len()),
+            );
+        }
+
+        finalized
+    }
+
+    /// Query whether a (device, nonce) pair has already been finalized.
+    pub fn was_nonce_processed(env: Env, device_mac: BytesN<32>, nonce: u64) -> bool {
+        Self::has_processed_nonce(&env, &device_mac, nonce)
+    }
+
+    /// Query the current pending telemetry queue for a device.
+    pub fn get_pending_telemetry(env: Env, device_mac: BytesN<32>) -> Vec<PendingTelemetry> {
+        Self::load_pending_queue(&env, &device_mac)
+    }
+}
+
+impl NonceSyncManager {
+    fn has_processed_nonce(env: &Env, device_mac: &BytesN<32>, nonce: u64) -> bool {
+        let key = DataKey::PastNonce(device_mac.clone(), nonce);
+        env.storage().persistent().get(&key).unwrap_or(false)
+    }
+
+    fn mark_nonce_processed(env: &Env, device_mac: &BytesN<32>, nonce: u64) {
+        let key = DataKey::PastNonce(device_mac.clone(), nonce);
+        env.storage().persistent().set(&key, &true);
+    }
+
+    fn load_pending_queue(env: &Env, device_mac: &BytesN<32>) -> Vec<PendingTelemetry> {
+        let key = DataKey::PendingTelemetryQueue(device_mac.clone());
+        env.storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    fn store_pending_queue(env: &Env, device_mac: &BytesN<32>, queue: &Vec<PendingTelemetry>) {
+        let key = DataKey::PendingTelemetryQueue(device_mac.clone());
+        env.storage().persistent().set(&key, queue);
+    }
+
+    /// Verify a `SignedTelemetry` signature. Mirrors the heartbeat verifier but
+    /// binds the billable `reading` and `ledger_seq` into the signed message so
+    /// they cannot be tampered with.
+    fn verify_telemetry_signature(env: &Env, telemetry: &SignedTelemetry) -> bool {
+        let mut message_data = Bytes::from_slice(env, b"UTILITY_DRIP_TELEMETRY_V1");
+        message_data.append(&Bytes::from_slice(env, &telemetry.meter_id.to_be_bytes()));
+        message_data.append(&Bytes::from_slice(env, &telemetry.device_mac.to_array()));
+        message_data.append(&Bytes::from_slice(env, &telemetry.nonce.to_be_bytes()));
+        message_data.append(&Bytes::from_slice(env, &telemetry.reading.to_be_bytes()));
+        message_data.append(&Bytes::from_slice(env, &telemetry.ledger_seq.to_be_bytes()));
+        message_data.append(&Bytes::from_slice(env, &telemetry.timestamp.to_be_bytes()));
+
+        #[cfg(not(test))]
+        {
+            // `ed25519_verify` panics on an invalid signature; reaching the
+            // next statement means the signature is valid.
+            env.crypto().ed25519_verify(
+                &telemetry.public_key,
+                &message_data,
+                &telemetry.signature,
+            );
+            true
+        }
+
+        #[cfg(test)]
+        {
+            let _ = &message_data;
+            let zero_key = BytesN::from_array(env, &[0u8; 32]);
+            let zero_sig = BytesN::from_array(env, &[0u8; 64]);
+            telemetry.public_key != zero_key && telemetry.signature != zero_sig
+        }
+    }
+}
+
 /// Nonce validation result
 #[derive(Debug, Eq, PartialEq)]
 enum NonceValidationResult {
