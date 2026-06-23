@@ -31,6 +31,7 @@ model Account {
 
   billingRecords  BillingRecord[]
   webhookSecrets  WebhookSecret[]
+  billingCycles   BillingCycle[]
 
   @@map("accounts")
 }
@@ -43,11 +44,48 @@ model BillingRecord {
   txHash      String?  @map("tx_hash")
   status      String   @default("pending")
   createdAt   DateTime @default(now()) @map("created_at")
+  cycleId     String?  @map("cycle_id")
 
   device Device @relation(fields: [deviceId], references: [id])
   account Account @relation(fields: [accountId], references: [id])
+  cycle   BillingCycle? @relation(fields: [cycleId], references: [id])
 
   @@map("billing_records")
+}
+
+/// A billing cycle transitions OPEN -> FINALIZING -> FINALIZED -> SETTLED.
+/// `lockVersion` is an optimistic-concurrency token: every state write does
+/// `WHERE id = ? AND lock_version = ?` and bumps the version, so two callers
+/// racing the same transition cannot both win (issue #42).
+model BillingCycle {
+  id          String   @id @default(cuid())
+  accountId   String   @map("account_id")
+  state       String   @default("OPEN")
+  lockVersion Int      @default(1) @map("lock_version")
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  account         Account                  @relation(fields: [accountId], references: [id])
+  billingRecords  BillingRecord[]
+  finalizationLog BillingFinalizationLog[]
+
+  @@index([state])
+  @@map("billing_cycles")
+}
+
+/// Append-only log making finalization idempotent: a unique idempotency_key
+/// means a replayed finalization for the same logical attempt is a no-op.
+model BillingFinalizationLog {
+  id             String   @id @default(cuid())
+  cycleId        String   @map("cycle_id")
+  idempotencyKey String   @unique @map("idempotency_key")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  cycle BillingCycle @relation(fields: [cycleId], references: [id])
+
+  @@map("billing_finalization_log")
 }
 
 model TelemetryData {
