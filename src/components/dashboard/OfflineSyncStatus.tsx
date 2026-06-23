@@ -1,15 +1,26 @@
 'use client';
 
 import { useOnlineSync } from '@/hooks/useOnlineSync';
+import { useBillingStreamConnectionStatus } from '@/services/billingStreamConnection';
 
 export function OfflineSyncStatus() {
   const { isOnline, pendingCount, lastSync, isSyncing, forceSync } = useOnlineSync();
+  const billingStream = useBillingStreamConnectionStatus();
+  const isReconnecting = billingStream.state === 'reconnecting';
 
-  if (isOnline && pendingCount === 0) return null;
+  if (isOnline && pendingCount === 0 && !isReconnecting) return null;
 
   return (
     <div className="flex items-center gap-3 rounded-md border border-yellow-700 bg-yellow-950 px-3 py-2 text-xs text-yellow-300">
       {!isOnline && <span className="font-medium">Offline</span>}
+      {isReconnecting && (
+        <span className="font-medium text-blue-300">
+          WebSocket RECONNECTING
+          {billingStream.backoffDelayMs > 0
+            ? ` (retry in ${Math.ceil(billingStream.backoffDelayMs / 1000)}s)`
+            : ''}
+        </span>
+      )}
       {pendingCount > 0 && (
         <span>
           {pendingCount} offline mutation{pendingCount !== 1 ? 's' : ''} pending

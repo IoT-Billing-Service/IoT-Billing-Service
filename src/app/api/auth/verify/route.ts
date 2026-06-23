@@ -1,24 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Keypair, StrKey } from '@stellar/stellar-sdk';
-import { createHash } from 'crypto';
 import { nonceStore, sessionStore } from '../sessionStore';
-
-function generateJWT(publicKey: string, expiresAt: number): string {
-  // Simple JWT-like token (in production, use proper JWT library with signing)
-  const payload = Buffer.from(
-    JSON.stringify({
-      sub: publicKey,
-      exp: Math.floor(expiresAt / 1000),
-      iat: Math.floor(Date.now() / 1000),
-    }),
-  ).toString('base64url');
-
-  const signature = createHash('sha256')
-    .update(payload + process.env.JWT_SECRET || 'dev-secret-change-in-production')
-    .digest('base64url');
-
-  return `${payload}.${signature}`;
-}
+import { generateJWT } from '../tokenUtils';
 
 function verifySignature(publicKey: string, message: string, signature: string): boolean {
   try {

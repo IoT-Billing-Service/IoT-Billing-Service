@@ -49,6 +49,8 @@ export function useWeb3Auth() {
       const signedChallenge = await signChallenge(publicKey, nonce);
       const session = await verifySignature({ publicKey, signedChallenge, nonce });
       await cachePut('authSession', publicKey, session);
+      window.__IOT_BILLING_AUTH_SESSION__ = session;
+      window.__IOT_BILLING_PUBLIC_KEY__ = publicKey;
 
       // Start session monitor with heartbeat
       startSessionMonitor(publicKey, {
@@ -76,6 +78,8 @@ export function useWeb3Auth() {
         body: JSON.stringify({ publicKey }),
       });
       await cacheDelete('authSession', publicKey);
+      delete window.__IOT_BILLING_AUTH_SESSION__;
+      delete window.__IOT_BILLING_PUBLIC_KEY__;
       queryClient.clear();
     },
     onSuccess: () => {
