@@ -68,5 +68,5 @@ export class TelemetryStreamParser {
 export const AckProtocol = {
   createAckMessage(sequence: number): string {
     return JSON.stringify({ type: 'ack', seq: sequence });
-  }
+  },
 };
