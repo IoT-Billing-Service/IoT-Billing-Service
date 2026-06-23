@@ -251,3 +251,84 @@ export function validateSignature(publicKey: Uint8Array, payload: SignedPayload)
     { [TELEMETRY_DOMAIN_ATTR]: DOMAIN_TELEMETRY },
   );
 }
+
+export interface ReorderBuffer {
+  submit(deviceId: string, frameSeq: number, payload: SignedPayload): Promise<SignedPayload[]>;
+  getDeliverCount(deviceId: string): Promise<number>;
+}
+
+export class RedisReorderBuffer implements ReorderBuffer {
+  private redis: Redis;
+  private maxWindow: number;
+
+  constructor(redis: Redis, maxWindow = 256) {
+    this.redis = redis;
+    this.maxWindow = maxWindow;
+  }
+
+  async submit(
+    deviceId: string,
+    frameSeq: number,
+    payload: SignedPayload,
+  ): Promise<SignedPayload[]> {
+    const deliveredKey = `reorder:delivered:${deviceId}`;
+    const zsetKey = `reorder:buffer:${deviceId}`;
+    const dropCountKey = `reorder:drops:${deviceId}`;
+
+    // Get current delivered
+    const currentDeliveredStr = await this.redis.get(deliveredKey);
+    let currentDelivered = currentDeliveredStr != null ? parseInt(currentDeliveredStr, 10) : 0;
+
+    if (frameSeq <= currentDelivered) {
+      // Already delivered, drop
+      return [];
+    }
+
+    if (frameSeq === currentDelivered + 1) {
+      // In sequence, we can deliver it right away, and then check buffer for more.
+      const delivered: SignedPayload[] = [payload];
+      currentDelivered++;
+
+      // Fetch contiguous frames from buffer
+      let done = false;
+      while (!done) {
+        const nextFrames = await this.redis.zrangebyscore(
+          zsetKey,
+          currentDelivered + 1,
+          currentDelivered + 1,
+        );
+        if (nextFrames.length > 0) {
+          const frameStr = nextFrames[0] ?? '{}';
+          delivered.push(JSON.parse(frameStr) as SignedPayload);
+          await this.redis.zremrangebyscore(zsetKey, currentDelivered + 1, currentDelivered + 1);
+          currentDelivered++;
+        } else {
+          done = true;
+        }
+      }
+
+      await this.redis.set(deliveredKey, currentDelivered.toString());
+      return delivered;
+    } else {
+      // Out of sequence. Add to ZSET.
+      await this.redis.zadd(zsetKey, frameSeq, JSON.stringify(payload));
+
+      // Check size and evict if > maxWindow
+      const count = await this.redis.zcard(zsetKey);
+      if (count > this.maxWindow) {
+        // PRIORITY EVICTION: drop the LARGEST sequence (newest).
+        // ZPOPMAX returns [member, score]
+        const popped = await this.redis.zpopmax(zsetKey);
+        if (popped.length > 0) {
+          await this.redis.incr(dropCountKey);
+        }
+      }
+      return [];
+    }
+  }
+
+  async getDeliverCount(deviceId: string): Promise<number> {
+    const val = await this.redis.get(`reorder:delivered:${deviceId}`);
+    return val != null ? parseInt(val, 10) : 0;
+  }
+}

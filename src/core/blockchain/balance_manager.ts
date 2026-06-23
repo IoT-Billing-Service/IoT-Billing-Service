@@ -178,6 +178,10 @@ export class BalanceManager {
  * with reconciliation support.
  */
 export class BillingStateMachine extends IngestionStateMachine {
+  constructor(initialState: IngestionState = IngestionState.PENDING) {
+    super('billing-system', initialState);
+  }
+
   /**
    * Handle a tx_bad_seq error by transitioning to ROLLED_BACK then RECONCILING.
    */

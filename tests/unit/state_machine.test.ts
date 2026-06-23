@@ -34,7 +34,7 @@ describe('IngestionStateMachine with RECONCILING', () => {
   let sm: IngestionStateMachine;
 
   beforeEach(() => {
-    sm = new IngestionStateMachine(IngestionState.PENDING);
+    sm = new IngestionStateMachine('dev-1', IngestionState.PENDING);
   });
 
   it('should transition PENDING -> TENTATIVE -> SETTLED', () => {
@@ -50,7 +50,7 @@ describe('IngestionStateMachine with RECONCILING', () => {
   });
 
   it('should allow rollback from tentative and then reconcile', () => {
-    const sm2 = new IngestionStateMachine(IngestionState.TENTATIVE);
+    const sm2 = new IngestionStateMachine('dev-1', IngestionState.TENTATIVE);
     expect(sm2.transition(IngestionState.ROLLED_BACK, 'tx rejected')).toBe(true);
     expect(sm2.getState()).toBe(IngestionState.ROLLED_BACK);
 
@@ -62,18 +62,18 @@ describe('IngestionStateMachine with RECONCILING', () => {
   });
 
   it('should reject transition from SETTLED to RECONCILING', () => {
-    const sm2 = new IngestionStateMachine(IngestionState.SETTLED);
+    const sm2 = new IngestionStateMachine('dev-1', IngestionState.SETTLED);
     expect(sm2.transition(IngestionState.RECONCILING, 'should not work')).toBe(false);
   });
 
   it('should allow RECONCILING -> FAILED when reconciliation fails', () => {
-    const sm2 = new IngestionStateMachine(IngestionState.RECONCILING);
+    const sm2 = new IngestionStateMachine('dev-1', IngestionState.RECONCILING);
     expect(sm2.transition(IngestionState.FAILED, 'reconciliation failed')).toBe(true);
     expect(sm2.getState()).toBe(IngestionState.FAILED);
   });
 
   it('should track transition history correctly', () => {
-    const sm2 = new IngestionStateMachine(IngestionState.PENDING);
+    const sm2 = new IngestionStateMachine('dev-1', IngestionState.PENDING);
     sm2.transition(IngestionState.TENTATIVE, 'start');
     sm2.transition(IngestionState.ROLLED_BACK, 'rejected');
     sm2.transition(IngestionState.RECONCILING, 'reconcile');
@@ -87,12 +87,12 @@ describe('IngestionStateMachine with RECONCILING', () => {
   });
 
   it('should report canTransitionTo correctly', () => {
-    const sm2 = new IngestionStateMachine(IngestionState.ROLLED_BACK);
+    const sm2 = new IngestionStateMachine('dev-1', IngestionState.ROLLED_BACK);
     expect(sm2.canTransitionTo(IngestionState.RECONCILING)).toBe(true);
     expect(sm2.canTransitionTo(IngestionState.SETTLED)).toBe(false);
     expect(sm2.canTransitionTo(IngestionState.TENTATIVE)).toBe(false);
 
-    const sm3 = new IngestionStateMachine(IngestionState.RECONCILING);
+    const sm3 = new IngestionStateMachine('dev-1', IngestionState.RECONCILING);
     expect(sm3.canTransitionTo(IngestionState.PENDING)).toBe(true);
     expect(sm3.canTransitionTo(IngestionState.FAILED)).toBe(true);
   });

@@ -79,7 +79,7 @@ export function registerAdminRoutes(
 
       // Create a state machine in TENTATIVE state (as if it was mid-flight)
       // In production, this would load the actual record's state from the database
-      const sm = new IngestionStateMachine(IngestionState.TENTATIVE);
+      const sm = new IngestionStateMachine('admin-override', IngestionState.TENTATIVE);
 
       if (!sm.canTransitionTo(IngestionState.SETTLED)) {
         return reply.status(409).send({
@@ -141,7 +141,7 @@ export function registerAdminRoutes(
 
       // Create a state machine in TENTATIVE state (as if it was mid-flight)
       // In production, this would load the actual record's state from the database
-      const sm = new IngestionStateMachine(IngestionState.TENTATIVE);
+      const sm = new IngestionStateMachine('admin-override', IngestionState.TENTATIVE);
 
       if (!sm.canTransitionTo(IngestionState.ROLLED_BACK)) {
         return reply.status(409).send({
