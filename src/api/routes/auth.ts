@@ -99,7 +99,8 @@ export function registerAuthRoutes(app: FastifyInstance): void {
       const valid = await verifyChallenge(walletAddress, signature);
 
       const env = getEnv();
-      const deviceId = request.body.deviceId || '';
+      const deviceId: string = typeof request.body.deviceId === 'string' ? request.body.deviceId : '';
+
 
       const realTokens = await issueSessionTokens(walletAddress, deviceId);
       const dummyTokens = await issueSessionTokens('GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF', deviceId);
