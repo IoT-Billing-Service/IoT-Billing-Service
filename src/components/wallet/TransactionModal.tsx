@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@/components/providers/WalletProvider';
 import { ErrorDecoder } from '@/utils/errorDecoder';
 import { useTxRetryQueue } from '@/hooks/useTxRetryQueue';
@@ -50,6 +50,12 @@ export function TransactionModal({
   const [amount, setAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [txError, setTxError] = useState<{ decoded: string; raw: string } | null>(null);
+  // Synchronous in-flight guard. The disabled button already blocks
+  // click-driven double-submits (React flushes discrete events synchronously),
+  // but this makes the protection independent of render timing and of the
+  // `disabled` condition staying correct — defense-in-depth for a money-moving
+  // action against future non-discrete or programmatic invocation paths.
+  const submittingRef = useRef(false);
 
   const {
     feeBreakdown,
@@ -81,6 +87,8 @@ export function TransactionModal({
 
   const handleSubmit = async () => {
     if (!amount || !metrics?.publicKey) return;
+    if (submittingRef.current) return; // already in flight — ignore re-entrant submits
+    submittingRef.current = true;
     setSubmitting(true);
     setTxError(null);
     try {
@@ -119,6 +127,7 @@ export function TransactionModal({
       setTxError({ decoded: errorDecoder.tryDecode(raw), raw });
     } finally {
       setSubmitting(false);
+      submittingRef.current = false;
     }
   };
 
