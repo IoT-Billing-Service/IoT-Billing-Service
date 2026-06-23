@@ -75,7 +75,7 @@ export class IngestionStateMachine {
     return true;
   }
 
-  private startResyncTimer() {
+  private startResyncTimer(): void {
     this.clearResyncTimer();
     this.resyncTimer = setTimeout(() => {
       this.triggerAutoResync();
@@ -84,14 +84,14 @@ export class IngestionStateMachine {
     this.resyncTimer.unref();
   }
 
-  private clearResyncTimer() {
+  private clearResyncTimer(): void {
     if (this.resyncTimer !== undefined) {
       clearTimeout(this.resyncTimer);
       this.resyncTimer = undefined;
     }
   }
 
-  private triggerAutoResync() {
+  private triggerAutoResync(): void {
     // In a real environment, this might trigger a local event or a service call.
     // As instructed by the blueprint, it triggers POST /api/v1/device/{device_id}/resync
     // Since we are inside the core, we can use a fetch call to localhost, or emit an event.
@@ -101,12 +101,12 @@ export class IngestionStateMachine {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'auto_resync_timeout' }),
-    }).catch((err) => {
+    }).catch((err: unknown) => {
       console.error(`Failed to trigger auto-resync for ${this.deviceId}:`, err);
     });
   }
 
-  dispose() {
+  dispose(): void {
     this.clearResyncTimer();
   }
 

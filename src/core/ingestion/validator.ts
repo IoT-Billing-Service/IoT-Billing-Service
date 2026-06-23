@@ -1,4 +1,4 @@
-﻿import nacl from 'tweetnacl';
+import nacl from 'tweetnacl';
 import { Buffer } from 'node:buffer';
 import type { Redis } from 'ioredis';
 import type { Span } from '@opentelemetry/api';
@@ -261,7 +261,7 @@ export class RedisReorderBuffer implements ReorderBuffer {
   private redis: Redis;
   private maxWindow: number;
 
-  constructor(redis: Redis, maxWindow: number = 256) {
+  constructor(redis: Redis, maxWindow = 256) {
     this.redis = redis;
     this.maxWindow = maxWindow;
   }
@@ -277,7 +277,7 @@ export class RedisReorderBuffer implements ReorderBuffer {
 
     // Get current delivered
     const currentDeliveredStr = await this.redis.get(deliveredKey);
-    let currentDelivered = currentDeliveredStr ? parseInt(currentDeliveredStr, 10) : 0;
+    let currentDelivered = currentDeliveredStr != null ? parseInt(currentDeliveredStr, 10) : 0;
 
     if (frameSeq <= currentDelivered) {
       // Already delivered, drop
@@ -298,7 +298,8 @@ export class RedisReorderBuffer implements ReorderBuffer {
           currentDelivered + 1,
         );
         if (nextFrames.length > 0) {
-          delivered.push(JSON.parse(nextFrames[0] as string) as SignedPayload);
+          const frameStr = nextFrames[0] ?? '{}';
+          delivered.push(JSON.parse(frameStr) as SignedPayload);
           await this.redis.zremrangebyscore(zsetKey, currentDelivered + 1, currentDelivered + 1);
           currentDelivered++;
         } else {
@@ -318,7 +319,7 @@ export class RedisReorderBuffer implements ReorderBuffer {
         // PRIORITY EVICTION: drop the LARGEST sequence (newest).
         // ZPOPMAX returns [member, score]
         const popped = await this.redis.zpopmax(zsetKey);
-        if (popped && popped.length > 0) {
+        if (popped.length > 0) {
           await this.redis.incr(dropCountKey);
         }
       }
@@ -328,6 +329,6 @@ export class RedisReorderBuffer implements ReorderBuffer {
 
   async getDeliverCount(deviceId: string): Promise<number> {
     const val = await this.redis.get(`reorder:delivered:${deviceId}`);
-    return val ? parseInt(val, 10) : 0;
+    return val != null ? parseInt(val, 10) : 0;
   }
 }
