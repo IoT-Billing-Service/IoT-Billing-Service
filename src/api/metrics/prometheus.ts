@@ -50,6 +50,11 @@ export const noncePoolDepth: promClient.Gauge = new promClient.Gauge({
   help: 'Active nonce reservations in the pool',
 });
 
+export const lockEventListenerCount: promClient.Gauge = new promClient.Gauge({
+  name: 'lock_event_listener_count',
+  help: 'Number of per-lock event listeners registered on AdvisoryLockManager',
+});
+
 export const ingestionQueueDepth: promClient.Gauge = new promClient.Gauge({
   name: 'ingestion_queue_depth',
   help: 'Current ingestion task queue depth',
