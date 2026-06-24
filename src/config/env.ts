@@ -16,9 +16,31 @@ const envSchema = z.object({
   CONTRACT_ID: z.string().optional(),
   ADMIN_SECRET_KEY: z.string().optional(),
   JWT_SECRET: z.string().min(32),
+  // Legacy informational value; access-token lifetime is now driven by the
+  // jittered, keepalive-aligned settings below (issue #59).
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  // --- Session lifecycle / WebSocket keepalive alignment (issue #59) ---------
+  // The WebSocket keepalive interval. The access-token lifetime must comfortably
+  // exceed this so a token can never expire silently between two keepalive
+  // pings (invariant: token_expiry > last_frame_timestamp + keepalive).
+  WS_KEEPALIVE_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
+  // Base access-token TTL, aligned with the keepalive interval
+  // (keepalive * N + buffer). Default 1260s (21m) keeps the token valid across
+  // many keepalive windows instead of the old 15m boundary that raced them.
+  ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(1260),
+  // Per-token random expiry spread. Each token expires at base + random(0,
+  // jitter) seconds so 100k devices do not all expire on the same instant and
+  // stampede the auth endpoint. Default spreads load across a 2-minute window.
+  ACCESS_TOKEN_JITTER_SECONDS: z.coerce.number().int().nonnegative().default(120),
+  // Tokens expired by no more than this are still honoured once, with an
+  // `X-Token-Expiring` hint, so a device can refresh asynchronously without
+  // dropping the in-flight telemetry frame.
+  TOKEN_GRACE_PERIOD_SECONDS: z.coerce.number().int().nonnegative().default(30),
+  // When a still-valid token is within this many seconds of expiry, the auth
+  // layer asks the client to refresh proactively (via response headers).
+  TOKEN_REFRESH_HINT_SECONDS: z.coerce.number().int().nonnegative().default(120),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   OTEL_SERVICE_NAME: z.string().default('iot-billing-backend'),
   MAX_PAYLOAD_SIZE_BYTES: z.coerce.number().int().positive().default(65536),

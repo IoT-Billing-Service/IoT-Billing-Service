@@ -38,6 +38,39 @@ export interface ChallengeResult {
 const CHALLENGE_KEY_PREFIX = 'auth:challenge:';
 
 /**
+ * Compute a jittered access-token TTL in seconds (issue #59).
+ *
+ * Returns `baseTtlSeconds + random(0, jitterSeconds)` so that a fleet of devices
+ * that all authenticate within a narrow window do NOT all expire at the same
+ * instant. Spreading expiry across the jitter window turns a synchronized
+ * reconnection stampede into a smooth trickle on the auth endpoint.
+ *
+ * Pure and deterministic given `rng`, so the staggering property is testable.
+ */
+export function computeAccessTokenTtlSeconds(
+  baseTtlSeconds: number,
+  jitterSeconds: number,
+  rng: () => number = Math.random,
+): number {
+  if (jitterSeconds <= 0) {
+    return baseTtlSeconds;
+  }
+  // +1 so the inclusive upper bound `jitterSeconds` is reachable.
+  return baseTtlSeconds + Math.floor(rng() * (jitterSeconds + 1));
+}
+
+/**
+ * Seconds remaining until a token's `exp` (negative once expired). Uses the
+ * standard JWT `exp` (unix seconds). `nowMs` is injectable for testing.
+ */
+export function secondsUntilExpiry(
+  payload: Pick<SessionPayload, 'exp'>,
+  nowMs: number = Date.now(),
+): number {
+  return payload.exp - Math.floor(nowMs / 1000);
+}
+
+/**
  * Generate a 32-byte cryptographically random nonce, hex-encoded (64 chars).
  */
 export function generateNonce(): string {
@@ -216,7 +249,10 @@ export async function issueSessionTokens(
     version,
   };
   const accessOpts: SignOptions = {
-    expiresIn: env.JWT_EXPIRES_IN as string & SignOptions['expiresIn'],
+    expiresIn: computeAccessTokenTtlSeconds(
+      env.ACCESS_TOKEN_TTL_SECONDS,
+      env.ACCESS_TOKEN_JITTER_SECONDS,
+    ),
   };
   const accessToken = jwt.sign(payload, env.JWT_SECRET, accessOpts);
 
@@ -287,7 +323,10 @@ export async function refreshSession(
       version: newVersion,
     };
     const accessOpts: SignOptions = {
-      expiresIn: env.JWT_EXPIRES_IN as string & SignOptions['expiresIn'],
+      expiresIn: computeAccessTokenTtlSeconds(
+        env.ACCESS_TOKEN_TTL_SECONDS,
+        env.ACCESS_TOKEN_JITTER_SECONDS,
+      ),
     };
     const accessToken = jwt.sign(payload, env.JWT_SECRET, accessOpts);
 
