@@ -10,15 +10,20 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import type pg from 'pg';
 
-import { BatchState, type Batch, batchLockId, BATCH_WINDOW_MS } from '../../src/ingestion/batchManager.js';
+import {
+  BatchState,
+  type Batch,
+  batchLockId,
+  BATCH_WINDOW_MS,
+} from '../../src/ingestion/batchManager.js';
 import { compactBatch, rotateBatch } from '../../src/ingestion/batchCompactor.js';
 
 // ─── Mock helpers ─────────────────────────────────────────────────────────────
 
 const BATCH_START = new Date('2026-06-24T10:00:00.000Z');
-const BATCH_END   = new Date(BATCH_START.getTime() + BATCH_WINDOW_MS);
-const DEVICE_ID   = 'dev-001';
-const BATCH_ID    = `${DEVICE_ID}:${String(BATCH_START.getTime())}`;
+const BATCH_END = new Date(BATCH_START.getTime() + BATCH_WINDOW_MS);
+const DEVICE_ID = 'dev-001';
+const BATCH_ID = `${DEVICE_ID}:${String(BATCH_START.getTime())}`;
 
 /** Shared mutable batch state visible to all query calls. */
 let batchState: BatchState;
@@ -55,13 +60,15 @@ function makeMockClient(): pg.PoolClient {
     // SELECT batch by id
     if (s.startsWith('SELECT') && s.includes('FROM TELEMETRY_BATCHES WHERE ID')) {
       return {
-        rows: [{
-          id: BATCH_ID,
-          device_id: DEVICE_ID,
-          batch_start: BATCH_START,
-          batch_end: BATCH_END,
-          state: batchState,
-        }],
+        rows: [
+          {
+            id: BATCH_ID,
+            device_id: DEVICE_ID,
+            batch_start: BATCH_START,
+            batch_end: BATCH_END,
+            state: batchState,
+          },
+        ],
       };
     }
 
@@ -69,13 +76,15 @@ function makeMockClient(): pg.PoolClient {
     if (s.startsWith('SELECT') && s.includes('FROM TELEMETRY_BATCHES') && s.includes('STATE')) {
       if (batchState === BatchState.OPEN) {
         return {
-          rows: [{
-            id: BATCH_ID,
-            device_id: DEVICE_ID,
-            batch_start: BATCH_START,
-            batch_end: BATCH_END,
-            state: BatchState.OPEN,
-          }],
+          rows: [
+            {
+              id: BATCH_ID,
+              device_id: DEVICE_ID,
+              batch_start: BATCH_START,
+              batch_end: BATCH_END,
+              state: BatchState.OPEN,
+            },
+          ],
         };
       }
       return { rows: [] };
@@ -109,10 +118,25 @@ function makeMockClient(): pg.PoolClient {
     if (s.startsWith('SELECT') && s.includes('FROM TELEMETRY')) {
       const [, start, end] = params as [string, Date, Date];
       const events = [
-        { device_id: DEVICE_ID, metric_id: 1, metric_value: 10, time: new Date(start.getTime() + 1_000) },
-        { device_id: DEVICE_ID, metric_id: 1, metric_value: 20, time: new Date(start.getTime() + 2_000) },
-        { device_id: DEVICE_ID, metric_id: 1, metric_value: 30, time: new Date(start.getTime() + 3_000) },
-      ].filter(e => e.time >= start && e.time < end);
+        {
+          device_id: DEVICE_ID,
+          metric_id: 1,
+          metric_value: 10,
+          time: new Date(start.getTime() + 1_000),
+        },
+        {
+          device_id: DEVICE_ID,
+          metric_id: 1,
+          metric_value: 20,
+          time: new Date(start.getTime() + 2_000),
+        },
+        {
+          device_id: DEVICE_ID,
+          metric_id: 1,
+          metric_value: 30,
+          time: new Date(start.getTime() + 3_000),
+        },
+      ].filter((e) => e.time >= start && e.time < end);
       return { rows: events };
     }
 
@@ -231,8 +255,8 @@ describe('batchCompactor — state machine + advisory lock', () => {
       ]);
 
       // One must win, one must be serialised out
-      const wins = [compactResult, rotateResult].filter(r => r !== null && r !== 'skipped');
-      const skips = [compactResult, rotateResult].filter(r => r === null || r === 'skipped');
+      const wins = [compactResult, rotateResult].filter((r) => r !== null && r !== 'skipped');
+      const skips = [compactResult, rotateResult].filter((r) => r === null || r === 'skipped');
       expect(wins.length).toBe(1);
       expect(skips.length).toBe(1);
 
@@ -240,7 +264,7 @@ describe('batchCompactor — state machine + advisory lock', () => {
       expect(batchState).toBe(BatchState.CLOSED);
 
       // Summaries must cover the exact original window once (no double-count)
-      const summariesForBatch = writtenSummaries.filter(s => s.batch_id === BATCH_ID);
+      const summariesForBatch = writtenSummaries.filter((s) => s.batch_id === BATCH_ID);
       for (const s of summariesForBatch) {
         expect(s.batch_start.getTime()).toBe(BATCH_START.getTime());
         expect(s.batch_end.getTime()).toBe(BATCH_END.getTime());
@@ -270,7 +294,7 @@ describe('batchCompactor — state machine + advisory lock', () => {
       expect(compactResult).toBe('skipped'); // batch already CLOSED
 
       // Created successor starts exactly at BATCH_END
-      const successor = createdBatches.find(b => b.id !== BATCH_ID);
+      const successor = createdBatches.find((b) => b.id !== BATCH_ID);
       expect(successor).toBeDefined();
       expect(successor!.batch_start.getTime()).toBe(BATCH_END.getTime());
 

@@ -30,10 +30,10 @@ export function batchLockId(batchId: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < batchId.length; i++) {
     h ^= batchId.charCodeAt(i);
-    h = (Math.imul(h, 0x01000193) >>> 0);
+    h = Math.imul(h, 0x01000193) >>> 0;
   }
   // mask to 31 bits so it is always a positive signed int
-  return (h & 0x7fffffff);
+  return h & 0x7fffffff;
 }
 
 // ─── DB helpers ──────────────────────────────────────────────────────────────
@@ -46,10 +46,7 @@ export async function createBatch(client: pg.PoolClient, batch: Batch): Promise<
   );
 }
 
-export async function getBatch(
-  client: pg.PoolClient,
-  batchId: string,
-): Promise<Batch | null> {
+export async function getBatch(client: pg.PoolClient, batchId: string): Promise<Batch | null> {
   const res = await client.query<Batch>(
     `SELECT id, device_id, batch_start, batch_end, state
      FROM telemetry_batches WHERE id = $1`,
@@ -58,10 +55,7 @@ export async function getBatch(
   return res.rows[0] ?? null;
 }
 
-export async function getOpenBatch(
-  client: pg.PoolClient,
-  deviceId: string,
-): Promise<Batch | null> {
+export async function getOpenBatch(client: pg.PoolClient, deviceId: string): Promise<Batch | null> {
   const res = await client.query<Batch>(
     `SELECT id, device_id, batch_start, batch_end, state
      FROM telemetry_batches
@@ -106,17 +100,13 @@ export async function tryAcquireBatchLock(
   batchId: string,
 ): Promise<boolean> {
   const lockId = batchLockId(batchId);
-  const res = await client.query<{ locked: boolean }>(
-    `SELECT pg_try_advisory_lock($1) AS locked`,
-    [lockId],
-  );
+  const res = await client.query<{ locked: boolean }>(`SELECT pg_try_advisory_lock($1) AS locked`, [
+    lockId,
+  ]);
   return res.rows[0]?.locked === true;
 }
 
-export async function releaseBatchLock(
-  client: pg.PoolClient,
-  batchId: string,
-): Promise<void> {
+export async function releaseBatchLock(client: pg.PoolClient, batchId: string): Promise<void> {
   const lockId = batchLockId(batchId);
   await client.query(`SELECT pg_advisory_unlock($1)`, [lockId]);
 }

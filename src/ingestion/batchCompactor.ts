@@ -27,12 +27,7 @@ function newBatchId(deviceId: string, startEpoch: number): string {
  * regardless of where rotation is in its lifecycle.
  */
 async function doCompact(client: pg.PoolClient, batch: Batch): Promise<void> {
-  const events = await readRawEvents(
-    client,
-    batch.device_id,
-    batch.batch_start,
-    batch.batch_end,
-  );
+  const events = await readRawEvents(client, batch.device_id, batch.batch_start, batch.batch_end);
   if (events.length === 0) return;
 
   // Group by metric_id
@@ -83,10 +78,7 @@ async function doCompact(client: pg.PoolClient, batch: Batch): Promise<void> {
  * rotateBatch() refuses to close a batch unless it is OPEN, so it will never
  * interfere with a compaction in progress.
  */
-export async function compactBatch(
-  batchId: string,
-  pool?: pg.Pool,
-): Promise<'ok' | 'skipped'> {
+export async function compactBatch(batchId: string, pool?: pg.Pool): Promise<'ok' | 'skipped'> {
   const p = pool ?? getTimescalePool();
   const client = await p.connect();
   try {
@@ -128,10 +120,7 @@ export async function compactBatch(
  *    zero gap regardless of wall-clock drift.
  * 4. Release advisory lock.
  */
-export async function rotateBatch(
-  deviceId: string,
-  pool?: pg.Pool,
-): Promise<Batch | null> {
+export async function rotateBatch(deviceId: string, pool?: pg.Pool): Promise<Batch | null> {
   const p = pool ?? getTimescalePool();
   const client = await p.connect();
   try {
@@ -184,12 +173,7 @@ export async function rotateBatch(
       // Now finish compacting the old batch (still under the advisory lock on old id).
       const oldBatch: Batch = { ...current, state: BatchState.COMPACTING };
       await doCompact(client, oldBatch);
-      await transitionBatchState(
-        client,
-        current.id,
-        BatchState.COMPACTING,
-        BatchState.CLOSED,
-      );
+      await transitionBatchState(client, current.id, BatchState.COMPACTING, BatchState.CLOSED);
 
       return nextBatch;
     } finally {
@@ -204,10 +188,7 @@ export async function rotateBatch(
  * Ensure an OPEN batch exists for the device.  Creates one anchored to the
  * current 5-minute time bucket if none exists.
  */
-export async function ensureOpenBatch(
-  deviceId: string,
-  pool?: pg.Pool,
-): Promise<Batch> {
+export async function ensureOpenBatch(deviceId: string, pool?: pg.Pool): Promise<Batch> {
   const p = pool ?? getTimescalePool();
   const client = await p.connect();
   try {
