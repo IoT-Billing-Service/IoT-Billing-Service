@@ -1,0 +1,12 @@
+[package]
+name = "telemetry-determinism-check"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Issue #19: standalone CI guard for the billing-ordering invariant billing(E) == billing(pi(E))."
+
+[[bin]]
+name = "telemetry-determinism-check"
+path = "src/main.rs"
+
+[dependencies]

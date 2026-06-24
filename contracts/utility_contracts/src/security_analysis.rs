@@ -167,3 +167,49 @@ The implementation satisfies all acceptance criteria:
 3. ✅ Amicable closures trigger accurate refunds
 
 The security analysis demonstrates that the buffer vault system is resilient against known attack vectors and maintains the integrity of user funds throughout the stream lifecycle.
+
+# Storage Key TTL Audit (Issue #18)
+
+## Threat
+Persistent storage entries have a finite TTL. When a device stream is inactive
+beyond its TTL, the host archives/evicts the entry. The ghost sweeper read
+stream keys without first bumping their TTL, so a key could be garbage-collected
+between the `has()` existence check and the `get()` read — yielding a missing or
+garbage read (a TOCTOU bug).
+
+## Mitigation
+All eviction-prone persistent reads/writes in `ghost_sweeper.rs` now route
+through `storage_ttl.rs`:
+- `ttl_safe_read<K, V>` — extends the entry's TTL, then reads; returns `None`
+  if the key is absent (graceful, never garbage).
+- `set_with_ttl<K, V>` — writes, then pins a fresh 14-day TTL.
+
+Invariant: every key accessed through these helpers has, after the call,
+TTL ≥ `now + MIN_TTL_THRESHOLD_LEDGERS` (7 days).
+
+## Audited persistent keys
+
+| Storage key | Access site | Access kind | TTL policy |
+|---|---|---|---|
+| `DataKey::ContinuousFlow(stream_id)` | `prune_ghost_stream`, `get_ghost_stream_candidates`, `check_stream_eligibility` | read | `ttl_safe_read` (extend → read; None if evicted) |
+| `DataKey::StreamArchive(stream_id)` | `prune_ghost_stream` | write | `set_with_ttl` (14-day TTL) |
+| `DataKey::SweeperStatistics` | `update_sweeper_statistics` | write | `set_with_ttl` (14-day TTL) |
+| `DataKey::DeviceHash(pubkey)` | `prune_ghost_stream` | remove | n/a (intentional deletion) |
+
+## TTL parameters (`storage_ttl.rs`)
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `DAY_LEDGERS` | 17,280 | ledger closes per day at 5s/close (86,400 / 5) |
+| `TTL_WINDOW_DAYS` | 14 | TTL window applied to swept/created entries |
+| `TTL_EXTEND_TO_LEDGERS` | 241,920 | 14 days, the extend-to target |
+| `MIN_TTL_THRESHOLD_LEDGERS` | 120,960 | 7 days; only extend when remaining TTL drops below this |
+
+Note: the issue's "604,800 ledger closes" for the 7-day default conflates
+seconds with ledgers; 7 days at 5s/close is 7 × 17,280 = 120,960 closes.
+
+## Test-teardown audit
+The TTL behaviour is exercised in `ghost_sweeper_tests.rs::ttl_gc_tests`:
+graceful `None` for absent/GC'd keys, `set_with_ttl` roundtrip, and a GC
+simulation that fast-forwards ~150% of the TTL window before asserting a clean
+`None` read.
