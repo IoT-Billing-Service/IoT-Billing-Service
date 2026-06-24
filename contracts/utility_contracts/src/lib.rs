@@ -215,6 +215,8 @@ mod event_privacy_tests;
 #[cfg(test)]
 mod flow_rate_overflow_fuzz;
 #[cfg(test)]
+mod oracle_circuit_breaker_tests;
+#[cfg(test)]
 mod tariff_oracle_tests;
 #[cfg(test)]
 mod temporary_storage_tests;
@@ -308,6 +310,7 @@ pub mod ghost_sweeper;
 pub mod grant_stream_listener;
 pub mod multi_sig_admin;
 pub mod nonce_sync;
+pub mod oracle_circuit_breaker;
 pub mod secure_call_interface;
 pub mod tariff_oracle;
 pub mod event_privacy;
@@ -1035,9 +1038,9 @@ pub enum DataKey {
     // Issue #22 - Re-org replay protection
     PastNonce(BytesN<32>, u64),
     PendingTelemetryQueue(BytesN<32>),
-    // Issue #20 - Privacy-preserving billing events
-    TenantPrivacyConfig(Address),
-    BillingCommitmentRecord(Address, u64),
+    // Issue #21 - Oracle staleness circuit breaker
+    OraclePriceHistory,
+    OracleLastGoodPrice,
     // Issue #261 - Tariff Oracle
     TariffOracleAdmin,
     CurrentTariffSchedule,
@@ -1198,8 +1201,9 @@ pub enum ContractError {
     NonceAlreadyProcessed = 112,
     TelemetryFromFutureLedger = 113,
     TelemetryNotConfirmed = 114,
-    // Issue #20 - Privacy-preserving billing events
-    TenantEventsDisabled = 115,
+    // Issue #21 - Oracle staleness circuit breaker
+    // (115 left for the in-flight privacy-events PR #29)
+    OraclePriceUnavailable = 116,
 }
 
 #[contracttype]
