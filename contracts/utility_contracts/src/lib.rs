@@ -215,6 +215,8 @@ mod event_privacy_tests;
 #[cfg(test)]
 mod flow_rate_overflow_fuzz;
 #[cfg(test)]
+mod reentrancy_guard_tests;
+#[cfg(test)]
 mod oracle_circuit_breaker_tests;
 #[cfg(test)]
 mod tariff_oracle_tests;
@@ -312,6 +314,7 @@ pub mod grant_stream_listener;
 pub mod multi_sig_admin;
 pub mod nonce_sync;
 pub mod oracle_circuit_breaker;
+pub mod reentrancy_guard;
 pub mod secure_call_interface;
 pub mod storage_ttl;
 pub mod tariff_oracle;
