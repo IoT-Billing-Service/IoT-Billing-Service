@@ -124,12 +124,11 @@ impl GhostSweeper {
     pub fn prune_ghost_stream(env: Env, stream_id: u64, relayer: Address) -> i128 {
         let current_time = env.ledger().timestamp();
 
-        // Get stream data
+        // Get stream data. Issue #18: bump TTL before reading so an abandoned
+        // (long-inactive) stream key cannot be garbage-collected between the
+        // existence check and the read.
         let stream_key = DataKey::ContinuousFlow(stream_id);
-        let stream: ContinuousFlow = env
-            .storage()
-            .persistent()
-            .get(&stream_key)
+        let stream: ContinuousFlow = crate::storage_ttl::ttl_safe_read(&env, &stream_key)
             .unwrap_or_else(|| panic_with_error!(env, ContractError::MeterNotFound));
 
         // Check eligibility for pruning
@@ -159,9 +158,10 @@ impl GhostSweeper {
             env.storage().persistent().remove(&mac_key);
         }
 
-        // Store lightweight archive hash
+        // Store lightweight archive hash. Issue #18: pin a fresh 14-day TTL so
+        // the archive (needed for historical integrity) is not prematurely GC'd.
         let archive_key = DataKey::StreamArchive(stream_id);
-        env.storage().persistent().set(&archive_key, &archive_hash);
+        crate::storage_ttl::set_with_ttl(&env, &archive_key, &archive_hash);
 
         // Update global statistics
         Self::update_sweeper_statistics(&env, 1, storage_bytes, gas_bounty);
@@ -246,11 +246,11 @@ impl GhostSweeper {
         let stream_ids = Self::get_all_stream_ids(&env, limit);
 
         for stream_id in stream_ids.iter() {
+            // Issue #18: TTL-safe read keeps candidate stream keys alive and
+            // skips any already evicted, rather than reading garbage.
             let stream_key = DataKey::ContinuousFlow(stream_id);
-            if let Some(stream) = env
-                .storage()
-                .persistent()
-                .get::<DataKey, ContinuousFlow>(&stream_key)
+            if let Some(stream) =
+                crate::storage_ttl::ttl_safe_read::<DataKey, ContinuousFlow>(&env, &stream_key)
             {
                 let eligibility = Self::check_pruning_eligibility(&env, &stream, current_time);
 
@@ -285,8 +285,9 @@ impl GhostSweeper {
     pub fn check_stream_eligibility(env: Env, stream_id: u64) -> Option<GhostStreamCandidate> {
         let current_time = env.ledger().timestamp();
 
+        // Issue #18: TTL-safe read — extend before reading, return None if evicted.
         let stream_key = DataKey::ContinuousFlow(stream_id);
-        let stream: ContinuousFlow = env.storage().persistent().get(&stream_key)?;
+        let stream: ContinuousFlow = crate::storage_ttl::ttl_safe_read(&env, &stream_key)?;
 
         let eligibility = Self::check_pruning_eligibility(&env, &stream, current_time);
 
@@ -428,9 +429,8 @@ impl GhostSweeper {
         stats.last_sweep_timestamp = env.ledger().timestamp();
         stats.total_sweep_operations += 1;
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::SweeperStatistics, &stats);
+        // Issue #18: pin TTL so the long-lived statistics entry is not GC'd.
+        crate::storage_ttl::set_with_ttl(&env, &DataKey::SweeperStatistics, &stats);
     }
 
     /// Get all stream IDs (simplified implementation)
