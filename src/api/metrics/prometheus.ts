@@ -33,6 +33,23 @@ export const blockchainTxCounter: promClient.Counter = new promClient.Counter({
   labelNames: ['status'],
 });
 
+// Billing-tier config hot-reload observability (issue #63). Incremented when a
+// batch observes the active config version change mid-processing, so the batch
+// is re-processed under the new version. Labelled by the start/end version so
+// transitions are traceable.
+export const configTransitionEvents: promClient.Gauge = new promClient.Gauge({
+  name: 'config_transition_events',
+  help: 'Billing-tier config version transitions detected mid-batch, by start/end version',
+  labelNames: ['start_version', 'end_version'],
+});
+
+export function incrementConfigTransitionEvents(
+  startVersion: string | number,
+  endVersion: string | number,
+): void {
+  configTransitionEvents.inc({ start_version: startVersion, end_version: endVersion });
+}
+
 // Rate-limiter observability (issue #50). Every decision is served from
 // centralized Redis state (the token bucket is a server-side Lua script), so
 // the limiter is pod-agnostic by construction. This counter makes that visible
@@ -178,10 +195,18 @@ export const ledgerSyncPollErrors: promClient.Counter = new promClient.Counter({
   labelNames: ['sync_id', 'phase'],
 });
 
-export const configTransitionEvents: promClient.Gauge = new promClient.Gauge({
-  name: 'config_transition_events',
-  help: 'Number of batches that straddle a config version boundary',
-  labelNames: ['start_version', 'end_version'],
+// Ledger event-bus continuity (issue #48). Before this change, cross-process
+// ledger notifications used Redis pub/sub, which silently dropped every message
+// published during a sentinel failover (no subscribers on the new leader). The
+// bus now uses durable Redis Streams + consumer groups, but we still track any
+// sequence discontinuity observed at consume time so a regression is visible.
+// The counter is incremented by the number of missing sequences each time a gap
+// is detected; the legacy `redis_pubsub_messages_lost_total` name is retained so
+// existing dashboards/alerts continue to work.
+export const redisPubsubMessagesLost: promClient.Counter = new promClient.Counter({
+  name: 'redis_pubsub_messages_lost_total',
+  help: 'Ledger events detected as missing via consumer-group sequence-gap detection',
+  labelNames: ['stream'],
 });
 
 // Setters -----------------------------------------------------------------------
@@ -257,8 +282,10 @@ export function recordLedgerSyncPollError(syncId: string, phase: 'poll' | 'fetch
   ledgerSyncPollErrors.inc({ sync_id: syncId, phase });
 }
 
-export function incrementConfigTransitionEvents(startVersion: string, endVersion: string): void {
-  configTransitionEvents.inc({ start_version: startVersion, end_version: endVersion });
+export function recordRedisPubsubMessagesLost(stream: string, count: number): void {
+  if (Number.isFinite(count) && count > 0) {
+    redisPubsubMessagesLost.inc({ stream }, count);
+  }
 }
 
 // Metrics endpoint -------------------------------------------------------------
