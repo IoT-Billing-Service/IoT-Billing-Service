@@ -8,13 +8,12 @@ import {
 
 const MIGRATION_LOCK_KEY = 'migration_lock';
 const MIGRATION_DONE_KEY = 'migration_done';
-const MIGRATION_LOCK_TTL = 300;
 
 describe('Concurrent Migration Lock Integration', () => {
   let redisClient: Redis;
 
   beforeEach(async () => {
-    redisClient = new Redis(process.env['REDIS_URL'] || 'redis://localhost:6379', {
+    redisClient = new Redis(process.env['REDIS_URL'] ?? 'redis://localhost:6379', {
       maxRetriesPerRequest: 3,
       commandTimeout: 5000,
     });
@@ -44,13 +43,13 @@ describe('Concurrent Migration Lock Integration', () => {
   });
 
   it('should simulate 6 concurrent migration attempts with only 1 succeeding', async () => {
-    const instances = Array.from({ length: 6 }, (_, i) => `instance-${i + 1}`);
+    const instances = Array.from({ length: 6 }, (_, i) => `instance-${String(i + 1)}`);
     const lockResults = await Promise.all(
       instances.map((instanceId) => acquireMigrationLock(redisClient, instanceId)),
     );
 
-    const successfulLocks = lockResults.filter((result: boolean) => result === true);
-    const failedLocks = lockResults.filter((result: boolean) => result === false);
+    const successfulLocks = lockResults.filter((result: boolean) => result);
+    const failedLocks = lockResults.filter((result: boolean) => !result);
 
     expect(successfulLocks.length).toBe(1);
     expect(failedLocks.length).toBe(5);

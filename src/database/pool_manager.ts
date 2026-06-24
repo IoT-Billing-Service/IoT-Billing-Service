@@ -462,7 +462,7 @@ export async function runMigrationWithDistributedLock(): Promise<void> {
     lazyConnect: false,
   });
 
-  const instanceId = `${env.HOST}-${process.pid}-${Date.now()}`;
+  const instanceId = `${env.HOST}-${process.pid.toString()}-${Date.now().toString()}`;
   console.log(`Attempting to acquire migration lock with instance ID: ${instanceId}`);
 
   try {
