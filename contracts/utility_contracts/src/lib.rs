@@ -221,6 +221,8 @@ mod oracle_circuit_breaker_tests;
 #[cfg(test)]
 mod telemetry_buffer_fuzz;
 #[cfg(test)]
+mod precision_factor_fuzz;
+#[cfg(test)]
 mod tariff_oracle_tests;
 #[cfg(test)]
 mod temporary_storage_tests;
@@ -319,6 +321,7 @@ pub mod oracle_circuit_breaker;
 pub mod reentrancy_guard;
 pub mod secure_call_interface;
 pub mod storage_ttl;
+pub mod remainder_accumulator;
 pub mod tariff_oracle;
 pub mod telemetry_buffer;
 pub mod event_privacy;
