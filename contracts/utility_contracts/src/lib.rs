@@ -217,6 +217,8 @@ mod flow_rate_overflow_fuzz;
 #[cfg(test)]
 mod reentrancy_guard_tests;
 #[cfg(test)]
+mod reentrancy_fuzz_cross_contract;
+#[cfg(test)]
 mod oracle_circuit_breaker_tests;
 #[cfg(test)]
 mod telemetry_buffer_fuzz;

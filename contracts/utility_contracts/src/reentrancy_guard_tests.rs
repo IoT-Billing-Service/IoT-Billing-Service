@@ -10,8 +10,7 @@
 extern crate std;
 
 use crate::reentrancy_guard::{GuardedAsset, GuardedAssetClient};
-use crate::ContractError;
-use soroban_sdk::{testutils::Address as _, Address, Env};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
 fn setup() -> (Env, GuardedAssetClient<'static>, Address, Address) {
     let env = Env::default();
@@ -58,6 +57,35 @@ fn test_reentrancy_is_detected() {
     // The attack moved nothing.
     assert_eq!(client.balance_of(&alice), 1_000);
     assert_eq!(client.balance_of(&bob), 0);
+}
+
+/// Cross-function reentry is rejected too: an untrusted callback cannot enter
+/// `transfer` while another guarded public function frame is active.
+#[test]
+fn test_cross_function_reentrancy_is_detected() {
+    let (_env, client, alice, bob) = setup();
+    client.set_balance(&alice, &1_000);
+
+    let res = client.try_simulate_cross_function_reentry(&alice, &bob, &500);
+    assert!(
+        res.is_err(),
+        "cross-function reentry must trip the shared guard"
+    );
+
+    assert_eq!(client.balance_of(&alice), 1_000);
+    assert_eq!(client.balance_of(&bob), 0);
+}
+
+/// A cross-contract adapter can bind an outbound call to a context id and then
+/// require the callee to echo that id before accepting returned side effects.
+#[test]
+fn test_call_context_echo_must_match_active_frame() {
+    let (env, client, _alice, _bob) = setup();
+    let expected = BytesN::from_array(&env, &[7; 32]);
+    let wrong = BytesN::from_array(&env, &[9; 32]);
+
+    assert!(client.context_matches(&expected));
+    assert!(!client.context_mismatch(&expected, &wrong));
 }
 
 /// The guard is released after each call, so sequential transfers all succeed
