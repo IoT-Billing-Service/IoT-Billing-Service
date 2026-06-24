@@ -25,6 +25,7 @@ const envSchema = z.object({
   NONCE_WINDOW_MS: z.coerce.number().int().positive().default(5000),
   LEDGER_START: z.coerce.number().int().nonnegative().default(0),
   LEDGER_SYNC_CONCURRENCY: z.coerce.number().int().positive().default(10),
+  SKIP_MIGRATION_ON_STARTUP: z.coerce.boolean().default(true),
 });
 
 export type Env = z.infer<typeof envSchema>;
