@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Redis } from 'ioredis';
-import { acquireMigrationLock, markMigrationCompleted, resetPoolManagerForTests } from '../../src/database/pool_manager.js';
+import {
+  acquireMigrationLock,
+  markMigrationCompleted,
+  resetPoolManagerForTests,
+} from '../../src/database/pool_manager.js';
 
 const MIGRATION_LOCK_KEY = 'migration_lock';
 const MIGRATION_DONE_KEY = 'migration_done';

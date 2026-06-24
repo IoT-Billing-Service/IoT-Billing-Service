@@ -8,7 +8,6 @@ import { refreshAggregatesAdaptively } from '../../database/pool_manager.js';
 import { getConfig } from '../../config/index.js';
 import { incrementConfigTransitionEvents } from '../../api/metrics/prometheus.js';
 
-
 export interface SignedPayload {
   deviceId: string;
   timestamp: number;
@@ -369,7 +368,7 @@ export async function processBatch(
   for (;;) {
     const startConfig = getConfig();
     const capturedVersion = startConfig.version_id;
-    
+
     const results: ProcessedEvent[] = [];
     for (const event of events) {
       const tier = applyTier(event.value, capturedVersion);
@@ -378,25 +377,24 @@ export async function processBatch(
         value: event.value,
         tier,
       });
-      
+
       if (simulateDelayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, simulateDelayMs));
       }
     }
-    
+
     const endConfig = getConfig();
     const currentVersion = endConfig.version_id;
-    
+
     if (capturedVersion !== currentVersion) {
       // Overlap detected! Increment transition event gauge and re-process the batch.
       incrementConfigTransitionEvents(capturedVersion, currentVersion);
       continue;
     }
-    
+
     return {
       versionId: capturedVersion,
       results,
     };
   }
 }
-

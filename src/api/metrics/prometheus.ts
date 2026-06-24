@@ -178,7 +178,6 @@ export const configTransitionEvents: promClient.Gauge = new promClient.Gauge({
   labelNames: ['start_version', 'end_version'],
 });
 
-
 // Setters -----------------------------------------------------------------------
 
 export function setTenantPoolActiveConnections(tenantId: string, count: number): void {
@@ -251,7 +250,6 @@ export function recordLedgerSyncPollError(syncId: string, phase: 'poll' | 'fetch
 export function incrementConfigTransitionEvents(startVersion: string, endVersion: string): void {
   configTransitionEvents.inc({ start_version: startVersion, end_version: endVersion });
 }
-
 
 // Metrics endpoint -------------------------------------------------------------
 

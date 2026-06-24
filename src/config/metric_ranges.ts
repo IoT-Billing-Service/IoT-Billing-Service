@@ -15,4 +15,3 @@ export const DEFAULT_BILLING_TIERS: Record<string, BillingTier> = {
   TIER_2: { min: 1001, max: 10000 },
   TIER_3: { min: 10001, max: Infinity },
 };
-

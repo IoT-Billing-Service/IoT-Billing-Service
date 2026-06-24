@@ -414,8 +414,17 @@ export function isMigrationCompleted(): boolean {
   return migrationCompleted;
 }
 
-export async function acquireMigrationLock(redisClient: Redis, instanceId: string): Promise<boolean> {
-  const result = await redisClient.set(MIGRATION_LOCK_KEY, instanceId, 'PX', MIGRATION_LOCK_TTL * 1000, 'NX');
+export async function acquireMigrationLock(
+  redisClient: Redis,
+  instanceId: string,
+): Promise<boolean> {
+  const result = await redisClient.set(
+    MIGRATION_LOCK_KEY,
+    instanceId,
+    'PX',
+    MIGRATION_LOCK_TTL * 1000,
+    'NX',
+  );
   return result === 'OK';
 }
 
