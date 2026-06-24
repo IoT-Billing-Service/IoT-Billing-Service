@@ -1,6 +1,21 @@
 @import 'tailwindcss';
 
 /*
+ * ── Status / severity class safelist ─────────────────────────────────
+ * Tailwind v4 only emits classes it finds in source files. Classes that
+ * are selected at runtime via a map lookup (e.g. TX_STATUS_CLASSES[status])
+ * must be declared here with @source inline so the scanner sees them as
+ * literals and includes them in the production bundle unconditionally.
+ *
+ * Brace expansion mirrors the combinations defined in src/lib/statusClasses.ts.
+ * If you add a new status value or colour there, add it here too.
+ */
+/* TxStatus pill colours (pending / confirmed / failed / unknown) */
+@source inline("{bg-{yellow,green,red,gray}-500/20,text-{yellow,green,red,gray,amber}-300,border-{yellow,green,red,gray}-500/40}");
+/* Notification severity colours (info / warning / critical) */
+@source inline("{border-{green,amber,red}-500,bg-{green,amber,red}-950,text-{green,amber,red}-100}");
+
+/*
  * ── Theme CSS Custom Properties ──────────────────────────────────────
  * All variables for every theme variant are precomputed here so that
  * theme switching only requires a single data-theme attribute change.

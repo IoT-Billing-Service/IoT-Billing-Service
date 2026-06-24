@@ -25,4 +25,6 @@ sizes.forEach((size) => {
 });
 
 console.log('PWA asset placeholders generated.');
-console.log('For production PNG generation, run: npx pwa-asset-generator public/icons/icon.svg public/icons/');
+console.log(
+  'For production PNG generation, run: npx pwa-asset-generator public/icons/icon.svg public/icons/',
+);

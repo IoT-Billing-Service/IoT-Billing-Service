@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TxStatusPill, TxStatusList } from './TxStatusPill';
+import { TX_STATUS_CLASSES, TX_STATUS_FALLBACK_CLASSES } from '@/lib/statusClasses';
 import type { PendingTransaction } from '@/services/indexedDbCache';
 
 describe('TxStatusPill', () => {
@@ -282,5 +283,48 @@ describe('TxStatusList', () => {
 
     rerender(<TxStatusList transactions={[withdrawal]} />);
     expect(screen.getByText('Withdrawal')).toBeInTheDocument();
+  });
+});
+
+const BASE_TX: PendingTransaction = {
+  id: 'color-tx',
+  hash: 'colorhash',
+  contractId: 'contract-1',
+  amount: '100',
+  asset: 'XLM',
+  publicKey: 'GABC',
+  type: 'escrow_deposit',
+  status: 'pending',
+  retryCount: 0,
+  maxRetries: 3,
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
+};
+
+describe('TxStatusPill color classes', () => {
+  it.each([
+    ['pending', TX_STATUS_CLASSES.pending],
+    ['confirmed', TX_STATUS_CLASSES.confirmed],
+    ['failed', TX_STATUS_CLASSES.failed],
+  ] as const)(
+    '%s status → wrapper carries the correct non-empty color classes',
+    (status, expected) => {
+      const { container } = render(<TxStatusPill transaction={{ ...BASE_TX, status }} />);
+      const wrapper = container.firstElementChild as HTMLElement;
+      expect(expected).toBeTruthy();
+      for (const cls of expected.split(' ')) {
+        expect(wrapper.classList.contains(cls)).toBe(true);
+      }
+    },
+  );
+
+  it('unknown (default) status → wrapper carries the fallback color classes', () => {
+    const tx = { ...BASE_TX, status: 'unknown' as PendingTransaction['status'] };
+    const { container } = render(<TxStatusPill transaction={tx} />);
+    const wrapper = container.firstElementChild as HTMLElement;
+    expect(TX_STATUS_FALLBACK_CLASSES).toBeTruthy();
+    for (const cls of TX_STATUS_FALLBACK_CLASSES.split(' ')) {
+      expect(wrapper.classList.contains(cls)).toBe(true);
+    }
   });
 });

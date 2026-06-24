@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "generate-pwa-assets": "node scripts/generate-pwa-assets.mjs"
+    "generate-pwa-assets": "node scripts/generate-pwa-assets.mjs",
+    "validate:css": "node scripts/validate-css.mjs"
   },
   "dependencies": {
     "@stellar/freighter-api": "^6.0.1",

@@ -3,18 +3,10 @@
 import { useEffect } from 'react';
 import { useNotificationStore } from '@/stores/useNotificationStore';
 import type { AppNotification } from '@/types';
-
-const SEVERITY_STYLES: Record<AppNotification['severity'], string> = {
-  info: 'border-green-500 bg-green-950 text-green-100',
-  warning: 'border-amber-500 bg-amber-950 text-amber-100',
-  critical: 'border-red-500 bg-red-950 text-red-100',
-};
-
-const SEVERITY_TITLE_STYLES: Record<AppNotification['severity'], string> = {
-  info: 'text-green-300',
-  warning: 'text-amber-300',
-  critical: 'text-red-300',
-};
+import {
+  NOTIFICATION_SEVERITY_CONTAINER_CLASSES,
+  NOTIFICATION_SEVERITY_TITLE_CLASSES,
+} from '@/lib/statusClasses';
 
 const AUTO_DISMISS_MS: Partial<Record<AppNotification['severity'], number>> = {
   info: 8000,
@@ -53,11 +45,13 @@ export function NotificationToast() {
       {visible.map((n) => (
         <div
           key={n.id}
-          className={`flex w-80 items-start gap-3 rounded border p-3 shadow-lg ${SEVERITY_STYLES[n.severity]}`}
+          className={`flex w-80 items-start gap-3 rounded border p-3 shadow-lg ${NOTIFICATION_SEVERITY_CONTAINER_CLASSES[n.severity]}`}
           role="alert"
         >
           <div className="min-w-0 flex-1">
-            <p className={`text-sm font-semibold ${SEVERITY_TITLE_STYLES[n.severity]}`}>
+            <p
+              className={`text-sm font-semibold ${NOTIFICATION_SEVERITY_TITLE_CLASSES[n.severity]}`}
+            >
               {n.title}
             </p>
             <p className="mt-0.5 text-xs opacity-90">{n.message}</p>

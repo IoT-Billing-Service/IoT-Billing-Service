@@ -1,6 +1,7 @@
 'use client';
 
 import type { PendingTransaction } from '@/services/indexedDbCache';
+import { TX_STATUS_CLASSES, TX_STATUS_FALLBACK_CLASSES } from '@/lib/statusClasses';
 
 interface TxStatusPillProps {
   transaction: PendingTransaction;
@@ -12,7 +13,7 @@ export function TxStatusPill({ transaction }: TxStatusPillProps) {
       case 'pending':
         return {
           text: 'Submitted (pending confirmation)',
-          color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
+          color: TX_STATUS_CLASSES.pending,
           icon: '⏳',
         };
       case 'confirmed':
@@ -20,19 +21,19 @@ export function TxStatusPill({ transaction }: TxStatusPillProps) {
           text: transaction.lastScannedLedger
             ? `Confirmed on ledger ${transaction.lastScannedLedger}`
             : 'Confirmed',
-          color: 'bg-green-500/20 text-green-300 border-green-500/40',
+          color: TX_STATUS_CLASSES.confirmed,
           icon: '✓',
         };
       case 'failed':
         return {
           text: `Failed - retry ${transaction.retryCount}/${transaction.maxRetries}`,
-          color: 'bg-red-500/20 text-red-300 border-red-500/40',
+          color: TX_STATUS_CLASSES.failed,
           icon: '✗',
         };
       default:
         return {
           text: 'Unknown',
-          color: 'bg-gray-500/20 text-gray-300 border-gray-500/40',
+          color: TX_STATUS_FALLBACK_CLASSES,
           icon: '?',
         };
     }
