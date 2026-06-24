@@ -1,3 +1,5 @@
+import { BackpressureController } from './backpressure.js';
+
 export enum IngestionState {
   PENDING = 'PENDING',
   TENTATIVE = 'TENTATIVE',
@@ -35,6 +37,59 @@ const VALID_TRANSITIONS: Record<IngestionState, IngestionState[]> = {
 };
 
 const AUTO_RESYNC_TIMEOUT = 60000;
+export const TOTAL_CONNECTION_MEMORY_BUDGET_BYTES = 64 * 1024 * 1024;
+export const MAX_CONCURRENT_CONNECTIONS = 1000;
+export const PER_CONNECTION_MEMORY_BUDGET_BYTES =
+  TOTAL_CONNECTION_MEMORY_BUDGET_BYTES / MAX_CONCURRENT_CONNECTIONS;
+
+export interface ConnectionBudgetOptions {
+  totalMemoryBudgetBytes?: number;
+  maxConnections?: number;
+  backpressure?: BackpressureController;
+}
+
+export class ConnectionBudgetTracker {
+  private readonly perConnectionBudgetBytes: number;
+  private readonly backpressure?: BackpressureController;
+  private readonly bufferBytesByConnection = new Map<string, number>();
+
+  constructor(options: ConnectionBudgetOptions = {}) {
+    const totalMemoryBudgetBytes =
+      options.totalMemoryBudgetBytes ?? TOTAL_CONNECTION_MEMORY_BUDGET_BYTES;
+    const maxConnections = options.maxConnections ?? MAX_CONCURRENT_CONNECTIONS;
+    this.perConnectionBudgetBytes = Math.floor(totalMemoryBudgetBytes / maxConnections);
+    this.backpressure = options.backpressure;
+  }
+
+  updateConnectionBuffer(connectionId: string, bufferBytes: number): boolean {
+    this.bufferBytesByConnection.set(connectionId, bufferBytes);
+    if (bufferBytes > this.perConnectionBudgetBytes) {
+      this.backpressure?.shedConnection(connectionId);
+      return false;
+    }
+    return true;
+  }
+
+  releaseConnection(connectionId: string): void {
+    this.bufferBytesByConnection.delete(connectionId);
+  }
+
+  getConnectionBufferBytes(connectionId: string): number {
+    return this.bufferBytesByConnection.get(connectionId) ?? 0;
+  }
+
+  getTotalBufferBytes(): number {
+    let total = 0;
+    for (const bytes of this.bufferBytesByConnection.values()) {
+      total += bytes;
+    }
+    return total;
+  }
+
+  getPerConnectionBudgetBytes(): number {
+    return this.perConnectionBudgetBytes;
+  }
+}
 
 export class IngestionStateMachine {
   private state: IngestionState;

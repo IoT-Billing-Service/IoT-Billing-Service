@@ -80,6 +80,12 @@ export const eventLoopLag: promClient.Gauge = new promClient.Gauge({
   help: 'Current event loop lag in ms',
 });
 
+export const connectionBufferBytes: promClient.Gauge = new promClient.Gauge({
+  name: 'connection_buffer_bytes',
+  help: 'Current partial telemetry reassembly buffer size per device',
+  labelNames: ['device_id'],
+});
+
 // Required GC pause buckets per issue #19: 1, 5, 10, 25, 50, 100, 250, 500 ms
 export const GC_PAUSE_BUCKETS_MS = [1, 5, 10, 25, 50, 100, 250, 500] as const;
 
@@ -172,6 +178,12 @@ export const ledgerSyncPollErrors: promClient.Counter = new promClient.Counter({
   labelNames: ['sync_id', 'phase'],
 });
 
+export const configTransitionEvents: promClient.Gauge = new promClient.Gauge({
+  name: 'config_transition_events',
+  help: 'Number of batches that straddle a config version boundary',
+  labelNames: ['start_version', 'end_version'],
+});
+
 // Setters -----------------------------------------------------------------------
 
 export function setTenantPoolActiveConnections(tenantId: string, count: number): void {
@@ -203,6 +215,10 @@ export function recordGcPause(durationMs: number): void {
   if (Number.isFinite(durationMs) && durationMs > 0) {
     gcPauseDuration.observe(durationMs);
   }
+}
+
+export function setConnectionBufferBytes(deviceId: string, bytes: number): void {
+  connectionBufferBytes.set({ device_id: deviceId }, bytes);
 }
 
 export interface PoolSizeMetrics {
@@ -239,6 +255,10 @@ export function setLedgerSyncMetrics(metrics: LedgerSyncMetrics): void {
 
 export function recordLedgerSyncPollError(syncId: string, phase: 'poll' | 'fetch'): void {
   ledgerSyncPollErrors.inc({ sync_id: syncId, phase });
+}
+
+export function incrementConfigTransitionEvents(startVersion: string, endVersion: string): void {
+  configTransitionEvents.inc({ start_version: startVersion, end_version: endVersion });
 }
 
 // Metrics endpoint -------------------------------------------------------------

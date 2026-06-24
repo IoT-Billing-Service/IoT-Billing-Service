@@ -3,6 +3,11 @@ import { NoncePool } from '../../src/core/blockchain/nonce_pool.js';
 import { SorobanRpcClient, CircuitState } from '../../src/core/blockchain/rpc_client.js';
 import { IngestionStateMachine, IngestionState } from '../../src/core/ingestion/state_machine.js';
 import { TransactionManager } from '../../src/core/blockchain/tx_manager.js';
+import {
+  MAX_PARTIAL_MESSAGE_SIZE,
+  MESSAGE_TOO_BIG_CLOSE_CODE,
+  TelemetryFragmentReassembler,
+} from '../../src/core/ingestion/stream_parser.js';
 
 describe('NoncePool', () => {
   let pool: NoncePool;
@@ -130,6 +135,53 @@ describe('IngestionStateMachine', () => {
   it('should allow rollback from tentative', () => {
     const sm = new IngestionStateMachine('dev-1', IngestionState.TENTATIVE);
     expect(sm.transition(IngestionState.ROLLED_BACK, 'tx rejected')).toBe(true);
+  });
+});
+
+describe('TelemetryFragmentReassembler', () => {
+  it('caps fuzzed fragmented WebSocket messages at MAX_PARTIAL_MESSAGE_SIZE', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const maxObservedBufferByDevice = new Map<string, number>();
+    const violations: string[] = [];
+    const closedConnections: { code: number; reason: string }[] = [];
+    const devices = Array.from({ length: 1000 }, (_, i) => {
+      const deviceId = `fuzz-dev-${String(i)}`;
+      return new TelemetryFragmentReassembler({
+        connectionId: `conn-${String(i)}`,
+        deviceId,
+        onBufferSizeChange: (id, bytes): void => {
+          maxObservedBufferByDevice.set(
+            id,
+            Math.max(maxObservedBufferByDevice.get(id) ?? 0, bytes),
+          );
+        },
+        onProtocolViolation: (event): void => {
+          violations.push(event.connectionId);
+        },
+        onClose: (code, reason): void => {
+          closedConnections.push({ code, reason });
+        },
+      });
+    });
+
+    for (let round = 0; round < 66; round++) {
+      for (let i = 0; i < 1000; i++) {
+        const parser = devices[(i * 37 + round * 101) % devices.length];
+        expect(parser).toBeDefined();
+        parser?.append(Buffer.alloc(1024, (i + round) % 255));
+      }
+    }
+
+    for (const bytes of maxObservedBufferByDevice.values()) {
+      expect(bytes).toBeLessThanOrEqual(MAX_PARTIAL_MESSAGE_SIZE);
+    }
+    expect(violations.length).toBeGreaterThan(0);
+    expect(closedConnections.every((conn) => conn.code === MESSAGE_TOO_BIG_CLOSE_CODE)).toBe(true);
+
+    for (const parser of devices) {
+      parser.dispose();
+    }
+    warnSpy.mockRestore();
   });
 });
 
