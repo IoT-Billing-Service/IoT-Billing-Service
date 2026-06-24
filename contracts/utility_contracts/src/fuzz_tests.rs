@@ -1,4 +1,5 @@
 use super::*;
+use crate::gas_budget::{plan_oracle_batches, EMERGENCY_THRESHOLD, HOST_FUNCTION_BUDGET};
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
 #[test]
@@ -73,6 +74,18 @@ fn test_arithmetic_edge_cases() {
             let _d = 1000i128 / value;
         }
     }
+}
+
+#[test]
+fn test_nested_oracle_budget_splits_one_hundred_calls() {
+    let plan = plan_oracle_batches(100, HOST_FUNCTION_BUDGET)
+        .expect("host budget should allow chunked oracle verification");
+
+    assert_eq!(plan.requested_calls, 100);
+    assert_eq!(plan.completed_calls, 100);
+    assert!(plan.batches > 1);
+    assert_eq!(plan.max_calls_per_batch, 11);
+    assert!(plan.min_remaining_budget >= EMERGENCY_THRESHOLD);
 }
 
 #[test]
