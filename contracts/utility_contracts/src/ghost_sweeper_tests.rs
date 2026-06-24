@@ -501,3 +501,73 @@ mod ghost_sweeper_property_tests {
         }
     }
 }
+
+/// Issue #18: TTL-safe storage access — graceful handling of garbage-collected
+/// keys and TTL-pinned writes.
+#[cfg(test)]
+mod ttl_gc_tests {
+    use super::*;
+    use crate::storage_ttl::{set_with_ttl, ttl_safe_read, TTL_EXTEND_TO_LEDGERS};
+
+    fn sample_stats() -> SweeperStatistics {
+        SweeperStatistics {
+            total_streams_pruned: 3,
+            total_bytes_reclaimed: 100,
+            total_gas_bounty_paid: 50,
+            last_sweep_timestamp: 1,
+            total_sweep_operations: 1,
+        }
+    }
+
+    /// A missing key (never created, or already GC'd) reads as `None` rather
+    /// than producing a partial/garbage value — closing the TOCTOU gap.
+    #[test]
+    fn test_ttl_safe_read_none_when_absent() {
+        let env = Env::default();
+        let id = env.register_contract(None, GhostSweeper);
+        env.as_contract(&id, || {
+            let key = DataKey::SweeperStatistics;
+            let got: Option<SweeperStatistics> = ttl_safe_read(&env, &key);
+            assert!(got.is_none(), "absent key must read as None");
+        });
+    }
+
+    /// `set_with_ttl` writes and the entry is then readable via `ttl_safe_read`.
+    #[test]
+    fn test_set_with_ttl_roundtrip() {
+        let env = Env::default();
+        let id = env.register_contract(None, GhostSweeper);
+        env.as_contract(&id, || {
+            let key = DataKey::SweeperStatistics;
+            set_with_ttl(&env, &key, &sample_stats());
+            let got: Option<SweeperStatistics> = ttl_safe_read(&env, &key);
+            assert_eq!(got.unwrap().total_streams_pruned, 3);
+        });
+    }
+
+    /// GC simulation (blueprint step 5): write with TTL, fast-forward the ledger
+    /// well past the 14-day window, then simulate the host evicting the expired
+    /// entry, and assert `ttl_safe_read` returns `None` gracefully.
+    #[test]
+    fn test_gc_simulation_returns_none_gracefully() {
+        let env = Env::default();
+        let id = env.register_contract(None, GhostSweeper);
+        env.as_contract(&id, || {
+            let key = DataKey::SweeperStatistics;
+            set_with_ttl(&env, &key, &sample_stats());
+
+            // Fast-forward ~150% of the TTL window.
+            env.ledger().with_mut(|li| {
+                li.sequence_number = li
+                    .sequence_number
+                    .saturating_add(TTL_EXTEND_TO_LEDGERS + TTL_EXTEND_TO_LEDGERS / 2);
+            });
+
+            // Simulate host garbage collection of the now-expired entry.
+            env.storage().persistent().remove(&key);
+
+            let got: Option<SweeperStatistics> = ttl_safe_read(&env, &key);
+            assert!(got.is_none(), "GC'd key must read as None, not garbage");
+        });
+    }
+}

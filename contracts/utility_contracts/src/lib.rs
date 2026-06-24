@@ -211,9 +211,11 @@ mod streaming_invariant_tests;
 #[cfg(test)]
 mod stroop_fuzz_tests;
 #[cfg(test)]
+mod event_privacy_tests;
+#[cfg(test)]
 mod flow_rate_overflow_fuzz;
 #[cfg(test)]
-mod tariff_resolver_fuzz;
+mod oracle_circuit_breaker_tests;
 #[cfg(test)]
 mod tariff_oracle_tests;
 #[cfg(test)]
@@ -303,14 +305,17 @@ pub struct SignedUsageData {
 mod gas_estimator;
 use gas_estimator::GasCostEstimator;
 
+pub mod admin_validation;
 pub mod enterprise;
 pub mod ghost_sweeper;
 pub mod grant_stream_listener;
 pub mod multi_sig_admin;
 pub mod nonce_sync;
+pub mod oracle_circuit_breaker;
 pub mod secure_call_interface;
+pub mod storage_ttl;
 pub mod tariff_oracle;
-pub mod tariff_resolver;
+pub mod event_privacy;
 pub mod temporary_storage;
 pub mod u256;
 pub mod velocity_limit;
@@ -946,6 +951,8 @@ pub enum DataKey {
     ActiveMetersCount,
     ActiveUsers,
     AdminAddress,
+    // Issue #16 - ledger at which admin was first set (recovery window anchor)
+    AdminInitLedger,
     AdminTransferProposal,
     AdminVeto(Address, u64),
     AuthorizedContributor(u64, Address),
@@ -1035,6 +1042,9 @@ pub enum DataKey {
     // Issue #22 - Re-org replay protection
     PastNonce(BytesN<32>, u64),
     PendingTelemetryQueue(BytesN<32>),
+    // Issue #21 - Oracle staleness circuit breaker
+    OraclePriceHistory,
+    OracleLastGoodPrice,
     // Issue #261 - Tariff Oracle
     TariffOracleAdmin,
     CurrentTariffSchedule,
@@ -1195,6 +1205,9 @@ pub enum ContractError {
     NonceAlreadyProcessed = 112,
     TelemetryFromFutureLedger = 113,
     TelemetryNotConfirmed = 114,
+    // Issue #21 - Oracle staleness circuit breaker
+    // (115 left for the in-flight privacy-events PR #29)
+    OraclePriceUnavailable = 116,
 }
 
 #[contracttype]
@@ -3015,9 +3028,47 @@ impl UtilityContract {
     /// * Panics if the caller is not the current contract address (self-invocation).
     pub fn set_admin(env: Env, admin_address: Address) {
         env.current_contract_address().require_auth();
+
+        // Issue #16: reject a zero / contract-id admin (would permanently brick
+        // governance), and require the new admin to prove control.
+        admin_validation::validate_admin(&env, &admin_address);
+
         env.storage()
             .instance()
             .set(&DataKey::AdminAddress, &admin_address);
+
+        // Anchor the recovery window on the first admin set.
+        if !env.storage().instance().has(&DataKey::AdminInitLedger) {
+            env.storage()
+                .instance()
+                .set(&DataKey::AdminInitLedger, &env.ledger().sequence());
+        }
+    }
+
+    /// Issue #16: emergency admin recovery. Callable only within
+    /// `RECOVERY_WINDOW` ledgers of the first admin set, so a botched
+    /// deployment can be corrected before the window closes. The proposed admin
+    /// must authorize (proving control); a zero/contract-id admin is rejected.
+    pub fn recover_admin(env: Env, proposed_admin: Address) {
+        let init_ledger: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AdminInitLedger)
+            .unwrap_or_else(|| panic_with_error!(&env, ContractError::AdminRecoveryWindowClosed));
+
+        if !admin_validation::within_recovery_window(
+            init_ledger,
+            env.ledger().sequence(),
+            admin_validation::RECOVERY_WINDOW,
+        ) {
+            panic_with_error!(&env, ContractError::AdminRecoveryWindowClosed);
+        }
+
+        admin_validation::validate_admin(&env, &proposed_admin);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::AdminAddress, &proposed_admin);
     }
 
     /// Adds funds to the gas bounty pool used to reward dust sweepers.
