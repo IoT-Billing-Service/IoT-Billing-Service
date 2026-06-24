@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { getEnv } from '../config/env.js';
 import { Redis } from 'ioredis';
+import { clampRefreshWindow } from './aggregate_refresh_window.js';
 import {
   recordTenantPoolGrant,
   recordTenantPoolRejection,

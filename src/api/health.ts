@@ -8,7 +8,7 @@ import pg from 'pg';
 import { Redis } from 'ioredis';
 import { getEnv } from '../config/env.js';
 import { reportHealthCheckCompleted } from './metrics/gc_monitor.js';
-import { isMigrationInProgress } from '../database/pool_manager.js';
+import { isMigrationInProgress, getLastAggregateRefreshTime } from '../database/pool_manager.js';
 
 interface MetricEntry {
   labels: Partial<Record<string, string | number>>;
