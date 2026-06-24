@@ -10,11 +10,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Mock } from 'vitest';
 import type pg from 'pg';
 
-import {
-  BatchState,
-  batchLockId,
-  BATCH_WINDOW_MS,
-} from '../../src/ingestion/batchManager.js';
+import { BatchState, batchLockId, BATCH_WINDOW_MS } from '../../src/ingestion/batchManager.js';
 import { compactBatch, rotateBatch } from '../../src/ingestion/batchCompactor.js';
 
 // ─── Mock helpers ─────────────────────────────────────────────────────────────
