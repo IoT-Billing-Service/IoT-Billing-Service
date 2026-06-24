@@ -313,6 +313,7 @@ use gas_estimator::GasCostEstimator;
 
 pub mod admin_validation;
 pub mod enterprise;
+pub mod gas_budget;
 pub mod ghost_sweeper;
 pub mod grant_stream_listener;
 pub mod multi_sig_admin;

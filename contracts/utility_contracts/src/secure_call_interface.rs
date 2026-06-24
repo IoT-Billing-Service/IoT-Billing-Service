@@ -1,4 +1,5 @@
 #![no_std]
+use crate::gas_budget::GasBudget;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
     BytesN, Env, Symbol, Val, Vec,
@@ -49,6 +50,7 @@ pub enum SecureCallError {
     ContractCallFailed = 8,
     ReentrancyDetected = 9,
     InvalidContractAddress = 10,
+    BudgetExhausted = 11,
 }
 
 #[contracttype]
@@ -56,6 +58,8 @@ pub enum SecureCallDataKey {
     ContractConfig(Address),
     CallDepth,
     LastCallReset,
+    BudgetLedger,
+    RemainingBudget,
 }
 
 /// Generic secure interface for cross-contract calls
@@ -181,6 +185,16 @@ impl SecureCallManager {
         if effective_gas_limit > MAX_CALL_GAS || effective_gas_limit > config.max_gas_per_call {
             return Err(SecureCallError::GasLimitExceeded);
         }
+
+        let mut budget = Self::load_call_budget(env, effective_gas_limit);
+        let reserved_budget = budget
+            .reserve_oracle_call()
+            .map_err(|_| SecureCallError::BudgetExhausted)?;
+        Self::store_call_budget(env, budget.remaining());
+        env.events().publish(
+            (symbol_short!("GBudget"),),
+            (effective_gas_limit, reserved_budget, budget.remaining()),
+        );
 
         // Increment call depth
         env.storage()
@@ -356,5 +370,33 @@ impl SecureCallManager {
 
         env.events()
             .publish((symbol_short!("EOn"),), env.ledger().timestamp());
+    }
+
+    fn load_call_budget(env: &Env, effective_gas_limit: u64) -> GasBudget {
+        let current_ledger = env.ledger().sequence();
+        let stored_ledger: Option<u32> = env
+            .storage()
+            .instance()
+            .get(&SecureCallDataKey::BudgetLedger);
+
+        if stored_ledger == Some(current_ledger) {
+            let remaining = env
+                .storage()
+                .instance()
+                .get::<_, u64>(&SecureCallDataKey::RemainingBudget)
+                .unwrap_or(effective_gas_limit);
+            return GasBudget::new(core::cmp::min(remaining, effective_gas_limit));
+        }
+
+        env.storage()
+            .instance()
+            .set(&SecureCallDataKey::BudgetLedger, &current_ledger);
+        GasBudget::new(effective_gas_limit)
+    }
+
+    fn store_call_budget(env: &Env, remaining: u64) {
+        env.storage()
+            .instance()
+            .set(&SecureCallDataKey::RemainingBudget, &remaining);
     }
 }

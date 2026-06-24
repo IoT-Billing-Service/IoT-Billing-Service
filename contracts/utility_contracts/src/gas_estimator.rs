@@ -2,6 +2,8 @@ use soroban_sdk::contracttype;
 use soroban_sdk::String;
 use soroban_sdk::{Address, Env};
 
+use crate::gas_budget::{plan_oracle_batches, GasBudgetError, OracleBatchPlan, ORACLE_MAX_COST};
+
 pub struct GasCostEstimator;
 
 impl GasCostEstimator {
@@ -14,6 +16,7 @@ impl GasCostEstimator {
     const EMERGENCY_SHUTDOWN: i128 = 2_000_000; // 0.02 XLM
     const SUBMIT_ZK_REPORT: i128 = 50_000_000; // 0.5 XLM (includes pairing check)
     const SET_ZK_VK: i128 = 15_000_000; // 0.15 XLM
+    const ORACLE_VERIFICATION: i128 = ORACLE_MAX_COST as i128;
 
     // Estimated monthly operations per meter
     const CLAIMS_PER_MONTH: u32 = 30;
@@ -141,7 +144,23 @@ impl GasCostEstimator {
         {
             return Self::SET_ZK_VK;
         }
+        if *operation
+            == soroban_sdk::String::from_str(&soroban_sdk::Env::default(), "oracle_verification")
+        {
+            return Self::ORACLE_VERIFICATION;
+        }
         0
+    }
+
+    pub fn estimate_nested_oracle_cost(num_verifications: u32) -> i128 {
+        Self::ORACLE_VERIFICATION.saturating_mul(num_verifications as i128)
+    }
+
+    pub fn plan_nested_oracle_batches(
+        num_verifications: u32,
+        per_invocation_budget: u64,
+    ) -> Result<OracleBatchPlan, GasBudgetError> {
+        plan_oracle_batches(num_verifications, per_invocation_budget)
     }
 }
 
