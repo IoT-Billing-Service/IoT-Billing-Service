@@ -56,6 +56,19 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // Pre-generated chart thumbnails (scripts/generate-thumbnails.mjs).
+        // stale-while-revalidate keeps the UI instant while the CDN / edge
+        // cache refreshes in the background, preventing the server-overload
+        // bottleneck described in issue #66.
+        source: '/thumbnails/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
     ];
   },
 };

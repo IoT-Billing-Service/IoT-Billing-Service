@@ -165,6 +165,11 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Pre-generate lightweight SVG chart thumbnails to prevent server-side
+      # image-processing bottlenecks (WebP conversion) and layout shift (CLS)
+      # when many device thumbnails load concurrently on the dashboard.
+      - name: Generate chart thumbnails (pre-build)
+        run: node scripts/generate-thumbnails.mjs
       - run: npm run build
       - name: Start production server
         run: |
@@ -179,10 +184,17 @@ jobs:
           done
       - name: Run Lighthouse CI
         env:
-          CHROME_FLAGS: "--no-sandbox --headless"
+          CHROME_FLAGS: '--no-sandbox --headless'
         run: |
           npm i -g @lhci/cli@0.14.x
           lhci collect --url=http://localhost:3000 --url=http://localhost:3000/dashboard
+      - name: Assert Lighthouse Budgets (CLS ≤ 0.1, LCP ≤ 2.5s)
+        run: |
+          lhci assert \
+            --assertions.cumulative-layout-shift='["error", {"maxNumericValue": 0.1}]' \
+            --assertions.largest-contentful-paint='["error", {"maxNumericValue": 2500}]' \
+            --assertions.interactive='["warn", {"maxNumericValue": 5000}]' \
+            --assertions.total-blocking-time='["warn", {"maxNumericValue": 300}]'
       - name: Stop server
         if: always()
         run: |
