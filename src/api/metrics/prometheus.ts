@@ -80,6 +80,12 @@ export const eventLoopLag: promClient.Gauge = new promClient.Gauge({
   help: 'Current event loop lag in ms',
 });
 
+export const connectionBufferBytes: promClient.Gauge = new promClient.Gauge({
+  name: 'connection_buffer_bytes',
+  help: 'Current partial telemetry reassembly buffer size per device',
+  labelNames: ['device_id'],
+});
+
 // Required GC pause buckets per issue #19: 1, 5, 10, 25, 50, 100, 250, 500 ms
 export const GC_PAUSE_BUCKETS_MS = [1, 5, 10, 25, 50, 100, 250, 500] as const;
 
@@ -217,6 +223,10 @@ export function recordGcPause(durationMs: number): void {
   if (Number.isFinite(durationMs) && durationMs > 0) {
     gcPauseDuration.observe(durationMs);
   }
+}
+
+export function setConnectionBufferBytes(deviceId: string, bytes: number): void {
+  connectionBufferBytes.set({ device_id: deviceId }, bytes);
 }
 
 export interface PoolSizeMetrics {

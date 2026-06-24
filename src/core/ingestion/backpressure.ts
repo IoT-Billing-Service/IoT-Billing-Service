@@ -12,6 +12,11 @@ export interface BackpressureMetrics {
   dbConnectionUtilization: number;
 }
 
+export interface ShedConnectionEvent {
+  connectionId: string;
+  reason: string;
+}
+
 const MAX_QUEUE_DEPTH = 10_000;
 const MAX_MEMORY_BYTES = 512 * 1024 * 1024;
 const MAX_DB_UTILIZATION = 0.85;
@@ -57,6 +62,10 @@ export class BackpressureController extends EventEmitter {
 
   shouldPause(): boolean {
     return this.level >= BackpressureLevel.CRITICAL;
+  }
+
+  shedConnection(connectionId: string, reason = 'connection_memory_budget_exceeded'): void {
+    this.emit('shedConnection', { connectionId, reason } satisfies ShedConnectionEvent);
   }
 }
 
