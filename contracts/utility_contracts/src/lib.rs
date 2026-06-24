@@ -213,6 +213,8 @@ mod stroop_fuzz_tests;
 #[cfg(test)]
 mod flow_rate_overflow_fuzz;
 #[cfg(test)]
+mod safe_storage_fuzz;
+#[cfg(test)]
 mod tariff_oracle_tests;
 #[cfg(test)]
 mod temporary_storage_tests;
@@ -306,6 +308,7 @@ pub mod ghost_sweeper;
 pub mod grant_stream_listener;
 pub mod multi_sig_admin;
 pub mod nonce_sync;
+pub mod safe_storage;
 pub mod secure_call_interface;
 pub mod tariff_oracle;
 pub mod temporary_storage;
