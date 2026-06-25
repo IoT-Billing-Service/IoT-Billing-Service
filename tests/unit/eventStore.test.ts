@@ -133,7 +133,10 @@ function createMockClient(): pg.PoolClient {
         const next = new Promise<void>((res) => {
           resolveNext = res;
         });
-        db.lockQueues.set(key, prev.then(() => next));
+        db.lockQueues.set(
+          key,
+          prev.then(() => next),
+        );
 
         // Wait for our turn
         await prev;
@@ -312,8 +315,8 @@ describe('appendEvent — sequential writes', () => {
   it('issues BEGIN and COMMIT for a successful append', async () => {
     const client = newClient();
     await appendEvent(client, 'tenant-tx', 'ev', {});
-    const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls.map(
-      (c: unknown[]) => (c[0] as string).trim(),
+    const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) =>
+      (c[0] as string).trim(),
     );
     expect(calls[0]).toBe('BEGIN');
     expect(calls[calls.length - 1]).toBe('COMMIT');
@@ -322,8 +325,8 @@ describe('appendEvent — sequential writes', () => {
   it('acquires the advisory lock before reading the sequence', async () => {
     const client = newClient();
     await appendEvent(client, 'tenant-lock', 'ev', {});
-    const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls.map(
-      (c: unknown[]) => (c[0] as string).trim(),
+    const calls = (client.query as ReturnType<typeof vi.fn>).mock.calls.map((c: unknown[]) =>
+      (c[0] as string).trim(),
     );
     const lockIdx = calls.findIndex((s: string) => s.includes('pg_advisory_xact_lock'));
     const seqIdx = calls.findIndex((s: string) => s.includes('COALESCE'));
@@ -412,9 +415,7 @@ describe('appendEvent — concurrent writes (race-condition regression)', () => 
     const TENANT = 'tenant-dedup';
 
     await Promise.all(
-      Array.from({ length: CONCURRENCY }, () =>
-        appendEvent(newClient(), TENANT, 'ping', {}),
-      ),
+      Array.from({ length: CONCURRENCY }, () => appendEvent(newClient(), TENANT, 'ping', {})),
     );
 
     const storedForTenant = db.events.filter((e) => e.tenantId === TENANT);
