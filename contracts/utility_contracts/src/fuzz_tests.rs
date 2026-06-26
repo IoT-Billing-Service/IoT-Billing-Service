@@ -76,6 +76,44 @@ fn test_arithmetic_edge_cases() {
     }
 }
 
+/// Stress test for `AssetManager::rebalance_pool()`.
+///
+/// The original spec asked us to "call `rebalance_pool()` 1000 times and assert
+/// zero `HostStorageAccessViolation` events." Soroban contract execution is
+/// single-threaded and the SDK has no `HostStorageAccessViolation` event type,
+/// so there is nothing of that name to count. We instead exercise the function
+/// 1000 times and assert the invariants the read-local-then-mutate pattern is
+/// meant to preserve: no panic, an exact `reserve + allocated == total`
+/// partition on every call, and a strictly monotonic rebalance counter.
+#[test]
+fn test_rebalance_pool_stress_1000() {
+    use crate::asset::{AssetManager, AssetManagerClient};
+
+    let env = Env::default();
+    let contract_id = env.register(AssetManager, ());
+    let client = AssetManagerClient::new(&env, &contract_id);
+
+    client.init(&1_000_000u128);
+
+    let mut last_count = 0u64;
+    for _ in 0..1000 {
+        let state = client.rebalance_pool();
+
+        assert_eq!(
+            state.reserve + state.allocated,
+            state.total_balance,
+            "reserve + allocated must equal total balance every rebalance"
+        );
+        assert!(
+            state.rebalance_count > last_count,
+            "rebalance counter must advance monotonically"
+        );
+        last_count = state.rebalance_count;
+    }
+
+    assert_eq!(last_count, 1000, "exactly 1000 rebalances should be recorded");
+}
+
 #[test]
 fn test_nested_oracle_budget_splits_one_hundred_calls() {
     let plan = plan_oracle_batches(100, HOST_FUNCTION_BUDGET)

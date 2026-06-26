@@ -191,6 +191,8 @@ pub struct GuarantorSlashed {
 }
 
 #[cfg(test)]
+mod asset;
+#[cfg(test)]
 mod buffer_tests;
 #[cfg(test)]
 mod debt_fuzz_tests;

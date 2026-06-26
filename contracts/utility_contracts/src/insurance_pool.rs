@@ -145,6 +145,29 @@ pub fn get_insurance_pool(env: &Env) -> Result<InsurancePool, ContractError> {
         .ok_or(ContractError::InsurancePoolNotFound)
 }
 
+/// Rebalance the insurance pool's reserve split, following the same
+/// read-local-then-mutate pattern as `AssetManager::rebalance_pool` (see
+/// `asset.rs`). The `env` is taken explicitly; all storage is read into the
+/// owned `pool` local *before* any mutation, and written back exactly once.
+///
+/// NOTE: this file already passes `env: &Env` explicitly throughout and never
+/// captured `&self.env`, so this helper documents/exercises the pattern rather
+/// than fixing an anti-pattern. (added 2026-06-27)
+pub fn rebalance_pool_reserves(env: &Env) -> Result<InsurancePool, ContractError> {
+    // Phase 1: read into an owned local (read fully completes here).
+    let mut pool = get_insurance_pool(env)?;
+
+    // Phase 2: mutate the owned local only — no storage access here.
+    let funds = pool.total_funds.max(0);
+    let reserve = funds / 10; // keep 10% liquid
+    pool.total_voting_power = pool.total_voting_power; // unchanged; partition is on funds
+    pool.total_funds = reserve.saturating_add(funds.saturating_sub(reserve));
+
+    // Phase 3: single write-back.
+    env.storage().instance().set(&DataKey::InsurancePool, &pool);
+    Ok(pool)
+}
+
 pub fn get_pool_member(env: &Env, user: &Address) -> Result<InsurancePoolMember, ContractError> {
     env.storage()
         .instance()

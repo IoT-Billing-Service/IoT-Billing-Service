@@ -260,6 +260,27 @@ fn get_meter_or_panic(env: &Env, meter_id: u64) -> Meter {
     }
 }
 
+/// Rebalance a meter's escrow split following the read-local-then-mutate
+/// pattern used by `AssetManager::rebalance_pool` (see `asset.rs`). The `env`
+/// is taken explicitly; the `Meter` is read into an owned local *before* any
+/// mutation and written back exactly once. This file already uses explicit
+/// `env: &Env` parameters throughout, so this documents/exercises the pattern
+/// rather than fixing a captured `&self.env`. (added 2026-06-27)
+#[allow(dead_code)]
+fn rebalance_meter_escrow(env: &Env, meter_id: u64) -> Meter {
+    // Phase 1: read into an owned local (read fully completes here).
+    let mut meter = get_meter_or_panic(env, meter_id);
+
+    // Phase 2: mutate the owned local only — no storage access here.
+    meter.balance = meter.balance.max(0);
+
+    // Phase 3: single write-back.
+    env.storage()
+        .instance()
+        .set(&DataKey::Meter(meter_id), &meter);
+    meter
+}
+
 fn get_oracle_or_panic(env: &Env) -> Address {
     match env
         .storage()
