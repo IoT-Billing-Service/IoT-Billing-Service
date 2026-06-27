@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeAccessTokenTtlSeconds } from '../../../src/api/auth/session.js';
+import { computeAccessTokenTtlSeconds, seededUnitInterval } from '../../../src/api/auth/session.js';
 
 // Load model for issue #59.
 //
@@ -67,6 +67,22 @@ describe('jittered token expiry staggering (issue #59)', () => {
       computeAccessTokenTtlSeconds(BASE_TTL_SECONDS, 0),
     );
     expect(peakReconnectsPerSecond(ttls)).toBe(DEVICE_COUNT);
+  });
+
+  it('derives a deterministic, well-spread offset from the token identity', () => {
+    // Same identity -> identical TTL, so concurrent signings of the same
+    // session+version yield byte-identical JWTs (regression for the concurrent
+    // refresh test). Distinct identities stay spread across the jitter window.
+    const ttlFor = (seed: string): number =>
+      computeAccessTokenTtlSeconds(BASE_TTL_SECONDS, JITTER_SECONDS, () =>
+        seededUnitInterval(seed),
+      );
+
+    expect(ttlFor('session-abc:2')).toBe(ttlFor('session-abc:2'));
+
+    const ttls = Array.from({ length: DEVICE_COUNT }, (_, i) => ttlFor(`session-${String(i)}:1`));
+    expect(peakReconnectsPerSecond(ttls)).toBeLessThan(RPS_CEILING);
+    expect(new Set(ttls.map((t) => Math.floor(t))).size).toBeGreaterThan(JITTER_SECONDS * 0.8);
   });
 
   it('spreads expiry across the full jitter window', () => {

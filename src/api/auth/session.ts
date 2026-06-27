@@ -60,6 +60,21 @@ export function computeAccessTokenTtlSeconds(
 }
 
 /**
+ * Derive a stable value in [0, 1) from a seed string.
+ *
+ * Used to make the per-token expiry jitter a deterministic function of the
+ * token's identity (session + version) rather than wall-clock randomness. Two
+ * independent signings of the *same* token identity therefore produce the same
+ * expiry — so concurrent refreshes that resolve to the same version still yield
+ * byte-identical JWTs — while distinct sessions remain spread across the jitter
+ * window, preserving the anti-thundering-herd property.
+ */
+export function seededUnitInterval(seed: string): number {
+  const digest = crypto.createHash('sha256').update(seed).digest();
+  return digest.readUInt32BE(0) / 0x1_0000_0000;
+}
+
+/**
  * Seconds remaining until a token's `exp` (negative once expired). Uses the
  * standard JWT `exp` (unix seconds). `nowMs` is injectable for testing.
  */
@@ -252,6 +267,7 @@ export async function issueSessionTokens(
     expiresIn: computeAccessTokenTtlSeconds(
       env.ACCESS_TOKEN_TTL_SECONDS,
       env.ACCESS_TOKEN_JITTER_SECONDS,
+      () => seededUnitInterval(`${sessionId}:${String(version)}`),
     ),
   };
   const accessToken = jwt.sign(payload, env.JWT_SECRET, accessOpts);
@@ -326,6 +342,7 @@ export async function refreshSession(
       expiresIn: computeAccessTokenTtlSeconds(
         env.ACCESS_TOKEN_TTL_SECONDS,
         env.ACCESS_TOKEN_JITTER_SECONDS,
+        () => seededUnitInterval(`${sessionId}:${String(newVersion)}`),
       ),
     };
     const accessToken = jwt.sign(payload, env.JWT_SECRET, accessOpts);
