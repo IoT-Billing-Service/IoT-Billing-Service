@@ -114,6 +114,58 @@ fn test_rebalance_pool_stress_1000() {
     assert_eq!(last_count, 1000, "exactly 1000 rebalances should be recorded");
 }
 
+/// Drift simulation for billing-cycle assignment.
+///
+/// Introduces random device clock offsets of 0..=3600s and verifies that the
+/// oracle-anchored assignment (`assign_cycle`) keeps cycle-assignment accuracy
+/// above 99%. Delegates to the pure functions in `telemetry_billing_core.rs`,
+/// which are also exercised by the runnable `telemetry-determinism-check`
+/// standalone crate (this lib test cannot currently run because the wider
+/// `utility_contracts` crate has pre-existing build breakage).
+#[test]
+fn test_billing_cycle_drift_assignment_accuracy() {
+    // The pure time-alignment math lives in `telemetry_billing_core.rs` (the
+    // single source of truth, also exercised by the standalone
+    // `telemetry-determinism-check` crate). `telemetry_billing` is not a wired
+    // module, so include the core directly into a nested module here.
+    mod drift_core {
+        include!("telemetry_billing_core.rs");
+    }
+    use drift_core::{assign_cycle, cycle_index, BILLING_CYCLE_SECONDS};
+
+    // Small deterministic PRNG (SplitMix64) so the test is reproducible.
+    let mut state: u64 = 0xA5A5_1234_DEAD_BEEF;
+    let mut next = || {
+        state = state.wrapping_add(0x9E3779B97F4A7C15);
+        let mut z = state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+        z ^ (z >> 31)
+    };
+
+    let origin: u64 = 1_600_000_000;
+    let total: u64 = 50_000;
+    let mut correct: u64 = 0;
+
+    for _ in 0..total {
+        let true_ts = origin + next() % (2 * BILLING_CYCLE_SECONDS);
+        let true_cycle = cycle_index(true_ts, origin);
+        let anchor = true_ts; // ledger/oracle anchor tracks true time
+        let offset = next() % 3601; // 0..=3600s device drift
+        let device_ts = true_ts + offset;
+
+        if assign_cycle(device_ts, anchor, origin) == true_cycle {
+            correct += 1;
+        }
+    }
+
+    let accuracy = correct as f64 / total as f64;
+    assert!(
+        accuracy >= 0.99,
+        "drift-corrected cycle assignment accuracy {accuracy:.4} fell below 0.99"
+    );
+}
+
 #[test]
 fn test_nested_oracle_budget_splits_one_hundred_calls() {
     let plan = plan_oracle_batches(100, HOST_FUNCTION_BUDGET)

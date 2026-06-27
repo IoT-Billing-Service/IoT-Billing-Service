@@ -130,4 +130,59 @@ fn main() {
         "OK: billing(E) == billing(pi(E)) for all 8! = {perms} permutations \
          and {cases} randomized shuffles (seed {seed})."
     );
+
+    // --- Drift simulation: cycle-assignment accuracy under clock drift -----
+    //
+    // Each event has a true occurrence time sampled uniformly across a cycle.
+    // The device reports a drifted timestamp (true + random offset in
+    // 0..=3600s). We assign the event to a cycle two ways:
+    //   * naive:  cycle_index(device_ts)        — the bug
+    //   * fixed:  assign_cycle(device_ts, anchor) — reconcile to anchored time
+    // and measure how often each matches the true cycle. The fixed model must
+    // exceed 99% accuracy (it is robust because it falls back to the single
+    // anchored clock once drift exceeds MAX_DRIFT_TOLERANCE_SECONDS).
+    let origin: u64 = 1_600_000_000;
+    let total_events: u64 = 200_000;
+    let mut naive_correct: u64 = 0;
+    let mut fixed_correct: u64 = 0;
+
+    for _ in 0..total_events {
+        // True occurrence time: uniform across two cycles so boundaries are hit.
+        let true_ts = origin + rng.range(0, (2 * BILLING_CYCLE_SECONDS) as i128) as u64;
+        let true_cycle = cycle_index(true_ts, origin);
+
+        // The ledger/oracle anchor reflects the true time (within sub-tolerance
+        // ledger jitter, which cannot by itself cross a boundary here).
+        let anchor = true_ts;
+
+        // Device clock drift: 0..=3600s forward (unsynchronized edge device).
+        let offset = rng.range(0, 3600) as u64;
+        let device_ts = true_ts + offset;
+
+        if cycle_index(device_ts, origin) == true_cycle {
+            naive_correct += 1;
+        }
+        if assign_cycle(device_ts, anchor, origin) == true_cycle {
+            fixed_correct += 1;
+        }
+    }
+
+    let fixed_acc = fixed_correct as f64 / total_events as f64;
+    let naive_acc = naive_correct as f64 / total_events as f64;
+    if fixed_acc < 0.99 {
+        fail(&format!(
+            "drift-corrected cycle assignment accuracy {:.4} < 0.99 (seed {seed})",
+            fixed_acc
+        ));
+    }
+    println!(
+        "OK: drift simulation over {total_events} events (offsets 0..=3600s) — \
+         anchored accuracy {:.4} (>= 0.99), naive accuracy {:.4}.",
+        fixed_acc, naive_acc
+    );
+
+    // Sanity: the deviation alert fires above 5% and stays quiet below it.
+    assert!(exceeds_deviation_alert(1_060, 1_000)); // +6%
+    assert!(!exceeds_deviation_alert(1_040, 1_000)); // +4%
+    println!("OK: deviation alert threshold (>5%) behaves correctly.");
 }

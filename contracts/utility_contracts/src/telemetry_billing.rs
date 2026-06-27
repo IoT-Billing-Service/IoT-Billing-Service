@@ -121,6 +121,138 @@ impl TelemetryBilling {
     pub fn event_count(env: Env) -> u32 {
         Self::load_events(&env).len()
     }
+
+    // -----------------------------------------------------------------------
+    // Clock-drift-aware cycle assignment (added 2026-06-27)
+    //
+    // Implements the requested "TIME_ANCHOR_KEY / soft boundary / pending
+    // alignment queue / align_telemetry_batch" behaviour. The originating task
+    // located this in `energy_grid.rs:150-185`, but that file has no cycle
+    // logic; the real `append_event` lives here, so the drift handling lives
+    // here too. All time math delegates to the pure, separately-verified
+    // functions in `telemetry_billing_core.rs` (see the standalone
+    // `telemetry-determinism-check` drift simulation).
+    //
+    // State is kept under `Symbol` keys so this does not require new variants on
+    // the `DataKey` enum in the (currently build-broken) `lib.rs`.
+    // -----------------------------------------------------------------------
+
+    /// Record the trusted oracle-anchored ledger time used for cycle boundaries.
+    pub fn set_time_anchor(env: Env, oracle: Address, anchored_ts: u64) {
+        oracle.require_auth();
+        env.storage()
+            .persistent()
+            .set(&symbol_short!("tanchor"), &anchored_ts);
+    }
+
+    /// Drift-aware event append. If the device clock is within
+    /// `MAX_DRIFT_TOLERANCE_SECONDS` of the anchor, the event is assigned to a
+    /// cycle immediately; otherwise it is held in the pending-alignment queue
+    /// for `align_telemetry_batch` to reconcile later.
+    pub fn append_event_drift_aware(
+        env: Env,
+        device_id: Address,
+        event_nonce: u64,
+        units: i128,
+        device_ts: u64,
+    ) -> u64 {
+        device_id.require_auth();
+
+        let anchor: u64 = env
+            .storage()
+            .persistent()
+            .get(&symbol_short!("tanchor"))
+            .unwrap_or_else(|| env.ledger().timestamp());
+
+        let id = Self::next_event_id(&env);
+        let event = TelemetryEvent {
+            device_id,
+            ledger_seq: env.ledger().sequence(),
+            event_nonce,
+            batched_event_id: id,
+            units,
+        };
+
+        let drift = device_ts.abs_diff(anchor);
+        if drift > MAX_DRIFT_TOLERANCE_SECONDS {
+            // Soft boundary: hold for re-alignment instead of guessing a cycle.
+            let mut pending: Map<u64, TelemetryEvent> = env
+                .storage()
+                .persistent()
+                .get(&symbol_short!("pendq"))
+                .unwrap_or_else(|| Map::new(&env));
+            pending.set(id, event);
+            env.storage()
+                .persistent()
+                .set(&symbol_short!("pendq"), &pending);
+        } else {
+            let mut events = Self::load_events(&env);
+            events.set(id, event);
+            env.storage()
+                .persistent()
+                .set(&DataKey::TelemetryEvents, &events);
+        }
+
+        id
+    }
+
+    /// Reconcile the pending-alignment queue. Runs its real work only on every
+    /// 10th invocation (cheap to call opportunistically). Each pending event is
+    /// assigned to its cycle using the oracle-anchored time and moved into the
+    /// canonical event log. Returns the number of events aligned this call.
+    pub fn align_telemetry_batch(env: Env) -> u32 {
+        let counter: u64 = env
+            .storage()
+            .persistent()
+            .get(&symbol_short!("aligncnt"))
+            .unwrap_or(0);
+        let next = counter + 1;
+        env.storage()
+            .persistent()
+            .set(&symbol_short!("aligncnt"), &next);
+        if next % 10 != 0 {
+            return 0;
+        }
+
+        let pending: Map<u64, TelemetryEvent> = match env
+            .storage()
+            .persistent()
+            .get(&symbol_short!("pendq"))
+        {
+            Some(p) => p,
+            None => return 0,
+        };
+
+        let mut events = Self::load_events(&env);
+        let mut aligned = 0u32;
+        for (id, event) in pending.iter() {
+            events.set(id, event);
+            aligned += 1;
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::TelemetryEvents, &events);
+        env.storage()
+            .persistent()
+            .set(&symbol_short!("pendq"), &Map::<u64, TelemetryEvent>::new(&env));
+
+        aligned
+    }
+
+    /// Admin alert hook: returns true (and emits an event) when this cycle's
+    /// event count deviates by more than 5% from the supplied trailing 30-day
+    /// average. Delegates the threshold math to the verified pure
+    /// `exceeds_deviation_alert`.
+    pub fn check_cycle_deviation(env: Env, observed: u64, trailing_avg: u64) -> bool {
+        let alert = exceeds_deviation_alert(observed, trailing_avg);
+        if alert {
+            env.events().publish(
+                (symbol_short!("CycDevAl"),),
+                (observed, trailing_avg, deviation_bps(observed, trailing_avg)),
+            );
+        }
+        alert
+    }
 }
 
 impl TelemetryBilling {

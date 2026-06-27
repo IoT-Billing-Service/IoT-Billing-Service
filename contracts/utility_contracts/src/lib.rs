@@ -331,6 +331,7 @@ pub mod secure_call_interface;
 pub mod storage_ttl;
 pub mod remainder_accumulator;
 pub mod tariff_oracle;
+pub mod telemetry_billing;
 pub mod telemetry_buffer;
 pub mod event_privacy;
 pub mod temporary_storage;
@@ -1088,6 +1089,9 @@ pub enum DataKey {
     TimelockWD(u64),
     WdCounter,
     CbState,
+    // Issue #19 — Telemetry billing (deterministic rollup + drift-aware cycle assignment)
+    TelemetryEvents,
+    TelemetryEventCounter,
 }
 
 #[contracterror(export = false)]
@@ -2173,6 +2177,21 @@ fn can_finalize_upgrade(env: &Env) -> bool {
     veto_bps < VETO_THRESHOLD_BPS
 }
 
+/// The storage key for the trusted oracle-anchored ledger timestamp.
+/// Set via [`set_time_anchor`] and read by [`get_anchored_time`].
+const TIME_ANCHOR_KEY: soroban_sdk::Symbol = symbol_short!("tanchor");
+
+/// Read the oracle-anchored timestamp if one has been recorded, falling back
+/// to the raw `env.ledger().timestamp()`. This is the single clock source for
+/// **billing-cycle boundary decisions**, insulating them from the 5-minute
+/// drift between ledger time and device-local wall clocks.
+fn get_anchored_time(env: &Env) -> u64 {
+    env.storage()
+        .persistent()
+        .get::<_, u64>(&TIME_ANCHOR_KEY)
+        .unwrap_or_else(|| env.ledger().timestamp())
+}
+
 #[contract]
 pub struct UtilityContract;
 
@@ -2978,6 +2997,23 @@ impl UtilityContract {
 
         env.events()
             .publish((symbol_short!("OracleSet"),), (oracle_address,));
+    }
+
+    /// Record a trusted oracle-anchored ledger timestamp used for billing-cycle
+    /// boundary decisions. Contract functions that determine cycle membership
+    /// (e.g. monthly-volume reset, cycle-usage reset) will use this value via
+    /// [`get_anchored_time`] instead of `env.ledger().timestamp()`, insulating
+    /// billing from the up-to-5-minute drift between ledger close time and
+    /// device-local wall clocks.
+    pub fn set_time_anchor(env: Env, oracle: Address, anchored_ts: u64) {
+        oracle.require_auth();
+        env.storage()
+            .persistent()
+            .set(&TIME_ANCHOR_KEY, &anchored_ts);
+        env.events().publish(
+            (symbol_short!("TAnchor"),),
+            (oracle, anchored_ts),
+        );
     }
 
     /// Sets the maintenance wallet address and protocol fee configuration.
@@ -5033,11 +5069,11 @@ impl UtilityContract {
         // Task #3: Auto-extend TTL if needed (every 500,000 ledgers)
         auto_extend_ttl_if_needed(&env, signed_data.meter_id);
 
-        // Task #89: Update monthly volume
-        let now = env.ledger().timestamp();
-        if now.saturating_sub(meter.usage_data.last_volume_reset) >= (30 * DAY_IN_SECONDS) {
+        // Task #89: Update monthly volume (use anchored time for cycle-boundary decisions)
+        let cycle_now = get_anchored_time(&env);
+        if cycle_now.saturating_sub(meter.usage_data.last_volume_reset) >= (30 * DAY_IN_SECONDS) {
             meter.usage_data.monthly_volume = cost;
-            meter.usage_data.last_volume_reset = now;
+            meter.usage_data.last_volume_reset = cycle_now;
         } else {
             meter.usage_data.monthly_volume = meter.usage_data.monthly_volume.saturating_add(cost);
         }
@@ -5323,7 +5359,7 @@ impl UtilityContract {
             meter.usage_data.peak_usage_watt_hours = meter.usage_data.current_cycle_watt_hours;
         }
 
-        meter.usage_data.last_reading_timestamp = env.ledger().timestamp();
+        meter.usage_data.last_reading_timestamp = get_anchored_time(&env);
         env.storage()
             .instance()
             .set(&DataKey::Meter(meter_id), &meter);
@@ -5333,7 +5369,7 @@ impl UtilityContract {
         let mut meter = get_meter_or_panic(&env, meter_id);
         meter.provider.require_auth();
         meter.usage_data.current_cycle_watt_hours = 0;
-        meter.usage_data.last_reading_timestamp = env.ledger().timestamp();
+        meter.usage_data.last_reading_timestamp = get_anchored_time(&env);
         env.storage()
             .instance()
             .set(&DataKey::Meter(meter_id), &meter);
