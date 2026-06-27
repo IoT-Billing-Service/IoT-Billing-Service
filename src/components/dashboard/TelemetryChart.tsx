@@ -3,6 +3,7 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useTheme } from '@/components/providers/ThemeProvider';
 import { useRenderLoop } from '@/hooks/useRenderLoop';
+import { FrameBudgetReport } from '@/utils/frameBudget';
 
 interface TelemetryDataPoint {
   timestamp: number;
@@ -33,7 +34,7 @@ const RATE_WARN_THRESHOLD = 3000;
 function createWorker(): Worker | null {
   if (typeof window === 'undefined') return null;
   try {
-    return new Worker(new URL('../../workers/analyticsDataProcessor.worker.ts', import.meta.url), {
+    return new Worker(new URL('../../workers/canvasWorker.ts', import.meta.url), {
       type: 'module',
     });
   } catch {
@@ -57,35 +58,107 @@ export function TelemetryChart({
   const headRef = useRef(0);
   const countRef = useRef(0);
   const lastFullRedraw = useRef(0);
-  const lastDrawnHead = useRef(0);
   const msgTimestamps = useRef<number[]>([]);
   const workerRef = useRef<Worker | null>(null);
+  const workerReadyRef = useRef(false);
+  const workerInitRef = useRef(false);
+  const pendingWorkerBatchesRef = useRef<{ values: number[] }[]>([]);
   const prevDataLenRef = useRef(0);
   const isPageVisible = useRef(true);
-  const [range, setRange] = useState<{ min: number; max: number }>({ min: 0, max: 1 });
   const [memoryInfo, setMemoryInfo] = useState<string | null>(null);
+  const [frameStats, setFrameStats] = useState<FrameBudgetReport | null>(null);
+  const [useWorkerRender, setUseWorkerRender] = useState(false);
   const { chartPalette, prefersReducedMotion } = useTheme();
 
-  // Upstream: worker initialization
   useEffect(() => {
-    workerRef.current = createWorker();
+    if (typeof window === 'undefined') return;
 
-    const handleWorkerMessage = (e: MessageEvent) => {
-      if (e.data.type === 'rangeResult' && e.data.range) {
-        setRange({ min: e.data.range.min, max: e.data.range.max });
+    workerRef.current = createWorker();
+    const worker = workerRef.current;
+    if (!worker) return;
+
+    const handleWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'ready') {
+        workerReadyRef.current = true;
+        setUseWorkerRender(true);
+        pendingWorkerBatchesRef.current.forEach((batch) => {
+          worker.postMessage({ type: 'appendBatch', payload: batch });
+        });
+        pendingWorkerBatchesRef.current.length = 0;
+        return;
+      }
+
+      if (event.data?.type === 'frameStats' && event.data.payload) {
+        setFrameStats(event.data.payload);
+      }
+
+      if (event.data?.type === 'error') {
+        console.error('[TelemetryChart worker]', event.data.payload);
       }
     };
 
-    workerRef.current?.addEventListener('message', handleWorkerMessage);
-
+    worker.addEventListener('message', handleWorkerMessage);
     return () => {
-      workerRef.current?.removeEventListener('message', handleWorkerMessage);
-      workerRef.current?.terminate();
+      worker.removeEventListener('message', handleWorkerMessage);
+      worker.terminate();
       workerRef.current = null;
     };
   }, []);
 
-  // Upstream: ring buffer data processing with prevDataLenRef
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const worker = workerRef.current;
+    if (!canvas || !worker || workerInitRef.current) return;
+    type OffscreenTransferable = HTMLCanvasElement & {
+      transferControlToOffscreen?: () => OffscreenCanvas;
+    };
+    const transfer = (canvas as OffscreenTransferable).transferControlToOffscreen?.();
+    if (!transfer) return;
+
+    worker.postMessage(
+      {
+        type: 'init',
+        payload: {
+          canvas: transfer,
+          width,
+          height,
+          dpr: window.devicePixelRatio || 1,
+          metric,
+          color,
+          isLoading,
+          loadingProgress,
+          totalTimeRange,
+          pendingRange,
+        },
+      },
+      [transfer],
+    );
+    workerInitRef.current = true;
+  }, [color, height, loadingProgress, metric, pendingRange, totalTimeRange, width, isLoading]);
+
+  useEffect(() => {
+    if (!workerReadyRef.current || !workerRef.current) return;
+    workerRef.current.postMessage({
+      type: 'updateConfig',
+      payload: {
+        metric,
+        color,
+        isLoading,
+        loadingProgress,
+        totalTimeRange,
+        pendingRange,
+      },
+    });
+  }, [color, isLoading, loadingProgress, metric, pendingRange, totalTimeRange]);
+
+  useEffect(() => {
+    if (!workerReadyRef.current || !workerRef.current) return;
+    workerRef.current.postMessage({
+      type: 'resize',
+      payload: { width, height, dpr: window.devicePixelRatio || 1 },
+    });
+  }, [width, height]);
+
   useEffect(() => {
     const points = data;
     const prevLen = prevDataLenRef.current;
@@ -103,6 +176,7 @@ export function TelemetryChart({
       const idx = (head + count + i) % RING_CAPACITY;
       ring[idx] = point;
     }
+
     const newCount = Math.min(count + newPoints.length, RING_CAPACITY);
     const newHead =
       newCount < RING_CAPACITY
@@ -110,6 +184,14 @@ export function TelemetryChart({
         : (headRef.current + newPoints.length) % RING_CAPACITY;
     headRef.current = newHead;
     countRef.current = newCount;
+
+    const values = newPoints.map((point) => point.value);
+    const batch = { values };
+    if (workerReadyRef.current && workerRef.current) {
+      workerRef.current.postMessage({ type: 'appendBatch', payload: batch });
+    } else {
+      pendingWorkerBatchesRef.current.push(batch);
+    }
 
     const now = performance.now();
     msgTimestamps.current.push(now);
@@ -122,22 +204,6 @@ export function TelemetryChart({
     }
   }, [data, metric]);
 
-  // HEAD: Visibility change handler — pause/resume rAF loop
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      isPageVisible.current = document.visibilityState === 'visible';
-      if (isPageVisible.current) {
-        lastFullRedraw.current = 0;
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-
-  // HEAD: Dev-mode memory measurement
   useEffect(() => {
     if (process.env.NODE_ENV !== 'development') return;
 
@@ -162,15 +228,13 @@ export function TelemetryChart({
     return () => clearInterval(interval);
   }, []);
 
-  const sendToWorker = useCallback((values: number[]) => {
-    workerRef.current?.postMessage({
-      type: 'computeRange',
-      payload: { values },
-    });
-  }, []);
-
   const draw = useCallback(
     (now: number) => {
+      if (useWorkerRender && workerRef.current && workerReadyRef.current) {
+        workerRef.current.postMessage({ type: 'draw', payload: { now } });
+        return;
+      }
+
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
@@ -179,19 +243,15 @@ export function TelemetryChart({
       const dpr = window.devicePixelRatio || 1;
       canvas.width = width * dpr;
       canvas.height = height * dpr;
-      ctx.scale(dpr, dpr);
-
-      // Resolve theme-aware colours from CSS custom properties for canvas rendering
-      const computedStyle = getComputedStyle(canvas);
-      const chartTextColor = computedStyle.getPropertyValue('--chart-text').trim() || '#a0a0a0';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const ring = ringRef.current;
       const head = headRef.current;
       const count = countRef.current;
-
       if (count < 2) {
-        // HEAD: Draw loading state text even with no data yet
         if (isLoading && totalTimeRange) {
+          const computedStyle = getComputedStyle(canvas);
+          const chartTextColor = computedStyle.getPropertyValue('--chart-text').trim() || '#a0a0a0';
           ctx.fillStyle = chartTextColor;
           ctx.globalAlpha = 0.6;
           ctx.font = '14px monospace';
@@ -202,62 +262,41 @@ export function TelemetryChart({
         }
         return;
       }
-      if (count > 1 && range.max === range.min && range.max === 0) return;
 
       const fullRedraw = now - lastFullRedraw.current >= FULL_REDRAW_MS;
       const padding = 20;
+      const widthCap = Math.max(50, Math.floor(width));
+      const maxPoints = fullRedraw ? widthCap : Math.max(50, Math.floor(widthCap / 2));
+      const chartMaxPoints = Math.min(maxPoints, widthCap);
+
+      let min = Infinity;
+      let max = -Infinity;
+      for (let i = 0; i < count; i++) {
+        const idx = (head + i) % RING_CAPACITY;
+        const pt = ring[idx] as TelemetryDataPoint;
+        const value = pt?.value;
+        if (value < min) min = value;
+        if (value > max) max = value;
+      }
+      if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        min = 0;
+        max = 1;
+      }
+      const rng = max - min || 1;
 
       ctx.clearRect(0, 0, width, height);
 
-      // HEAD: Draw pending/loading region (dimmed overlay) when data is still being fetched
-      if (pendingRange && totalTimeRange) {
-        const totalSpan = totalTimeRange.end - totalTimeRange.start || 1;
-        const pendingStartRatio = (pendingRange.start - totalTimeRange.start) / totalSpan;
-        const pendingEndRatio = (pendingRange.end - totalTimeRange.start) / totalSpan;
-        const px = padding + pendingStartRatio * (width - 2 * padding);
-        const pw = Math.max(2, (pendingEndRatio - pendingStartRatio) * (width - 2 * padding));
-
-        ctx.fillStyle = chartTextColor;
-        ctx.globalAlpha = 0.15;
-        ctx.fillRect(px, padding, pw, height - 2 * padding);
-        ctx.globalAlpha = 1;
-
-        ctx.save();
-        ctx.strokeStyle = chartTextColor;
-        ctx.globalAlpha = 0.4;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
-        ctx.lineDashOffset = -(now / 50);
-        ctx.strokeRect(px, padding, pw, height - 2 * padding);
-        ctx.setLineDash([]);
-        ctx.restore();
-
-        ctx.fillStyle = chartTextColor;
-        ctx.globalAlpha = 0.6;
-        ctx.font = '10px monospace';
-        ctx.fillText('Loading...', px + 4, padding + 14);
-        ctx.globalAlpha = 1;
-      }
-
-      // Upstream: line chart drawing — use theme-aware colour
       ctx.strokeStyle = color ?? chartPalette[0] ?? '#5ec962';
       ctx.lineWidth = 2;
-
-      const rng = range.max - range.min || 1;
-
-      let startIdx = 0;
-      if (!fullRedraw && lastDrawnHead.current > 0) {
-        startIdx = Math.max(0, lastDrawnHead.current - 1);
-      }
-      lastDrawnHead.current = head + count;
-
       ctx.beginPath();
       let first = true;
-      for (let i = startIdx; i < count; i++) {
+      const stride = Math.max(1, Math.ceil(count / chartMaxPoints));
+
+      for (let i = 0; i < count; i += stride) {
         const idx = (head + i) % RING_CAPACITY;
         const pt = ring[idx] as TelemetryDataPoint;
         const x = padding + (i / (count - 1)) * (width - 2 * padding);
-        const y = height - padding - ((pt.value - range.min) / rng) * (height - 2 * padding);
+        const y = height - padding - ((pt.value - min) / rng) * (height - 2 * padding);
         if (first) {
           ctx.moveTo(x, y);
           first = false;
@@ -265,65 +304,29 @@ export function TelemetryChart({
           ctx.lineTo(x, y);
         }
       }
+
+      if (!first && count > 1) {
+        const idx = (head + count - 1) % RING_CAPACITY;
+        const pt = ring[idx] as TelemetryDataPoint;
+        const x = padding + ((count - 1) / (count - 1)) * (width - 2 * padding);
+        const y = height - padding - ((pt.value - min) / rng) * (height - 2 * padding);
+        ctx.lineTo(x, y);
+      }
+
       ctx.stroke();
 
       if (fullRedraw) {
         lastFullRedraw.current = now;
-        const values: number[] = [];
-        for (let i = 0; i < count; i++) {
-          const idx = (head + i) % RING_CAPACITY;
-          values.push((ring[idx] as TelemetryDataPoint).value);
-        }
-        sendToWorker(values);
       }
 
+      const latest = ring[(head + count - 1) % RING_CAPACITY] as TelemetryDataPoint;
       ctx.fillStyle = color ?? chartPalette[0] ?? '#5ec962';
       ctx.font = '12px monospace';
-      const latest = ring[(head + count - 1) % RING_CAPACITY] as TelemetryDataPoint;
       ctx.fillText(`${metric}: ${latest.value.toFixed(2)}`, padding, 20);
-
-      // Upstream: Loading gradient for progressive chunked history
-      if (loadingProgress !== undefined && loadingProgress < 1 && count > 1) {
-        const loadedX = padding + loadingProgress * (width - 2 * padding);
-        const gradient = ctx.createLinearGradient(loadedX, 0, width, 0);
-        gradient.addColorStop(0, 'transparent');
-        gradient.addColorStop(0.3, chartTextColor);
-        ctx.globalAlpha = 0.15;
-        ctx.fillStyle = gradient;
-        ctx.fillRect(loadedX, 0, width - loadedX, height);
-        ctx.globalAlpha = 1;
-
-        const dotX = loadedX + 30;
-        const dotY = height / 2;
-        const dotRadius = 3;
-        const dotSpacing = 12;
-        const phase = Math.floor(now / 400) % 3;
-        ctx.fillStyle = chartTextColor;
-        for (let d = 0; d < 3; d++) {
-          ctx.globalAlpha = d === phase ? 1 : 0.3;
-          ctx.beginPath();
-          ctx.arc(dotX + d * dotSpacing, dotY, dotRadius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-      }
     },
-    [
-      chartPalette,
-      color,
-      height,
-      isLoading,
-      loadingProgress,
-      metric,
-      pendingRange,
-      range,
-      sendToWorker,
-      totalTimeRange,
-      width,
-    ],
+    [color, height, isLoading, metric, totalTimeRange, useWorkerRender, width, chartPalette],
   );
 
-  // rAF loop with visibility + reduced-motion handling (shared hook).
   const isVisible = useCallback(() => isPageVisible.current, []);
   const handleResumeAfterHidden = useCallback(() => {
     lastFullRedraw.current = 0;
@@ -339,9 +342,14 @@ export function TelemetryChart({
   return (
     <div className="relative">
       <canvas ref={canvasRef} style={{ width, height }} aria-label={`${metric} telemetry chart`} />
-      {memoryInfo && (
+      {(memoryInfo || frameStats) && (
         <div className="absolute bottom-1 right-2 rounded bg-black/70 px-2 py-0.5 text-[10px] text-gray-400 font-mono">
           {memoryInfo}
+          {frameStats && (
+            <span className={memoryInfo ? 'ml-2' : ''}>
+              p95 {frameStats.p95.toFixed(1)}ms · dropped {frameStats.droppedFrames}
+            </span>
+          )}
         </div>
       )}
     </div>

@@ -115,52 +115,49 @@ export default function DeviceMapCanvas({
   useDeviceStatusStream(updateDeviceSprite);
 
   // ── Canvas draw loop ─────────────────────────────────────────────────────
-  const draw = useCallback(
-    (_now: number) => {
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext('2d');
-      const spriteImg = spriteImageRef.current;
-      if (!canvas || !ctx || !spriteImg) return;
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    const spriteImg = spriteImageRef.current;
+    if (!canvas || !ctx || !spriteImg) return;
 
-      // Clear the canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Rudimentary mercator-like projection (simplified for demo)
-      const projectLat = (lat: number): number => {
-        // Clamp to ±85°
-        const clampedLat = Math.max(-85, Math.min(85, lat));
-        // Map [-85..85] → [0..height]
-        return ((85 - clampedLat) / 170) * canvas.height;
-      };
-      const projectLng = (lng: number): number => {
-        // Map [-180..180] → [0..width]
-        return ((lng + 180) / 360) * canvas.width;
-      };
+    // Rudimentary mercator-like projection (simplified for demo)
+    const projectLat = (lat: number): number => {
+      // Clamp to ±85°
+      const clampedLat = Math.max(-85, Math.min(85, lat));
+      // Map [-85..85] → [0..height]
+      return ((85 - clampedLat) / 170) * canvas.height;
+    };
+    const projectLng = (lng: number): number => {
+      // Map [-180..180] → [0..width]
+      return ((lng + 180) / 360) * canvas.width;
+    };
 
-      // Draw each device's sprite
-      const states = spriteManagerRef.current.getAllStates();
-      for (const state of states) {
-        const device = deviceMapRef.current.get(state.status);
-        if (!device?.location) continue;
+    // Draw each device's sprite
+    const states = spriteManagerRef.current.getAllStates();
+    for (const state of states) {
+      const device = deviceMapRef.current.get(state.status);
+      if (!device?.location) continue;
 
-        const x = projectLng(device.location.lng) - SPRITE_FRAME_WIDTH / 2;
-        const y = projectLat(device.location.lat) - SPRITE_HEIGHT / 2;
+      const x = projectLng(device.location.lng) - SPRITE_FRAME_WIDTH / 2;
+      const y = projectLat(device.location.lat) - SPRITE_HEIGHT / 2;
 
-        ctx.drawImage(
-          spriteImg,
-          state.frameIndex * SPRITE_FRAME_WIDTH, // source X
-          0, // source Y (single-row sprite sheet)
-          SPRITE_FRAME_WIDTH,
-          SPRITE_HEIGHT,
-          x,
-          y,
-          SPRITE_FRAME_WIDTH,
-          SPRITE_HEIGHT,
-        );
-      }
-    },
-    [width, height],
-  );
+      ctx.drawImage(
+        spriteImg,
+        state.frameIndex * SPRITE_FRAME_WIDTH, // source X
+        0, // source Y (single-row sprite sheet)
+        SPRITE_FRAME_WIDTH,
+        SPRITE_HEIGHT,
+        x,
+        y,
+        SPRITE_FRAME_WIDTH,
+        SPRITE_HEIGHT,
+      );
+    }
+  }, []);
 
   const isVisible = useCallback(() => !document.hidden, []);
 
