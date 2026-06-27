@@ -109,7 +109,10 @@ export function TelemetryChart({
     const canvas = canvasRef.current;
     const worker = workerRef.current;
     if (!canvas || !worker || workerInitRef.current) return;
-    const transfer = (canvas as any).transferControlToOffscreen?.();
+    type OffscreenTransferable = HTMLCanvasElement & {
+      transferControlToOffscreen?: () => OffscreenCanvas;
+    };
+    const transfer = (canvas as OffscreenTransferable).transferControlToOffscreen?.();
     if (!transfer) return;
 
     worker.postMessage(
@@ -319,7 +322,7 @@ export function TelemetryChart({
       ctx.font = '12px monospace';
       ctx.fillText(`${metric}: ${latest.value.toFixed(2)}`, padding, 20);
     },
-    [color, height, isLoading, metric, totalTimeRange, useWorkerRender, width],
+    [color, height, isLoading, metric, totalTimeRange, useWorkerRender, width, chartPalette],
   );
 
   const isVisible = useCallback(() => isPageVisible.current, []);

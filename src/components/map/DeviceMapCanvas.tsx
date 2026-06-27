@@ -115,8 +115,7 @@ export default function DeviceMapCanvas({
   useDeviceStatusStream(updateDeviceSprite);
 
   // ── Canvas draw loop ─────────────────────────────────────────────────────
-  const draw = useCallback(
-    (_now: number) => {
+  const draw = useCallback(() => {
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext('2d');
       const spriteImg = spriteImageRef.current;
@@ -159,7 +158,7 @@ export default function DeviceMapCanvas({
         );
       }
     },
-    [width, height],
+    [],
   );
 
   const isVisible = useCallback(() => !document.hidden, []);

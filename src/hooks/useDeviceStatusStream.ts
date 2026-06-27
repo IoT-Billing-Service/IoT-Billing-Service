@@ -148,7 +148,5 @@ export function useDeviceStatusStream(handler: DeviceStatusHandler): void {
       ws?.close();
     };
 
-    // `delay` is a module-level pure helper; not a hook dep.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }
