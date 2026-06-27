@@ -147,6 +147,5 @@ export function useDeviceStatusStream(handler: DeviceStatusHandler): void {
       if (reconnectTimer !== null) clearTimeout(reconnectTimer);
       ws?.close();
     };
-
   }, []);
 }

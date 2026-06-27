@@ -179,7 +179,9 @@ export function TelemetryChart({
 
     const newCount = Math.min(count + newPoints.length, RING_CAPACITY);
     const newHead =
-      newCount < RING_CAPACITY ? headRef.current : (headRef.current + newPoints.length) % RING_CAPACITY;
+      newCount < RING_CAPACITY
+        ? headRef.current
+        : (headRef.current + newPoints.length) % RING_CAPACITY;
     headRef.current = newHead;
     countRef.current = newCount;
 

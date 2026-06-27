@@ -44,7 +44,10 @@ class CanvasRenderWorker {
   private totalTimeRange?: { start: number; end: number };
   private pendingRange?: { start: number; end: number } | null = null;
   private readonly buffer = new TelemetryBuffer(CAPACITY);
-  private readonly monitor = new FrameBudgetMonitor({ budgetMs: 1000 / 60, pressureThreshold: 0.5 });
+  private readonly monitor = new FrameBudgetMonitor({
+    budgetMs: 1000 / 60,
+    pressureThreshold: 0.5,
+  });
   private lastFullRedraw = 0;
   private lastStatsSent = 0;
   private pendingMessageCount = 0;
@@ -237,7 +240,10 @@ class CanvasRenderWorker {
         this.canvas = payload.canvas;
         const context = this.canvas.getContext('2d');
         if (!context) {
-          self.postMessage({ type: 'error', payload: 'Unable to obtain OffscreenCanvas 2D context.' });
+          self.postMessage({
+            type: 'error',
+            payload: 'Unable to obtain OffscreenCanvas 2D context.',
+          });
           return;
         }
         this.ctx = context;

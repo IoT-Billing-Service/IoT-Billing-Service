@@ -1,4 +1,5 @@
-const ATOMICS_AVAILABLE = typeof Atomics !== 'undefined' && typeof SharedArrayBuffer !== 'undefined';
+const ATOMICS_AVAILABLE =
+  typeof Atomics !== 'undefined' && typeof SharedArrayBuffer !== 'undefined';
 
 type AtomicView = Uint32Array | Uint8Array;
 
