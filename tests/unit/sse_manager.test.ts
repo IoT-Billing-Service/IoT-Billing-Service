@@ -1,16 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Writable } from 'node:stream';
-import {
-  SseConnection,
-  getSseManager,
-} from '../../src/core/ingestion/sse_manager.js';
+import { SseConnection, getSseManager } from '../../src/core/ingestion/sse_manager.js';
 import type { FastifyReply } from 'fastify';
 
 interface MockRaw extends Writable {
   setWriteResult: (v: boolean) => void;
 }
 
-interface MockReply { raw: MockRaw; header: ReturnType<typeof vi.fn>; hijack: ReturnType<typeof vi.fn> }
+interface MockReply {
+  raw: MockRaw;
+  header: ReturnType<typeof vi.fn>;
+  hijack: ReturnType<typeof vi.fn>;
+}
 
 function mockFastifyReply(): { reply: MockReply; raw: MockRaw } {
   let writeShouldReturnTrue = true;
@@ -50,7 +51,7 @@ describe('SseConnection', () => {
 
     const writeSpy = vi.spyOn(reply.raw, 'write');
     const accepted = conn.enqueue('event: test\ndata: hello\n\n');
-    
+
     expect(accepted).toBe(true);
     expect(writeSpy).toHaveBeenCalled();
     expect(conn.getQueueDepth()).toBe(0);
@@ -94,26 +95,27 @@ describe('SseConnection', () => {
     expect(conn.getQueueDepth()).toBe(0);
   });
 
-  it('should resume writing after drain event', () => new Promise<void>((done) => {
-    const { reply } = mockFastifyReply();
-    reply.raw.setWriteResult(false);
-    const conn = new SseConnection('test-4', reply as unknown as FastifyReply);
+  it('should resume writing after drain event', () =>
+    new Promise<void>((done) => {
+      const { reply } = mockFastifyReply();
+      reply.raw.setWriteResult(false);
+      const conn = new SseConnection('test-4', reply as unknown as FastifyReply);
 
-    // Enqueue while backpressured
-    conn.enqueue('event: test\ndata: first\n\n');
-    expect(conn.getQueueDepth()).toBe(1);
+      // Enqueue while backpressured
+      conn.enqueue('event: test\ndata: first\n\n');
+      expect(conn.getQueueDepth()).toBe(1);
 
-    // Now clear backpressure
-    reply.raw.setWriteResult(true);
-    reply.raw.emit('drain');
+      // Now clear backpressure
+      reply.raw.setWriteResult(true);
+      reply.raw.emit('drain');
 
-    // Allow microtask flush
-    setImmediate(() => {
-      expect(conn.getQueueDepth()).toBe(0);
-      conn.close();
-      done();
-    });
-  }));
+      // Allow microtask flush
+      setImmediate(() => {
+        expect(conn.getQueueDepth()).toBe(0);
+        conn.close();
+        done();
+      });
+    }));
 
   it('should stop heartbeat on close', () => {
     const { reply } = mockFastifyReply();
@@ -180,7 +182,7 @@ describe('SseManager', () => {
     expect(writeSpy1).toHaveBeenCalled();
     // Second client should NOT receive the private event
     const callsForPrivate = writeSpy2.mock.calls.filter(
-      (call) => typeof call[0] === 'string' && (call[0]).includes('private'),
+      (call) => typeof call[0] === 'string' && call[0].includes('private'),
     );
     expect(callsForPrivate.length).toBe(0);
 
