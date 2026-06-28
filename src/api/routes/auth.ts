@@ -135,7 +135,9 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         walletAddress,
-        expiresIn: env.JWT_EXPIRES_IN,
+        // Nominal base lifetime in seconds; the actual token carries up to
+        // ACCESS_TOKEN_JITTER_SECONDS of additional random spread (issue #59).
+        expiresIn: String(env.ACCESS_TOKEN_TTL_SECONDS),
       });
     },
   );
