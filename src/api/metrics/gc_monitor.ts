@@ -1,5 +1,10 @@
 import { PerformanceObserver, monitorEventLoopDelay } from 'node:perf_hooks';
-import { recordGcPause, eventLoopLag, bufferConnectionBufferBytes, logDeviceMetric } from './prometheus.js';
+import {
+  recordGcPause,
+  eventLoopLag,
+  bufferConnectionBufferBytes,
+  logDeviceMetric,
+} from './prometheus.js';
 
 export let lastHealthCheckAt = 0;
 let forcedGcTimer: ReturnType<typeof setTimeout> | null = null;

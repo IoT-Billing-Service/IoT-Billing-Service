@@ -321,7 +321,8 @@ describe('Prometheus cardinality invariant', () => {
     ];
 
     for (let i = 0; i < DEVICE_COUNT; i++) {
-      const c = combos[i % combos.length]!;
+      const c = combos[i % combos.length] ?? combos[0];
+      if (!c) continue;
       bufferIngestionIncrement(c.tenantId, c.deviceTier, c.region, 'success');
       bufferConnectionBufferBytes(c.tenantId, c.deviceTier, c.region, 512);
     }

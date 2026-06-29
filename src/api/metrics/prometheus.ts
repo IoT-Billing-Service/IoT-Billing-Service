@@ -47,15 +47,17 @@ const MAX_SERIES = 100_000;
  * below MAX_SERIES. If the guard trips, emits a HighCardinalityWarning log and
  * returns null instead of throwing.
  */
-export function registerMetric<T extends promClient.Metric>(
+export async function registerMetric<T extends promClient.Metric>(
   factory: () => T,
   name: string,
-): T | null {
-  const existing = promClient.register.getMetricsAsJSON().filter((m) => m.name === name);
-  const seriesCount = existing.reduce((sum, m) => {
-    const v = m as { values?: unknown[] };
-    return sum + (v.values?.length ?? 0);
-  }, 0);
+): Promise<T | null> {
+  const all = await promClient.register.getMetricsAsJSON();
+  const seriesCount = all
+    .filter((m) => m.name === name)
+    .reduce((sum, m) => {
+      const v = m as { values?: unknown[] };
+      return sum + (v.values?.length ?? 0);
+    }, 0);
   if (seriesCount > MAX_SERIES) {
     console.error(
       JSON.stringify({
@@ -80,7 +82,7 @@ interface AggregateEntry {
 }
 
 // aggregateKey = `${tenant_id}:${device_tier}:${region}`
-const _aggregates: Map<string, AggregateEntry> = new Map();
+const _aggregates = new Map<string, AggregateEntry>();
 
 function getEntry(aggregateKey: string): AggregateEntry {
   let entry = _aggregates.get(aggregateKey);
