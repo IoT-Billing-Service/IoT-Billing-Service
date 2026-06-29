@@ -3,6 +3,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { EscrowBalance } from '@/types';
 
+function isTransientError(error: Error): boolean {
+  const msg = error.message.toLowerCase();
+  return msg.includes('timeout') || msg.includes('network') || msg.includes('fetch');
+}
+
 async function fetchEscrowBalance(contractId: string): Promise<EscrowBalance> {
   const response = await fetch(`/api/escrow/${contractId}/balance`);
   if (!response.ok) throw new Error('Failed to fetch escrow balance');
@@ -15,6 +20,11 @@ export function useEscrowBalance(contractId: string) {
     queryFn: () => fetchEscrowBalance(contractId),
     refetchInterval: 30_000,
     staleTime: 15_000,
+    retry: (failureCount, error) => {
+      if (failureCount > 3) return false;
+      return isTransientError(error as Error);
+    },
+    retryDelay: 1000,
   });
 }
 
@@ -69,6 +79,11 @@ export function useEscrowContract(contractId: string) {
 
   const depositMutation = useMutation({
     mutationFn: depositEscrow,
+    retry: (failureCount, error) => {
+      if (failureCount > 3) return false;
+      return isTransientError(error as Error);
+    },
+    retryDelay: 1000,
     onMutate: async (params: {
       contractId: string;
       amount: string;
@@ -103,6 +118,11 @@ export function useEscrowContract(contractId: string) {
 
   const withdrawMutation = useMutation({
     mutationFn: withdrawEscrow,
+    retry: (failureCount, error) => {
+      if (failureCount > 3) return false;
+      return isTransientError(error as Error);
+    },
+    retryDelay: 1000,
     onMutate: async (params: {
       contractId: string;
       amount: string;
