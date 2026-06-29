@@ -1,5 +1,8 @@
+/// <reference types="vitest/globals" />
+
 import { renderHook, act } from '@testing-library/react';
 import { useDeviceStore } from '@/stores/deviceStore';
+import type { DeviceTelemetry } from '@/types';
 import { useBillingStream } from './useBillingStream';
 import { createMockBillingSource } from './useBillingStream';
 
@@ -24,21 +27,29 @@ describe('useBillingStream with device filter', () => {
     renderHook(() => {
       const { addTelemetryData, deviceFilter } = useDeviceStore();
 
-      useBillingStream((updates) => {
-        updates.forEach((update) => {
-          // Simulate telemetry creation from billing update
-          const telemetry: any = {
-            deviceId: update.deviceId,
-            timestamp: update.timestamp,
-            metrics: { powerUsage: parseFloat(update.amount), signalStrength: 100, temperature: 25, batteryLevel: 100 },
-          };
+      useBillingStream(
+        (updates) => {
+          updates.forEach((update) => {
+            // Simulate telemetry creation from billing update
+            const telemetry: DeviceTelemetry = {
+              deviceId: update.deviceId,
+              timestamp: update.timestamp,
+              metrics: {
+                powerUsage: parseFloat(update.amount),
+                signalStrength: 100,
+                temperature: 25,
+                batteryLevel: 100,
+              },
+            };
 
-          // Apply filter - this is where stale closure happens! deviceFilter is captured once
-          if (!deviceFilter || telemetry.deviceId === deviceFilter) {
-            addTelemetryData(telemetry);
-          }
-        });
-      }, { mockSocket: mockWs });
+            // Apply filter - this is where stale closure happens! deviceFilter is captured once
+            if (!deviceFilter || telemetry.deviceId === deviceFilter) {
+              addTelemetryData(telemetry);
+            }
+          });
+        },
+        { mockSocket: mockWs },
+      );
     });
 
     // Send first update with no filter - should add device-1
@@ -47,7 +58,7 @@ describe('useBillingStream with device filter', () => {
     });
 
     expect(result.current.telemetryData.length).toBe(1);
-    expect(result.current.telemetryData[0].deviceId).toBe('device-1');
+    expect(result.current.telemetryData[0]?.deviceId).toBe('device-1');
 
     // Change filter to device-2
     act(() => {
@@ -77,22 +88,30 @@ describe('useBillingStream with device filter', () => {
 
     // Setup useBillingStream with FIXED filter logic using getState()
     renderHook(() => {
-      useBillingStream((updates) => {
-        updates.forEach((update) => {
-          const { addTelemetryData, deviceFilter } = useDeviceStore.getState();
-          // Simulate telemetry creation from billing update
-          const telemetry: any = {
-            deviceId: update.deviceId,
-            timestamp: update.timestamp,
-            metrics: { powerUsage: parseFloat(update.amount), signalStrength: 100, temperature: 25, batteryLevel: 100 },
-          };
+      useBillingStream(
+        (updates) => {
+          updates.forEach((update) => {
+            const { addTelemetryData, deviceFilter } = useDeviceStore.getState();
+            // Simulate telemetry creation from billing update
+            const telemetry: DeviceTelemetry = {
+              deviceId: update.deviceId,
+              timestamp: update.timestamp,
+              metrics: {
+                powerUsage: parseFloat(update.amount),
+                signalStrength: 100,
+                temperature: 25,
+                batteryLevel: 100,
+              },
+            };
 
-          // Apply filter - this uses latest state from getState(), no stale closure!
-          if (!deviceFilter || telemetry.deviceId === deviceFilter) {
-            addTelemetryData(telemetry);
-          }
-        });
-      }, { mockSocket: mockWs });
+            // Apply filter - this uses latest state from getState(), no stale closure!
+            if (!deviceFilter || telemetry.deviceId === deviceFilter) {
+              addTelemetryData(telemetry);
+            }
+          });
+        },
+        { mockSocket: mockWs },
+      );
     });
 
     // Send first update with no filter - should add device-1
@@ -101,7 +120,7 @@ describe('useBillingStream with device filter', () => {
     });
 
     expect(result.current.telemetryData.length).toBe(1);
-    expect(result.current.telemetryData[0].deviceId).toBe('device-1');
+    expect(result.current.telemetryData[0]?.deviceId).toBe('device-1');
 
     // Change filter to device-2
     act(() => {
@@ -115,7 +134,7 @@ describe('useBillingStream with device filter', () => {
 
     // Verify fix: only 2 entries, second is device-2 (no extra device-1)
     expect(result.current.telemetryData.length).toBe(2);
-    expect(result.current.telemetryData[1].deviceId).toBe('device-2');
+    expect(result.current.telemetryData[1]?.deviceId).toBe('device-2');
 
     // Now send another device-1 update - should NOT be added!
     const update3 = { deviceId: 'device-1', amount: '300', timestamp: Date.now() };

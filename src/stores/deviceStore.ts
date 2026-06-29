@@ -10,7 +10,7 @@ interface DeviceStore {
   addTelemetryData: (data: DeviceTelemetry) => void;
 }
 
-export const useDeviceStore = create<DeviceStore>((set, get) => ({
+export const useDeviceStore = create<DeviceStore>((set) => ({
   telemetryData: [],
   deviceFilter: null,
   setDeviceFilter: (filter: string | null) => set({ deviceFilter: filter }),

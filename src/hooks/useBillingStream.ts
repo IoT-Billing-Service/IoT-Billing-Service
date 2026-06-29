@@ -65,10 +65,12 @@ export function useBillingStream(
   options?: { mockSocket?: MockWebSocket },
 ) {
   const handlerRef = useRef(handler);
+  const optionsRef = useRef(options);
 
   useEffect(() => {
     handlerRef.current = handler;
-  }, [handler]);
+    optionsRef.current = options;
+  }, [handler, options]);
 
   const isUserInteracting = useCurrencyPref((s) => s.isUserInteracting);
   const flushPendingQueue = useCurrencyPref((s) => s.flushPendingQueue);
@@ -132,7 +134,7 @@ export function useBillingStream(
     const connect = async (jwt?: string) => {
       if (cancelled) return;
       setBillingStreamConnectionState(reconnectAttempt > 0 ? 'reconnecting' : 'connecting');
-      ws = options?.mockSocket || new WebSocket(streamUrl(jwt));
+      ws = optionsRef.current?.mockSocket || new WebSocket(streamUrl(jwt));
 
       ws.onopen = () => {
         reconnectAttempt = 0;
@@ -140,7 +142,7 @@ export function useBillingStream(
         startHealthCheck();
       };
 
-      ws.onmessage = (event) => {
+      ws.onmessage = (event: MessageEvent) => {
         try {
           const message = JSON.parse(event.data) as BillingUpdate | BillingStreamControlMessage;
 
@@ -178,7 +180,7 @@ export function useBillingStream(
         // WebSocket errors are non-fatal; the connection will reconnect on close
       };
 
-      ws.onclose = (event) => {
+      ws.onclose = (event: CloseEvent) => {
         if (cancelled) return;
         // For mock sockets, event.code might be undefined
         const requiresFreshToken = (event as CloseEvent).code === 4001;
@@ -249,26 +251,6 @@ export function createMockBillingSource() {
     mockWs,
     send: (update: BillingUpdate) => {
       mockWs.onmessage?.({ data: JSON.stringify(update) });
-    },
-  };
-}
-
-/**
- * Creates a mock WebSocket-like source for testing.
- * Returns an object with a `send` method that simulates incoming messages.
- */
-export function createMockBillingSource() {
-  const listeners: Array<(update: BillingUpdate) => void> = [];
-  return {
-    send(update: BillingUpdate) {
-      listeners.forEach((fn) => fn(update));
-    },
-    subscribe(fn: (update: BillingUpdate) => void) {
-      listeners.push(fn);
-      return () => {
-        const idx = listeners.indexOf(fn);
-        if (idx !== -1) listeners.splice(idx, 1);
-      };
     },
   };
 }
