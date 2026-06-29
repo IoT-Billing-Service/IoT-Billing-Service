@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { shallow } from 'zustand/shallow';
 import type { DeviceTelemetry } from '@/types';
 
 interface DeviceStore {
@@ -9,6 +10,12 @@ interface DeviceStore {
   setDeviceFilter: (filter: string | null) => void;
   addTelemetryData: (data: DeviceTelemetry) => void;
 }
+
+// Stable selectors
+export const selectTelemetryData = (state: DeviceStore) => state.telemetryData;
+export const selectDeviceFilter = (state: DeviceStore) => state.deviceFilter;
+export const selectSetDeviceFilter = (state: DeviceStore) => state.setDeviceFilter;
+export const selectAddTelemetryData = (state: DeviceStore) => state.addTelemetryData;
 
 export const useDeviceStore = create<DeviceStore>((set) => ({
   telemetryData: [],
@@ -19,3 +26,5 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
       telemetryData: [...state.telemetryData, data],
     })),
 }));
+
+export { shallow };

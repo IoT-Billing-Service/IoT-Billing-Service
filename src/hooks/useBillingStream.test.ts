@@ -1,7 +1,13 @@
 /// <reference types="vitest/globals" />
 
 import { renderHook, act } from '@testing-library/react';
-import { useDeviceStore } from '@/stores/deviceStore';
+import {
+  useDeviceStore,
+  selectTelemetryData,
+  selectDeviceFilter,
+  selectSetDeviceFilter,
+  selectAddTelemetryData,
+} from '@/stores/deviceStore';
 import type { DeviceTelemetry } from '@/types';
 import { useBillingStream } from './useBillingStream';
 import { createMockBillingSource } from './useBillingStream';
@@ -15,7 +21,10 @@ describe('useBillingStream with device filter', () => {
     const { mockWs, send } = createMockBillingSource();
 
     const { result } = renderHook(() => {
-      const { telemetryData, deviceFilter, setDeviceFilter, addTelemetryData } = useDeviceStore();
+      const telemetryData = useDeviceStore(selectTelemetryData);
+      const deviceFilter = useDeviceStore(selectDeviceFilter);
+      const setDeviceFilter = useDeviceStore(selectSetDeviceFilter);
+      const addTelemetryData = useDeviceStore(selectAddTelemetryData);
       return { telemetryData, deviceFilter, setDeviceFilter, addTelemetryData };
     });
 
@@ -25,7 +34,8 @@ describe('useBillingStream with device filter', () => {
 
     // Setup useBillingStream with filter logic - THIS HAS THE STALE CLOSURE BUG
     renderHook(() => {
-      const { addTelemetryData, deviceFilter } = useDeviceStore();
+      const addTelemetryData = useDeviceStore(selectAddTelemetryData);
+      const deviceFilter = useDeviceStore(selectDeviceFilter);
 
       useBillingStream(
         (updates) => {
@@ -78,7 +88,10 @@ describe('useBillingStream with device filter', () => {
     const { mockWs, send } = createMockBillingSource();
 
     const { result } = renderHook(() => {
-      const { telemetryData, deviceFilter, setDeviceFilter, addTelemetryData } = useDeviceStore();
+      const telemetryData = useDeviceStore(selectTelemetryData);
+      const deviceFilter = useDeviceStore(selectDeviceFilter);
+      const setDeviceFilter = useDeviceStore(selectSetDeviceFilter);
+      const addTelemetryData = useDeviceStore(selectAddTelemetryData);
       return { telemetryData, deviceFilter, setDeviceFilter, addTelemetryData };
     });
 

@@ -1,4 +1,4 @@
-import React, { Component, ReactNode } from 'react';
+import { Component, ReactNode } from 'react';
 
 type ErrorCategory = 'NETWORK' | 'CONTRACT' | 'UNKNOWN';
 
@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBound
     return 'UNKNOWN';
   }
 
-  componentDidCatch(error: Error, _errorInfo: React.ErrorInfo): void {
+  componentDidCatch(error: Error): void {
     const now = Date.now();
     // Keep only crashes from last 5 seconds
     const newCrashTimes = this.state.crashTimes.filter((t) => now - t < 5000);
