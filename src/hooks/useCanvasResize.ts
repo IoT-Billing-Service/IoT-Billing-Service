@@ -58,10 +58,10 @@ function getSharedObserver(): SharedResizeObserver {
 
 export function useCanvasResize(
   canvasRef: React.RefObject<HTMLCanvasElement | null>,
-  onResize: (width: number, height: number) => void
+  onResize: (width: number, height: number) => void,
 ) {
   const onResizeRef = useRef(onResize);
-  
+
   useEffect(() => {
     onResizeRef.current = onResize;
   }, [onResize]);
