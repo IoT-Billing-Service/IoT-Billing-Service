@@ -22,20 +22,32 @@ setGlobalDispatcher(rpcAgent);
 // Safety net: if HTTP/2 is ever re-enabled, this catches leaked sessions.
 const _EXPECTED_H2 = 0;
 if (typeof setInterval !== 'undefined') {
-  const _gcTimer = setInterval(() => {
-    try {
-      const handles = (process as NodeJS.Process & { _getActiveHandles?: () => object[] })
-        ._getActiveHandles?.() ?? [];
-      const h2 = handles.filter(
-        (h) => (h as { constructor?: { name?: string } }).constructor?.name?.includes('Http2Session'),
-      );
-      if (h2.length > _EXPECTED_H2) {
-        console.warn(`[rpc_client] HTTP/2 session leak: ${String(h2.length)} sessions. Destroying.`);
-        for (const s of h2) (s as { destroy?: () => void }).destroy?.();
+  const _gcTimer = setInterval(
+    () => {
+      try {
+        const handles =
+          (
+            process as NodeJS.Process & { _getActiveHandles?: () => object[] }
+          )._getActiveHandles?.() ?? [];
+        const h2 = handles.filter(
+          (h) =>
+            (h as { constructor?: { name?: string } }).constructor?.name?.includes(
+              'Http2Session',
+            ) === true,
+        );
+        if (h2.length > _EXPECTED_H2) {
+          console.warn(
+            `[rpc_client] HTTP/2 session leak: ${String(h2.length)} sessions. Destroying.`,
+          );
+          for (const s of h2) (s as { destroy?: () => void }).destroy?.();
+        }
+      } catch {
+        /* not available in all environments */
       }
-    } catch { /* not available in all environments */ }
-  }, 5 * 60 * 1000);
-  if (_gcTimer.unref) _gcTimer.unref();
+    },
+    5 * 60 * 1000,
+  );
+  _gcTimer.unref();
 }
 
 export enum CircuitState {
