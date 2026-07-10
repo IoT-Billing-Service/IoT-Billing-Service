@@ -77,19 +77,19 @@ export const RangeProofGenerator = {
    */
   generateTampered(base: Buffer, mutation: 'commitment' | 'challenge' | 'response'): Buffer {
     if (base.length !== PROOF_BYTE_LENGTH) {
-      throw new RangeError(`Base proof must be exactly ${PROOF_BYTE_LENGTH} bytes`);
+      throw new RangeError(`Base proof must be exactly ${String(PROOF_BYTE_LENGTH)} bytes`);
     }
     const copy = Buffer.from(base);
 
     switch (mutation) {
       case 'commitment':
-        copy[0] = ~copy[0]!; // flip the first byte of the commitment
+        copy[0] = copy.readUInt8(0) ^ 0xff; // flip the first byte of the commitment
         break;
       case 'challenge':
-        copy[16] = ~copy[16]!; // flip the first byte of the challenge
+        copy[16] = copy.readUInt8(16) ^ 0xff; // flip the first byte of the challenge
         break;
       case 'response':
-        copy[32] = ~copy[32]!; // flip the first byte of the response
+        copy[32] = copy.readUInt8(32) ^ 0xff; // flip the first byte of the response
         break;
     }
     return copy;
@@ -142,7 +142,7 @@ export class ZkRangeProofVerifier {
     if (proofBuffer.length !== PROOF_BYTE_LENGTH) {
       return {
         valid: false,
-        reason: `${VERIFIER_ERROR_CODES.INVALID_LENGTH}: expected ${PROOF_BYTE_LENGTH} bytes, got ${proofBuffer.length}`,
+        reason: `${VERIFIER_ERROR_CODES.INVALID_LENGTH}: expected ${String(PROOF_BYTE_LENGTH)} bytes, got ${String(proofBuffer.length)}`,
       };
     }
 
@@ -214,7 +214,7 @@ export class ZkRangeProofVerifier {
     if (proofBuffer.length !== PROOF_BYTE_LENGTH) {
       return {
         valid: false,
-        reason: `${VERIFIER_ERROR_CODES.TAMPERED_BUFFER}: expected ${PROOF_BYTE_LENGTH} bytes, got ${proofBuffer.length}`,
+        reason: `${VERIFIER_ERROR_CODES.TAMPERED_BUFFER}: expected ${String(PROOF_BYTE_LENGTH)} bytes, got ${String(proofBuffer.length)}`,
       };
     }
     return { valid: true };

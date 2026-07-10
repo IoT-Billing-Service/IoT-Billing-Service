@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MtlsGatewayVerifier } from '../../src/api/gateway/mtls_verifier.js';
 import { PrismaClient } from '@prisma/client';
-import { closeRedis } from '../../src/database/redis.js';
+import { closeRedis, setRedisClient } from '../../src/database/redis.js';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import { execFileSync } from 'node:child_process';
@@ -9,6 +9,32 @@ import fs from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+
+class InMemoryRedis {
+  private readonly store = new Map<string, string>();
+
+  async get(key: string): Promise<string | null> {
+    return this.store.get(key) ?? null;
+  }
+
+  async set(key: string, value: string): Promise<'OK'> {
+    this.store.set(key, value);
+    return 'OK';
+  }
+
+  async del(key: string): Promise<number> {
+    return this.store.delete(key) ? 1 : 0;
+  }
+
+  async quit(): Promise<'OK'> {
+    this.store.clear();
+    return 'OK';
+  }
+
+  disconnect(): void {
+    this.store.clear();
+  }
+}
 
 describe('mTLS Gateway Verifier Integration', () => {
   let verifier: MtlsGatewayVerifier | null = null;
@@ -62,6 +88,7 @@ describe('mTLS Gateway Verifier Integration', () => {
       create: { serial: '87654321', model: 'TEST-B', batch: 'B1', revoked: true },
     });
 
+    setRedisClient(new InMemoryRedis() as never);
     verifier = new MtlsGatewayVerifier();
     await verifier.init();
   });

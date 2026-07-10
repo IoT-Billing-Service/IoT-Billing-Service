@@ -29,7 +29,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@prisma/client';
-import { IngestionService, INGESTION_ERROR_CODES, extractMetrics } from '../../core/ingestion/ingestion_service.js';
+import { IngestionService, INGESTION_ERROR_CODES } from '../../core/ingestion/ingestion_service.js';
 import { InMemoryNonceCache, type SignedPayload } from '../../core/ingestion/validator.js';
 
 // ── Schema ─────────────────────────────────────────────────────────────────────
@@ -115,7 +115,7 @@ export function registerIngestionRoutes(app: FastifyInstance): void {
       const { payload, publicKey, proof } = request.body;
 
       // Basic payload shape validation.
-      if (!payload || typeof payload.deviceId !== 'string') {
+      if (typeof payload.deviceId !== 'string') {
         return reply.status(400).send({
           success: false,
           error: INGESTION_ERROR_CODES.INVALID_PAYLOAD,

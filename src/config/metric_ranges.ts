@@ -166,7 +166,7 @@ export class MetricBoundsEnforcer {
       return {
         allowed: false,
         errorCode: PRIVACY_VIOLATION_ERROR_CODE,
-        reason: `Value ${value} for metric "${metricName}" is below the lower bound ${boundary.lowerBound.toString()}`,
+        reason: `Value ${String(value)} for metric "${metricName}" is below the lower bound ${boundary.lowerBound.toString()}`,
         metricName,
         metricValue: value,
         boundary,
@@ -177,7 +177,7 @@ export class MetricBoundsEnforcer {
       return {
         allowed: false,
         errorCode: PRIVACY_VIOLATION_ERROR_CODE,
-        reason: `Value ${value} for metric "${metricName}" exceeds the upper bound ${boundary.upperBound.toString()}`,
+        reason: `Value ${String(value)} for metric "${metricName}" exceeds the upper bound ${boundary.upperBound.toString()}`,
         metricName,
         metricValue: value,
         boundary,

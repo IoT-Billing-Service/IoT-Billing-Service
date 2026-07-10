@@ -137,7 +137,7 @@ export class IngestionService {
         return {
           success: false,
           errorCode: INGESTION_ERROR_CODES.INVALID_PAYLOAD,
-          reason: `Invalid public key length: expected 32 bytes, got ${publicKeyBytes.length}`,
+          reason: `Invalid public key length: expected 32 bytes, got ${String(publicKeyBytes.length)}`,
         };
       }
 
@@ -186,7 +186,7 @@ export class IngestionService {
           return {
             success: false,
             errorCode: INGESTION_ERROR_CODES.INVALID_PROOF,
-            reason: `ZK range proof failed for "${metricName}" (${metricValue}): ${proofResult.reason}`,
+            reason: `ZK range proof failed for "${metricName}" (${String(metricValue)}): ${proofResult.reason ?? 'unknown verification error'}`,
             deviceId: request.payload.deviceId,
           };
         }
@@ -289,12 +289,9 @@ export class IngestionService {
  * Returns `{}` if the `metrics` field is missing or not a record.
  */
 export function extractMetrics(payload: SignedPayload): Record<string, number> {
-  const raw = payload.metrics;
-  if (raw === undefined || raw === null || typeof raw !== 'object') {
-    return {};
-  }
+  const raw = payload.metrics as Record<string, number | string> | undefined;
   const result: Record<string, number> = {};
-  for (const [key, val] of Object.entries(raw)) {
+  for (const [key, val] of Object.entries(raw ?? {})) {
     if (typeof val === 'number') {
       result[key] = val;
     } else if (typeof val === 'string') {

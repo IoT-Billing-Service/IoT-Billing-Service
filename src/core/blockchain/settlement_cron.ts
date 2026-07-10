@@ -27,7 +27,7 @@
  *   (avoids wasting Soroban gas on micro-transactions)
  */
 
-import type { PrismaClient, Prisma } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import type { BillingCycleStore } from '../../billing/billing_cycle_repository.js';
 import {
   BillingCycleState,
@@ -233,7 +233,7 @@ export class SettlementCron {
    * Query for all billing cycles in FINALIZED state that have not yet been
    * settled.  Returns at most 50 cycles per tick to bound processing time.
    */
-  private async findStettableCycles(): Promise<Array<{ id: string; accountId: string }>> {
+  private async findStettableCycles(): Promise<{ id: string; accountId: string }[]> {
     const cycles = await this.prisma.billingCycle.findMany({
       where: { state: BillingCycleState.FINALIZED },
       select: { id: true, accountId: true },
@@ -270,7 +270,7 @@ export class SettlementCron {
     // If we have Soroban SDK configuration, submit a real tx via RPC.
     if (this.contractId !== undefined && this.sorobanRpcUrl !== undefined && this.networkPassphrase !== undefined) {
       try {
-        const { rpc, nativeToScVal, TransactionBuilder, BASE_FEE, Networks, Operation } =
+        const { rpc, nativeToScVal, TransactionBuilder, Operation } =
           await import('@stellar/stellar-sdk');
         const server = new rpc.Server(this.sorobanRpcUrl);
 
@@ -309,6 +309,6 @@ export class SettlementCron {
     }
 
     // Fallback for test / dev environments: return a simulated tx hash.
-    return `simulated_${cycleId}_${Date.now()}`;
+    return `simulated_${cycleId}_${String(Date.now())}`;
   }
 }
