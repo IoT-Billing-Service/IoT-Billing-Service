@@ -12,6 +12,7 @@ Enterprise-grade Web3/IoT billing backend integrating Soroban smart contracts fo
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
+- [Railway Deployment](#railway-deployment)
 - [Available Scripts](#available-scripts)
 - [Environment Variables](#environment-variables)
 - [Project Structure](#project-structure)
@@ -96,6 +97,44 @@ npm run dev
 ```
 
 The server starts at `http://localhost:3000`.
+
+---
+
+## Railway Deployment
+
+This repository includes a `railway.toml` that instructs Railway to deploy the backend with the existing `Dockerfile` and use `GET /health` as the service health check.
+
+### Deploy on Railway
+
+1. Create a new Railway project and connect the `iot-billing-backend` repository.
+2. Use the default Docker-based deployment detected from `railway.toml`.
+3. Add the required environment variables in Railway.
+4. Deploy the `main` branch.
+
+### Required Railway Environment Variables
+
+At minimum, configure these variables in Railway before deploying:
+
+- `NODE_ENV=production`
+- `HOST=0.0.0.0`
+- `PORT=3000`
+- `DATABASE_URL`
+- `TIMESCALEDB_URL`
+- `REDIS_URL`
+- `SOROBAN_RPC_URL`
+- `SOROBAN_NETWORK_PASSPHRASE`
+- `CONTRACT_ID`
+- `ADMIN_SECRET_KEY`
+- `JWT_SECRET`
+
+You may also need any additional values referenced by `.env.example`, such as observability or token expiry settings, depending on the features enabled in your Railway environment.
+
+### Runtime Notes
+
+- Railway is a better fit for this backend than Vercel because the service runs a long-lived Fastify server with background workers and health checks.
+- The container starts the app with Prisma migrations via the `Dockerfile` command:
+  `npx prisma migrate deploy && node dist/api/index.js`
+- Railway should route traffic to port `3000`, or provide `PORT` with an equivalent value.
 
 ---
 
