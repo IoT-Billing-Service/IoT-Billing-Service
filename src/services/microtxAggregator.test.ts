@@ -33,18 +33,18 @@ describe('MicrotxAggregator', () => {
 
   it('property-based test: sum of 10k 1e-8 packets with error ≤ 1e-15 per packet', () => {
     fc.assert(
-      fc.property(
-        fc.array(fc.constantFrom('0.00000001'), { minLength: 10_000, maxLength: 10_000 }),
-        (packets) => {
-          const aggregator = new MicrotxAggregator();
-          packets.forEach((p) => aggregator.add(p));
-          const displayedTotal = aggregator.getDisplayedTotal();
-          const expectedRawSum = new BigNumber(packets.length).times('0.00000001');
-          const displayedTotalBN = new BigNumber(displayedTotal);
-          const perPacketError = displayedTotalBN.minus(expectedRawSum).div(packets.length).abs();
-          expect(perPacketError.isLessThan(1e-15)).toBe(true);
-        },
-      ),
+      fc.property(fc.constant(10_000), (packetCount) => {
+        const aggregator = new MicrotxAggregator();
+        for (let i = 0; i < packetCount; i++) {
+          aggregator.add('0.00000001');
+        }
+        const displayedTotal = aggregator.getDisplayedTotal();
+        const expectedRawSum = new BigNumber(packetCount).times('0.00000001');
+        const displayedTotalBN = new BigNumber(displayedTotal);
+        const perPacketError = displayedTotalBN.minus(expectedRawSum).div(packetCount).abs();
+        expect(perPacketError.isLessThan(1e-15)).toBe(true);
+      }),
+      { numRuns: 10 },
     );
   });
 });
