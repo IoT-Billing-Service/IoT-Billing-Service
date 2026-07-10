@@ -155,11 +155,12 @@ This repository includes a `railway.toml` that instructs Railway to deploy the b
 1. Create a new Railway project and connect the `iot-billing-backend` repository.
 2. Use the default Docker-based deployment detected from `railway.toml`.
 3. Add the required environment variables in Railway.
-4. Deploy the `main` branch.
+4. Use `.env.railway.example` in the repo root as a copy-paste template for the Railway Variables tab.
+5. Deploy the `main` branch.
 
 ### Required Railway Environment Variables
 
-At minimum, configure these variables in Railway before deploying:
+At minimum, configure these variables in Railway before deploying. A ready-to-fill template is provided in `.env.railway.example`.
 
 - `NODE_ENV=production`
 - `HOST=0.0.0.0`
