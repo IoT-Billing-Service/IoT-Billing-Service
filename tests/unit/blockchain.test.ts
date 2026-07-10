@@ -139,7 +139,11 @@ describe('IngestionStateMachine', () => {
 });
 
 describe('TelemetryFragmentReassembler', () => {
-  it('caps fuzzed fragmented WebSocket messages at MAX_PARTIAL_MESSAGE_SIZE', () => {
+  it('caps fuzzed fragmented WebSocket messages at MAX_PARTIAL_MESSAGE_SIZE',
+    // 66k Buffer.concat calls under parallel execution need more than the
+    // default 10 s timeout (issue #89).
+    { timeout: 30_000 },
+    () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const maxObservedBufferByDevice = new Map<string, number>();
     const violations: string[] = [];

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { ZkRangeProofVerifier, RangeProofGenerator } from '../../src/core/crypto/zk_verifier.js';
+import {
+  ZkRangeProofVerifier,
+  RangeProofGenerator,
+  VERIFIER_ERROR_CODES,
+} from '../../src/core/crypto/zk_verifier.js';
 import { Buffer } from 'node:buffer';
 import { SafeMath } from '../../src/core/utils/math.js';
 
@@ -16,21 +20,28 @@ describe('ZkRangeProofVerifier', () => {
     const proof = Buffer.alloc(64);
     const result = verifier.verifyRangeProof(proof, 'device-123', 100n, 50n);
     expect(result.valid).toBe(false);
-    expect(result.reason).toContain('range');
+    expect(result.reason).toContain(VERIFIER_ERROR_CODES.INVALID_RANGE);
   });
 
-  it('should reject invalid commitment length', () => {
+  it('should reject invalid proof length', () => {
     const proof = Buffer.alloc(32); // short proof
     const result = verifier.verifyRangeProof(proof, 'device-123', 0n, 100n);
     expect(result.valid).toBe(false);
-    expect(result.reason).toContain('commitment');
+    expect(result.reason).toContain(VERIFIER_ERROR_CODES.INVALID_LENGTH);
+  });
+
+  it('should reject invalid proof length (too long)', () => {
+    const proof = Buffer.alloc(128); // long proof
+    const result = verifier.verifyRangeProof(proof, 'device-123', 0n, 100n);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain(VERIFIER_ERROR_CODES.INVALID_LENGTH);
   });
 
   it('should reject proof bound to wrong device', () => {
     const proof = RangeProofGenerator.generate(50n, 'device-123', 0n, 100n);
     const result = verifier.verifyRangeProof(proof, 'wrong-device', 0n, 100n);
     expect(result.valid).toBe(false);
-    expect(result.reason).toContain('Challenge-response');
+    expect(result.reason).toContain(VERIFIER_ERROR_CODES.CHALLENGE_MISMATCH);
   });
 });
 
