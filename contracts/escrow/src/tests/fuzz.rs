@@ -1,5 +1,9 @@
-use crate::{EscrowContract, EscrowContractClient, ContractError, Escrow, DataKey};
-use soroban_sdk::{contract, contractimpl, testutils::Address as _, Address, BytesN, Env, Executable};
+use crate::{
+    ContractError, EscrowContract, EscrowContractClient, EscrowBalance, DataKey,
+};
+use soroban_sdk::{
+    contract, contractimpl, testutils::Address as _, Address, BytesN, Env, Executable,
+};
 
 // Mock Authorizer Contract
 #[contract]
@@ -26,16 +30,19 @@ fn test_domain_authentication_fuzz() {
     let escrow_address = env.register(EscrowContract, (authorizer_wasm_hash.clone(),));
     let client = EscrowContractClient::new(&env, &escrow_address);
 
-    let owner = Address::generate(&env);
     let recipient = Address::generate(&env);
 
     // Register an escrow manually in storage
     env.as_contract(&escrow_address, || {
-        env.storage().instance().set(&DataKey::Escrow(1), &Escrow {
-            owner: owner.clone(),
-            total_locked: 1000,
-            last_withdrawal_epoch: 0,
-        });
+        env.storage()
+            .persistent()
+            .set(
+                &DataKey::Escrow(1),
+                &EscrowBalance {
+                    total_locked: 1000,
+                    last_deposit_epoch: 0,
+                },
+            );
     });
 
     // Set the authorizer in the escrow contract
@@ -48,7 +55,9 @@ fn test_domain_authentication_fuzz() {
         // We want to test that if the authorizer address in storage is changed to
         // something unauthorized, the domain check catches it.
         env.as_contract(&escrow_address, || {
-            env.storage().instance().set(&DataKey::Authorizer, &random_authorizer);
+            env.storage()
+                .instance()
+                .set(&DataKey::Authorizer, &random_authorizer);
         });
 
         let result = client.try_authorize_withdrawal(&1, &100, &recipient);
@@ -59,7 +68,10 @@ fn test_domain_authentication_fuzz() {
             }
             _ => {
                 if random_authorizer != legitimate_authorizer {
-                     panic!("Fuzz failure: Random address was not rejected with UnauthorizedDomain. Result: {:?}", result);
+                    panic!(
+                        "Fuzz failure: Random address was not rejected with UnauthorizedDomain. Result: {:?}",
+                        result
+                    );
                 }
             }
         }
@@ -67,7 +79,9 @@ fn test_domain_authentication_fuzz() {
 
     // 4. Verify legitimate authorizer still works
     env.as_contract(&escrow_address, || {
-        env.storage().instance().set(&DataKey::Authorizer, &legitimate_authorizer);
+        env.storage()
+            .instance()
+            .set(&DataKey::Authorizer, &legitimate_authorizer);
     });
     let result = client.try_authorize_withdrawal(&1, &100, &recipient);
     assert!(result.is_ok(), "Legitimate authorizer failed: {:?}", result);
@@ -90,10 +104,57 @@ fn test_authorizer_immutability_guard() {
 
     // Lock funds
     env.as_contract(&escrow_address, || {
-        env.storage().instance().set(&DataKey::TotalLocked, &1000i128);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalLocked, &1000i128);
     });
 
     // Should now fail to change authorizer
     let result = client.try_set_authorizer(&authorizer2);
+    assert!(result.is_err());
+}
+
+// ---------------------------------------------------------------------------
+// Fuzz-style: random charge attempts on the new billing functions
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_random_meter_charge_fuzz() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let zero_hash = BytesN::from_array(&env, &[0u8; 32]);
+    let escrow_address = env.register(EscrowContract, (zero_hash,));
+    let client = EscrowContractClient::new(&env, &escrow_address);
+
+    let user = Address::generate(&env);
+    let device_id = soroban_sdk::String::from_str(&env, "fuzz-meter");
+
+    // Initialize escrow and meter.
+    client.initialize_escrow(&user, &Address::generate(&env));
+    client.register_meter(&device_id, &user, &Address::generate(&env));
+
+    // Trying to charge without a valid escrow should fail with EscrowNotFound.
+    let result = client.try_charge_meter_usage(&device_id, &user, &100);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_random_group_charge_fuzz() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let zero_hash = BytesN::from_array(&env, &[0u8; 32]);
+    let escrow_address = env.register(EscrowContract, (zero_hash,));
+    let client = EscrowContractClient::new(&env, &escrow_address);
+
+    let user = Address::generate(&env);
+    let group_id = soroban_sdk::String::from_str(&env, "fuzz-group");
+
+    client.initialize_escrow(&user, &Address::generate(&env));
+    client.register_group(&group_id, &user, &Address::generate(&env), &5);
+
+    // No escrow with sufficient balance exists, so this should fail.
+    let result = client.try_charge_group_usage(&group_id, &user, &100);
     assert!(result.is_err());
 }

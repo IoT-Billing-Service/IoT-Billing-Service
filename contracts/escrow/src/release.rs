@@ -1,30 +1,31 @@
+use crate::{ContractError, DataKey, EscrowBalance};
 use soroban_sdk::{Address, Env, Executable};
-use crate::{ContractError, DataKey, Escrow};
 
 pub fn execute_release(
     env: Env,
     escrow_id: u64,
-    _amount: i128,
+    amount: i128,
     _recipient: Address,
 ) -> Result<(), ContractError> {
-    // SECURITY FIX: Verify that the caller is the domain-authenticated authorizer
+    // Verify that the caller is the domain-authenticated authorizer.
     let authorizer: Address = env
         .storage()
         .instance()
         .get(&DataKey::Authorizer)
         .ok_or(ContractError::AuthorizerNotSet)?;
 
-    // Only the registered authorizer can call execute_release
     authorizer.require_auth();
 
-    // Double-check the authorizer's domain identity just in case (defense in depth)
+    // Double-check the authorizer's domain identity (defense in depth).
     let expected_hash = env
         .storage()
         .instance()
         .get::<_, soroban_sdk::BytesN<32>>(&DataKey::AuthorizerDomainHash)
         .ok_or(ContractError::UnauthorizedDomain)?;
 
-    let executable = authorizer.executable().ok_or(ContractError::UnauthorizedDomain)?;
+    let executable = authorizer
+        .executable()
+        .ok_or(ContractError::UnauthorizedDomain)?;
     let actual_hash = match executable {
         Executable::Wasm(hash) => hash,
         _ => return Err(ContractError::UnauthorizedDomain),
@@ -34,16 +35,37 @@ pub fn execute_release(
         return Err(ContractError::UnauthorizedDomain);
     }
 
-    let escrow: Escrow = env
+    let mut escrow: EscrowBalance = env
         .storage()
-        .instance()
+        .persistent()
         .get(&DataKey::Escrow(escrow_id))
         .ok_or(ContractError::EscrowNotFound)?;
 
-    // Perform actual transfer/release logic...
-    // ...
+    if escrow.total_locked < amount {
+        return Err(ContractError::InsufficientBalance);
+    }
 
-    env.storage().instance().set(&DataKey::Escrow(escrow_id), &escrow);
+    // Deduct from escrow.
+    escrow.total_locked = escrow.total_locked.saturating_sub(amount);
+    escrow.last_deposit_epoch = env.ledger().timestamp();
+    env.storage()
+        .persistent()
+        .set(&DataKey::Escrow(escrow_id), &escrow);
+
+    // Update global total locked.
+    let total: i128 = env
+        .storage()
+        .instance()
+        .get(&DataKey::TotalLocked)
+        .unwrap_or(0);
+    env.storage()
+        .instance()
+        .set(&DataKey::TotalLocked, &total.saturating_sub(amount));
+
+    // Perform token transfer if we have enough info (token address is not stored
+    // per-escrow in this path, so this is a placeholder for the caller to handle).
+    // In practice, the caller would need to know the token address from context.
+    // The authorize_withdrawal path handles token transfer in the calling context.
 
     Ok(())
 }
