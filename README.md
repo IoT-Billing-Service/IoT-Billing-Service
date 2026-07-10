@@ -225,6 +225,20 @@ cargo test
 cargo tarpaulin --ignore-tests
 ```
 
+### Local Stellar + Postgres Stack
+
+A working local stack for Soroban protocol 27 is included in `docker-compose.local.yml`.
+
+```bash
+docker compose -f docker-compose.local.yml up -d
+```
+
+This starts:
+- PostgreSQL on `localhost:5432`
+- Stellar Quickstart on `localhost:8000`
+- Soroban local network with `--protocol-version 27`
+- Soroban resource limits set to `unlimited`
+
 ---
 
 ## Project Structure

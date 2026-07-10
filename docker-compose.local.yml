@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: iot_billing_postgres
+    environment:
+      POSTGRES_USER: billing_user
+      POSTGRES_PASSWORD: billing_password
+      POSTGRES_DB: iot_billing_local
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U billing_user -d iot_billing_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  stellar-node:
+    image: stellar/quickstart:latest
+    container_name: iot_billing_stellar
+    command: ["--local", "--protocol-version", "27", "--limits", "unlimited"]
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:
