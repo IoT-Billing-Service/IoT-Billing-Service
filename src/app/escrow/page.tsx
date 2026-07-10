@@ -1,17 +1,15 @@
 'use client';
 
-import { useState } from 'react';
 import { useWallet } from '@/components/providers/WalletProvider';
 import { EscrowAccountPanel } from '@/components/escrow/EscrowAccountPanel';
 import { EscrowFundingPanel } from '@/components/escrow/EscrowFundingPanel';
 import { PaymentHistoryTable } from '@/components/escrow/PaymentHistoryTable';
 import { WalletConnector } from '@/components/wallet/WalletConnector';
 
+const activeContractId = process.env.NEXT_PUBLIC_ESCROW_CONTRACT_ID;
+
 export default function EscrowPage() {
   const { metrics } = useWallet();
-  const [activeContractId] = useState<string>(
-    'CCY2QH7Y2QH7Y2QH7Y2QH7Y2QH7Y2QH7Y2QH7Y2QH7',
-  );
 
   if (!metrics?.isConnected) {
     return (
@@ -23,6 +21,24 @@ export default function EscrowPage() {
           </p>
         </div>
         <WalletConnector />
+      </div>
+    );
+  }
+
+  if (!activeContractId) {
+    return (
+      <div className="mx-auto max-w-2xl py-16">
+        <div className="rounded-lg border border-amber-700 bg-amber-950/40 p-6">
+          <h2 className="text-xl font-semibold text-white">Escrow contract not configured</h2>
+          <p className="mt-2 text-sm text-amber-200">
+            Set <code className="font-mono">NEXT_PUBLIC_ESCROW_CONTRACT_ID</code> in
+            <code className="ml-1 font-mono">.env.local</code> to enable the escrow views.
+          </p>
+          <p className="mt-3 text-xs text-amber-300/80">
+            This page intentionally avoids a hardcoded placeholder so local and deployed
+            environments use an explicit Soroban contract configuration.
+          </p>
+        </div>
       </div>
     );
   }

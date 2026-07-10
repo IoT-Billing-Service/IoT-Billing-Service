@@ -93,12 +93,18 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. The dashboa
 Create a `.env.local` file in the project root:
 
 ```env
-# No required environment variables for basic development
-# The app uses mock data for the dashboard by default
-# For production, configure:
-NEXT_PUBLIC_SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
-NEXT_PUBLIC_CONTRACT_ID=your-contract-id
+# Basic local development
+NEXT_PUBLIC_BACKEND_API_URL=http://localhost:3000
+NEXT_PUBLIC_SOROBAN_RPC_URL=http://localhost:8000/soroban/rpc
+
+# Set when the escrow contract is deployed locally or remotely
+NEXT_PUBLIC_ESCROW_CONTRACT_ID=your-escrow-contract-id
+
+# Current local price_oracle deployed during setup
+NEXT_PUBLIC_PRICE_ORACLE_CONTRACT_ID=CD7QY4BY3OFNVNZGWFZ2YUCILFNGUP4ZZUGU7KBUOE2P3ZUDCHA3AKCI
 ```
+
+A copyable template is also available at `.env.local.example`.
 
 ---
 
