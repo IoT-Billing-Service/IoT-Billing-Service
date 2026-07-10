@@ -151,6 +151,18 @@ See `.env.example` for all required configuration.
 | `SOROBAN_RPC_URL` | Stellar Soroban RPC endpoint |
 | `SOROBAN_NETWORK_PASSPHRASE` | Stellar network passphrase |
 | `CONTRACT_ID` | Deployed smart contract ID |
+
+### Local `price_oracle` Binding
+
+A generated TypeScript client for the locally deployed `price_oracle` contract is available at `contracts/price_oracle_client/`.
+
+Current local deployment used for generated bindings:
+
+```env
+SOROBAN_RPC_URL=http://localhost:8000/soroban/rpc
+SOROBAN_NETWORK_PASSPHRASE=Standalone Network ; February 2017
+CONTRACT_ID=CD7QY4BY3OFNVNZGWFZ2YUCILFNGUP4ZZUGU7KBUOE2P3ZUDCHA3AKCI
+```
 | `ADMIN_SECRET_KEY` | Stellar admin secret key |
 | `JWT_SECRET` | 32+ character signing secret |
 | `JWT_EXPIRES_IN` | JWT expiration (default: `15m`) |
