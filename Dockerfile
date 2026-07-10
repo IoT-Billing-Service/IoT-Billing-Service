@@ -13,6 +13,9 @@ RUN npm ci
 
 COPY . .
 
+# Inject a syntactically valid mock URL so Prisma can generate the client types
+ENV DATABASE_URL="postgresql://mock_user:mock_password@localhost:5432/mock_db?schema=public"
+
 # Generate the Prisma Client tailored for the deployment container architecture
 RUN npx prisma generate
 
