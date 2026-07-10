@@ -14,12 +14,54 @@ interface FleetOverviewProps {
  * a fleet-management API endpoint keyed by the authenticated tenant.
  */
 const MOCK_FLEETS: FleetView[] = [
-  { fleetId: 'fleet-alpha', name: 'Alpha — North America', deviceCount: 248, activeCount: 234, totalPowerOutput: 14230, status: 'active' },
-  { fleetId: 'fleet-beta', name: 'Beta — Europe', deviceCount: 156, activeCount: 142, totalPowerOutput: 8920, status: 'active' },
-  { fleetId: 'fleet-gamma', name: 'Gamma — Asia-Pacific', deviceCount: 312, activeCount: 287, totalPowerOutput: 18740, status: 'active' },
-  { fleetId: 'fleet-delta', name: 'Delta — South America', deviceCount: 89, activeCount: 67, totalPowerOutput: 4120, status: 'degraded' },
-  { fleetId: 'fleet-epsilon', name: 'Epsilon — Africa (Deploy)', deviceCount: 42, activeCount: 38, totalPowerOutput: 2100, status: 'active' },
-  { fleetId: 'fleet-zeta', name: 'Zeta — Oceania', deviceCount: 73, activeCount: 0, totalPowerOutput: 0, status: 'inactive' },
+  {
+    fleetId: 'fleet-alpha',
+    name: 'Alpha — North America',
+    deviceCount: 248,
+    activeCount: 234,
+    totalPowerOutput: 14230,
+    status: 'active',
+  },
+  {
+    fleetId: 'fleet-beta',
+    name: 'Beta — Europe',
+    deviceCount: 156,
+    activeCount: 142,
+    totalPowerOutput: 8920,
+    status: 'active',
+  },
+  {
+    fleetId: 'fleet-gamma',
+    name: 'Gamma — Asia-Pacific',
+    deviceCount: 312,
+    activeCount: 287,
+    totalPowerOutput: 18740,
+    status: 'active',
+  },
+  {
+    fleetId: 'fleet-delta',
+    name: 'Delta — South America',
+    deviceCount: 89,
+    activeCount: 67,
+    totalPowerOutput: 4120,
+    status: 'degraded',
+  },
+  {
+    fleetId: 'fleet-epsilon',
+    name: 'Epsilon — Africa (Deploy)',
+    deviceCount: 42,
+    activeCount: 38,
+    totalPowerOutput: 2100,
+    status: 'active',
+  },
+  {
+    fleetId: 'fleet-zeta',
+    name: 'Zeta — Oceania',
+    deviceCount: 73,
+    activeCount: 0,
+    totalPowerOutput: 0,
+    status: 'inactive',
+  },
 ];
 
 function StatusBadge({ status }: { status: FleetView['status'] }) {
@@ -89,21 +131,15 @@ export function FleetOverview({ selectedFleetId, onSelectFleet }: FleetOverviewP
         </div>
         <div className="rounded-lg border border-gray-700 bg-gray-900 p-4">
           <p className="text-xs text-gray-400">Total Devices</p>
-          <p className="mt-1 text-2xl font-bold text-blue-400">
-            {totalDevices.toLocaleString()}
-          </p>
+          <p className="mt-1 text-2xl font-bold text-blue-400">{totalDevices.toLocaleString()}</p>
         </div>
         <div className="rounded-lg border border-gray-700 bg-gray-900 p-4">
           <p className="text-xs text-gray-400">Devices Online</p>
-          <p className="mt-1 text-2xl font-bold text-green-400">
-            {totalActive.toLocaleString()}
-          </p>
+          <p className="mt-1 text-2xl font-bold text-green-400">{totalActive.toLocaleString()}</p>
         </div>
         <div className="rounded-lg border border-gray-700 bg-gray-900 p-4">
           <p className="text-xs text-gray-400">Total Power Output</p>
-          <p className="mt-1 text-2xl font-bold text-yellow-400">
-            {totalPower.toLocaleString()} W
-          </p>
+          <p className="mt-1 text-2xl font-bold text-yellow-400">{totalPower.toLocaleString()} W</p>
         </div>
       </div>
 
@@ -120,9 +156,7 @@ export function FleetOverview({ selectedFleetId, onSelectFleet }: FleetOverviewP
         {MOCK_FLEETS.map((fleet) => {
           const isSelected = selectedFleetId === fleet.fleetId;
           const onlinePct =
-            fleet.deviceCount > 0
-              ? Math.round((fleet.activeCount / fleet.deviceCount) * 100)
-              : 0;
+            fleet.deviceCount > 0 ? Math.round((fleet.activeCount / fleet.deviceCount) * 100) : 0;
 
           return (
             <button
@@ -139,9 +173,7 @@ export function FleetOverview({ selectedFleetId, onSelectFleet }: FleetOverviewP
                   <h3 className="text-base font-semibold text-white group-hover:text-green-300 transition-colors">
                     {fleet.name}
                   </h3>
-                  <p className="mt-0.5 text-xs text-gray-500">
-                    {fleet.deviceCount} devices
-                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500">{fleet.deviceCount} devices</p>
                 </div>
                 <StatusBadge status={fleet.status} />
               </div>

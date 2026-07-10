@@ -24,9 +24,7 @@ export default function FleetPage() {
   if (!metrics?.isConnected) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-gray-400">
-          Connect your wallet to view fleet data.
-        </p>
+        <p className="text-gray-400">Connect your wallet to view fleet data.</p>
       </div>
     );
   }
@@ -53,20 +51,11 @@ export default function FleetPage() {
       {/* Tab content */}
       <div className="min-h-[400px]">
         {activeTab === 'overview' && (
-          <FleetOverview
-            selectedFleetId={selectedFleetId}
-            onSelectFleet={setSelectedFleetId}
-          />
+          <FleetOverview selectedFleetId={selectedFleetId} onSelectFleet={setSelectedFleetId} />
         )}
-        {activeTab === 'devices' && (
-          <FleetDeviceGrid fleetId={selectedFleetId} />
-        )}
-        {activeTab === 'metrics' && (
-          <MetricStreamPanel fleetId={selectedFleetId} />
-        )}
-        {activeTab === 'failures' && (
-          <IngestionFailureTracker fleetId={selectedFleetId} />
-        )}
+        {activeTab === 'devices' && <FleetDeviceGrid fleetId={selectedFleetId} />}
+        {activeTab === 'metrics' && <MetricStreamPanel fleetId={selectedFleetId} />}
+        {activeTab === 'failures' && <IngestionFailureTracker fleetId={selectedFleetId} />}
       </div>
     </div>
   );

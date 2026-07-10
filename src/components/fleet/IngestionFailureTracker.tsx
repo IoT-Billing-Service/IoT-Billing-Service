@@ -14,7 +14,13 @@ interface IngestionFailureTrackerProps {
 function generateMockFailures(fleetId: string | null): IngestionFailure[] {
   if (!fleetId) return [];
   const failures: IngestionFailure[] = [];
-  const errorCodes = ['TIMEOUT', 'PARSE_ERROR', 'CONNECTION_RESET', 'BUFFER_OVERFLOW', 'AUTH_EXPIRED'];
+  const errorCodes = [
+    'TIMEOUT',
+    'PARSE_ERROR',
+    'CONNECTION_RESET',
+    'BUFFER_OVERFLOW',
+    'AUTH_EXPIRED',
+  ];
   const baseTime = Date.now() - 3600_000; // last hour
 
   const count = fleetId === 'fleet-delta' ? 12 : 4;
@@ -50,9 +56,7 @@ export function IngestionFailureTracker({ fleetId }: IngestionFailureTrackerProp
   if (!fleetId) {
     return (
       <div className="flex items-center justify-center h-64 rounded-lg border border-dashed border-gray-700">
-        <p className="text-sm text-gray-500">
-          Select a fleet to view ingestion failure logs.
-        </p>
+        <p className="text-sm text-gray-500">Select a fleet to view ingestion failure logs.</p>
       </div>
     );
   }
@@ -112,9 +116,7 @@ export function IngestionFailureTracker({ fleetId }: IngestionFailureTrackerProp
                     <span className="font-mono text-xs font-medium text-gray-300">
                       {failure.errorCode}
                     </span>
-                    <span className="ml-2 text-xs text-gray-500">
-                      {failure.deviceId}
-                    </span>
+                    <span className="ml-2 text-xs text-gray-500">{failure.deviceId}</span>
                   </div>
                 </div>
                 <span className="text-[10px] text-gray-600">
@@ -133,9 +135,7 @@ export function IngestionFailureTracker({ fleetId }: IngestionFailureTrackerProp
                     Resolved at {new Date(failure.resolvedAt).toLocaleTimeString()}
                   </span>
                 )}
-                {!failure.resolved && (
-                  <span className="text-red-500">Auto-recovery pending</span>
-                )}
+                {!failure.resolved && <span className="text-red-500">Auto-recovery pending</span>}
               </div>
             </div>
           ))}

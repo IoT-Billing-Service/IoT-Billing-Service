@@ -19,7 +19,13 @@ function generateMockPayments(contractId: string): SorobanContractPayment[] {
     'billing_settlement',
     'funding_adjustment',
   ];
-  const statuses: SorobanContractPayment['status'][] = ['confirmed', 'confirmed', 'confirmed', 'pending', 'failed'];
+  const statuses: SorobanContractPayment['status'][] = [
+    'confirmed',
+    'confirmed',
+    'confirmed',
+    'pending',
+    'failed',
+  ];
   const baseTime = Date.now() - 30 * 24 * 3600_000;
 
   for (let i = 0; i < 25; i++) {
@@ -93,7 +99,7 @@ export function PaymentHistoryTable({ contractId }: PaymentHistoryTableProps) {
                 : 'bg-gray-800 text-gray-500 hover:text-gray-300'
             }`}
           >
-            {type === 'all' ? 'All' : TYPE_LABELS[type] ?? type}
+            {type === 'all' ? 'All' : (TYPE_LABELS[type] ?? type)}
           </button>
         ))}
       </div>

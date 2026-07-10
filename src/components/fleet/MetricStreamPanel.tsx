@@ -45,7 +45,7 @@ function generateMockStream(fleetId: string): MetricStreamPoint[] {
         timestamp: now - (59 - i) * 1000,
         fleetId,
         metricName,
-        value: bv + (Math.sin(i * 0.3) * vr) + (Math.random() - 0.5) * (vr * 0.2),
+        value: bv + Math.sin(i * 0.3) * vr + (Math.random() - 0.5) * (vr * 0.2),
         unit: '',
       });
     }
@@ -104,9 +104,7 @@ export function MetricStreamPanel({ fleetId }: MetricStreamPanelProps) {
   if (!fleetId) {
     return (
       <div className="flex items-center justify-center h-64 rounded-lg border border-dashed border-gray-700">
-        <p className="text-sm text-gray-500">
-          Select a fleet to view its metric streams.
-        </p>
+        <p className="text-sm text-gray-500">Select a fleet to view its metric streams.</p>
       </div>
     );
   }
@@ -134,11 +132,7 @@ export function MetricStreamPanel({ fleetId }: MetricStreamPanelProps) {
       {/* Real-time canvas */}
       <div className="rounded-lg border border-gray-700 bg-gray-900 p-4">
         <h3 className="mb-3 text-sm font-semibold text-gray-300">Live Metric Stream</h3>
-        <LiveMetricsCanvas
-          stream={stream}
-          metrics={visibleMetrics}
-          height={280}
-        />
+        <LiveMetricsCanvas stream={stream} metrics={visibleMetrics} height={280} />
       </div>
 
       {/* Tabular snapshot */}
@@ -152,13 +146,8 @@ export function MetricStreamPanel({ fleetId }: MetricStreamPanelProps) {
               const latestFrame = stream[stream.length - 1];
               const value = latestFrame?.values[metricName];
               return (
-                <div
-                  key={metricName}
-                  className="rounded-lg border border-gray-800 bg-gray-950 p-3"
-                >
-                  <p className="text-xs text-gray-500">
-                    {METRIC_LABELS[metricName] ?? metricName}
-                  </p>
+                <div key={metricName} className="rounded-lg border border-gray-800 bg-gray-950 p-3">
+                  <p className="text-xs text-gray-500">{METRIC_LABELS[metricName] ?? metricName}</p>
                   <p className="mt-1 font-mono text-lg font-bold text-white">
                     {value !== undefined ? value.toFixed(1) : '—'}
                   </p>

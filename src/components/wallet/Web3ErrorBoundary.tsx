@@ -201,12 +201,10 @@ export class Web3ErrorBoundary extends Component<Web3ErrorBoundaryProps, Web3Err
         <div className="min-h-screen bg-gray-950 flex items-center justify-center p-6">
           <div className="w-full max-w-md rounded-xl border border-red-800 bg-gray-900 p-8 text-center">
             <span className="text-4xl">🚨</span>
-            <h2 className="mt-4 text-xl font-bold text-red-400">
-              Repeated Web3 Errors
-            </h2>
+            <h2 className="mt-4 text-xl font-bold text-red-400">Repeated Web3 Errors</h2>
             <p className="mt-2 text-sm text-gray-400">
-              The application has encountered multiple consecutive failures. This
-              may indicate a persistent network or configuration issue.
+              The application has encountered multiple consecutive failures. This may indicate a
+              persistent network or configuration issue.
             </p>
             <button
               onClick={this.reload}

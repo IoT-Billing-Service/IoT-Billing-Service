@@ -16,22 +16,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <nav className="border-b border-gray-800 bg-gray-950 px-6 py-3">
           <div className="flex items-center gap-6 text-sm">
             <span className="font-semibold text-green-400">Dashboard</span>
-            <a
-              href="/fleet"
-              className="text-gray-400 hover:text-gray-200 transition-colors"
-            >
+            <a href="/fleet" className="text-gray-400 hover:text-gray-200 transition-colors">
               Fleet
             </a>
-            <a
-              href="/escrow"
-              className="text-gray-400 hover:text-gray-200 transition-colors"
-            >
+            <a href="/escrow" className="text-gray-400 hover:text-gray-200 transition-colors">
               Escrow
             </a>
-            <a
-              href="/payments"
-              className="text-gray-400 hover:text-gray-200 transition-colors"
-            >
+            <a href="/payments" className="text-gray-400 hover:text-gray-200 transition-colors">
               Payments
             </a>
           </div>

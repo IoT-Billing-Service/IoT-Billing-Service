@@ -51,7 +51,13 @@ function generateMockPayments(contractId: string): SorobanContractPayment[] {
     'billing_settlement',
     'funding_adjustment',
   ];
-  const statuses: SorobanContractPayment['status'][] = ['confirmed', 'confirmed', 'confirmed', 'pending', 'failed'];
+  const statuses: SorobanContractPayment['status'][] = [
+    'confirmed',
+    'confirmed',
+    'confirmed',
+    'pending',
+    'failed',
+  ];
   const baseTime = Date.now() - 30 * 24 * 3600_000;
 
   for (let i = 0; i < 25; i++) {
@@ -125,15 +131,11 @@ export default function PaymentsPage() {
         </div>
         <div className="rounded-lg border border-gray-700 bg-gray-900 p-4">
           <p className="text-xs text-gray-400">Pending</p>
-          <p className="mt-1 text-2xl font-bold text-amber-400">
-            {stats.pendingCount}
-          </p>
+          <p className="mt-1 text-2xl font-bold text-amber-400">{stats.pendingCount}</p>
         </div>
         <div className="rounded-lg border border-gray-700 bg-gray-900 p-4">
           <p className="text-xs text-gray-400">Failed</p>
-          <p className="mt-1 text-2xl font-bold text-red-400">
-            {stats.failedCount}
-          </p>
+          <p className="mt-1 text-2xl font-bold text-red-400">{stats.failedCount}</p>
         </div>
       </div>
 

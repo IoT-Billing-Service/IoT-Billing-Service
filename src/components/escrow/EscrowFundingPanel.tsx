@@ -27,9 +27,7 @@ export function EscrowFundingPanel({ contractId }: EscrowFundingPanelProps) {
     <>
       <div className="rounded-lg border border-gray-700 bg-gray-900 p-6">
         <h3 className="text-base font-semibold text-white">Funding Controls</h3>
-        <p className="mt-0.5 text-sm text-gray-500">
-          Adjust escrow funding levels
-        </p>
+        <p className="mt-0.5 text-sm text-gray-500">Adjust escrow funding levels</p>
 
         <div className="mt-6 grid grid-cols-2 gap-4">
           <button

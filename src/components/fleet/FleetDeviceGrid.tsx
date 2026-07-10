@@ -17,7 +17,15 @@ function generateMockDevices(fleetId: string): FleetDevice[] {
   if (!fleetId) return [];
   const count = fleetId === 'fleet-gamma' ? 48 : fleetId === 'fleet-alpha' ? 36 : 24;
   const devices: FleetDevice[] = [];
-  const statuses: FleetDevice['status'][] = ['online', 'online', 'online', 'online', 'online', 'offline', 'degraded'];
+  const statuses: FleetDevice['status'][] = [
+    'online',
+    'online',
+    'online',
+    'online',
+    'online',
+    'offline',
+    'degraded',
+  ];
 
   for (let i = 0; i < count; i++) {
     const status = statuses[i % statuses.length] ?? 'online';
@@ -128,7 +136,9 @@ export function FleetDeviceGrid({ fleetId }: FleetDeviceGridProps) {
   if (!fleetId) {
     return (
       <div className="flex items-center justify-center h-64 rounded-lg border border-dashed border-gray-700">
-        <p className="text-sm text-gray-500">Select a fleet from the overview to view its devices.</p>
+        <p className="text-sm text-gray-500">
+          Select a fleet from the overview to view its devices.
+        </p>
       </div>
     );
   }
@@ -217,8 +227,7 @@ export function FleetDeviceGrid({ fleetId }: FleetDeviceGridProps) {
               </div>
 
               <p className="mt-2 text-[10px] text-gray-600">
-                Last seen:{' '}
-                {new Date(device.lastSeen).toLocaleTimeString()}
+                Last seen: {new Date(device.lastSeen).toLocaleTimeString()}
               </p>
             </div>
           ))}
