@@ -3,4 +3,4 @@ resolver = "2"
 members = ["utility_contracts", "price_oracle", "telemetry_determinism_check", "escrow"]
 
 [workspace.dependencies]
-soroban-sdk = "23.2.4"
+soroban-sdk = "27.0.0"
