@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: iot-billing-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: SKIP_MIGRATION_ON_STARTUP
+        value: "true"
+      - key: OTEL_SERVICE_NAME
+        value: iot-billing-backend
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: TIMESCALEDB_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: SOROBAN_RPC_URL
+        sync: false
+      - key: SOROBAN_NETWORK_PASSPHRASE
+        sync: false
+      - key: CONTRACT_ID
+        sync: false
+      - key: ADMIN_SECRET_KEY
+        sync: false

@@ -12,6 +12,7 @@ Enterprise-grade Web3/IoT billing backend integrating Soroban smart contracts fo
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
+- [Render Deployment](#render-deployment)
 - [Railway Deployment](#railway-deployment)
 - [Available Scripts](#available-scripts)
 - [Environment Variables](#environment-variables)
@@ -97,6 +98,51 @@ npm run dev
 ```
 
 The server starts at `http://localhost:3000`.
+
+---
+
+## Render Deployment
+
+This repository includes a `render.yaml` blueprint and a production `Dockerfile` so the backend can be deployed to Render as a Docker-based web service.
+
+### Deploy on Render
+
+1. Create a new Render **Blueprint** or **Web Service** from the `iot-billing-backend` repository.
+2. If using Blueprint deployment, Render will detect `render.yaml` automatically.
+3. If creating the service manually, choose **Docker** as the runtime and point Render to the repository root.
+4. Add the required environment variables before the first deploy.
+
+### Required Render Environment Variables
+
+At minimum, configure these values in Render:
+
+- `DATABASE_URL`
+- `TIMESCALEDB_URL`
+- `REDIS_URL`
+- `SOROBAN_RPC_URL`
+- `SOROBAN_NETWORK_PASSPHRASE`
+- `JWT_SECRET`
+
+Optional but recommended / environment-specific:
+
+- `CONTRACT_ID`
+- `ADMIN_SECRET_KEY`
+- `OTEL_EXPORTER_OTLP_ENDPOINT`
+
+The included `render.yaml` also sets these safe defaults:
+
+- `NODE_ENV=production`
+- `HOST=0.0.0.0`
+- `SKIP_MIGRATION_ON_STARTUP=true`
+- `OTEL_SERVICE_NAME=iot-billing-backend`
+
+### Runtime Notes
+
+- Render injects `PORT` automatically; this backend already reads `PORT` from the environment.
+- The container boot command runs Prisma migrations before starting the server:
+  `npx prisma migrate deploy && node dist/api/index.js`
+- `SKIP_MIGRATION_ON_STARTUP=true` avoids running the in-process startup migration path after the container command has already applied migrations.
+- The Render health check is configured to use `GET /health`.
 
 ---
 
