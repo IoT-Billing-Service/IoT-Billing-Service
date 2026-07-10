@@ -77,7 +77,10 @@ function getIngestionService(): IngestionService {
  * Initialise the ingestion service and its dependencies.
  * Call this once during server startup.
  */
-export function initIngestionService(prisma: PrismaClient, nonceCache?: InMemoryNonceCache): IngestionService {
+export function initIngestionService(
+  prisma: PrismaClient,
+  nonceCache?: InMemoryNonceCache,
+): IngestionService {
   const cache = nonceCache ?? new InMemoryNonceCache();
   ingestionService = new IngestionService(prisma, cache);
   return ingestionService;

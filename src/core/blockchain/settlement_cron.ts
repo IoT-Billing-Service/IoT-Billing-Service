@@ -29,10 +29,7 @@
 
 import type { PrismaClient } from '@prisma/client';
 import type { BillingCycleStore } from '../../billing/billing_cycle_repository.js';
-import {
-  BillingCycleState,
-  assertTransition,
-} from '../../billing/state_machine.js';
+import { BillingCycleState, assertTransition } from '../../billing/state_machine.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -58,7 +55,13 @@ export const DEFAULT_MAX_FEE_STROOPS = 100_000n; // 0.01 XLM
 
 export interface SettlementResult {
   cycleId: string;
-  outcome: 'settled' | 'below_threshold' | 'not_finalized' | 'not_found' | 'lost_race' | 'tx_failed';
+  outcome:
+    | 'settled'
+    | 'below_threshold'
+    | 'not_finalized'
+    | 'not_found'
+    | 'lost_race'
+    | 'tx_failed';
   usageAmount?: bigint;
   txHash?: string | null;
   error?: string;
@@ -101,7 +104,8 @@ export class SettlementCron {
     options: SettlementCronOptions = {},
   ) {
     this.intervalMs = options.intervalMs ?? DEFAULT_SETTLEMENT_INTERVAL_MS;
-    this.minSettlementThreshold = options.minSettlementThreshold ?? DEFAULT_MIN_SETTLEMENT_THRESHOLD;
+    this.minSettlementThreshold =
+      options.minSettlementThreshold ?? DEFAULT_MIN_SETTLEMENT_THRESHOLD;
     this.maxFeeStroops = options.maxFeeStroops ?? DEFAULT_MAX_FEE_STROOPS;
     this.sorobanRpcUrl = options.sorobanRpcUrl;
     this.networkPassphrase = options.networkPassphrase;
@@ -268,7 +272,11 @@ export class SettlementCron {
    */
   private async submitSettlementTx(cycleId: string, usageAmount: bigint): Promise<string> {
     // If we have Soroban SDK configuration, submit a real tx via RPC.
-    if (this.contractId !== undefined && this.sorobanRpcUrl !== undefined && this.networkPassphrase !== undefined) {
+    if (
+      this.contractId !== undefined &&
+      this.sorobanRpcUrl !== undefined &&
+      this.networkPassphrase !== undefined
+    ) {
       try {
         const { rpc, nativeToScVal, TransactionBuilder, Operation } =
           await import('@stellar/stellar-sdk');

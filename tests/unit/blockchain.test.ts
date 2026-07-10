@@ -139,54 +139,58 @@ describe('IngestionStateMachine', () => {
 });
 
 describe('TelemetryFragmentReassembler', () => {
-  it('caps fuzzed fragmented WebSocket messages at MAX_PARTIAL_MESSAGE_SIZE',
+  it(
+    'caps fuzzed fragmented WebSocket messages at MAX_PARTIAL_MESSAGE_SIZE',
     // 66k Buffer.concat calls under parallel execution need more than the
     // default 10 s timeout (issue #89).
     { timeout: 30_000 },
     () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const maxObservedBufferByDevice = new Map<string, number>();
-    const violations: string[] = [];
-    const closedConnections: { code: number; reason: string }[] = [];
-    const devices = Array.from({ length: 1000 }, (_, i) => {
-      const deviceId = `fuzz-dev-${String(i)}`;
-      return new TelemetryFragmentReassembler({
-        connectionId: `conn-${String(i)}`,
-        deviceId,
-        onBufferSizeChange: (id, bytes): void => {
-          maxObservedBufferByDevice.set(
-            id,
-            Math.max(maxObservedBufferByDevice.get(id) ?? 0, bytes),
-          );
-        },
-        onProtocolViolation: (event): void => {
-          violations.push(event.connectionId);
-        },
-        onClose: (code, reason): void => {
-          closedConnections.push({ code, reason });
-        },
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const maxObservedBufferByDevice = new Map<string, number>();
+      const violations: string[] = [];
+      const closedConnections: { code: number; reason: string }[] = [];
+      const devices = Array.from({ length: 1000 }, (_, i) => {
+        const deviceId = `fuzz-dev-${String(i)}`;
+        return new TelemetryFragmentReassembler({
+          connectionId: `conn-${String(i)}`,
+          deviceId,
+          onBufferSizeChange: (id, bytes): void => {
+            maxObservedBufferByDevice.set(
+              id,
+              Math.max(maxObservedBufferByDevice.get(id) ?? 0, bytes),
+            );
+          },
+          onProtocolViolation: (event): void => {
+            violations.push(event.connectionId);
+          },
+          onClose: (code, reason): void => {
+            closedConnections.push({ code, reason });
+          },
+        });
       });
-    });
 
-    for (let round = 0; round < 66; round++) {
-      for (let i = 0; i < 1000; i++) {
-        const parser = devices[(i * 37 + round * 101) % devices.length];
-        expect(parser).toBeDefined();
-        parser?.append(Buffer.alloc(1024, (i + round) % 255));
+      for (let round = 0; round < 66; round++) {
+        for (let i = 0; i < 1000; i++) {
+          const parser = devices[(i * 37 + round * 101) % devices.length];
+          expect(parser).toBeDefined();
+          parser?.append(Buffer.alloc(1024, (i + round) % 255));
+        }
       }
-    }
 
-    for (const bytes of maxObservedBufferByDevice.values()) {
-      expect(bytes).toBeLessThanOrEqual(MAX_PARTIAL_MESSAGE_SIZE);
-    }
-    expect(violations.length).toBeGreaterThan(0);
-    expect(closedConnections.every((conn) => conn.code === MESSAGE_TOO_BIG_CLOSE_CODE)).toBe(true);
+      for (const bytes of maxObservedBufferByDevice.values()) {
+        expect(bytes).toBeLessThanOrEqual(MAX_PARTIAL_MESSAGE_SIZE);
+      }
+      expect(violations.length).toBeGreaterThan(0);
+      expect(closedConnections.every((conn) => conn.code === MESSAGE_TOO_BIG_CLOSE_CODE)).toBe(
+        true,
+      );
 
-    for (const parser of devices) {
-      parser.dispose();
-    }
-    warnSpy.mockRestore();
-  });
+      for (const parser of devices) {
+        parser.dispose();
+      }
+      warnSpy.mockRestore();
+    },
+  );
 });
 
 import { RedisReorderBuffer } from '../../src/core/ingestion/validator.js';

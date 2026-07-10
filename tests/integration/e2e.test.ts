@@ -81,16 +81,20 @@ function createMockPrisma(): any {
       }),
     },
     telemetryData: {
-      create: vi.fn().mockImplementation((args: { data: { deviceId: string; metricId: number; metricValue: number } }) => {
-        telemetrySeq++;
-        const record = {
-          id: `telemetry-${telemetrySeq}`,
-          ...args.data,
-          ingestedAt: new Date(),
-        };
-        telemetryStore.push(record);
-        return Promise.resolve(record);
-      }),
+      create: vi
+        .fn()
+        .mockImplementation(
+          (args: { data: { deviceId: string; metricId: number; metricValue: number } }) => {
+            telemetrySeq++;
+            const record = {
+              id: `telemetry-${telemetrySeq}`,
+              ...args.data,
+              ingestedAt: new Date(),
+            };
+            telemetryStore.push(record);
+            return Promise.resolve(record);
+          },
+        ),
     },
     billingRecord: {
       aggregate: vi.fn().mockResolvedValue({ _sum: { usageAmount: 5000n } }),
@@ -141,14 +145,16 @@ function createMockCycleStore(): BillingCycleStore {
       };
     }),
     createCycle: vi.fn(),
-    applyTransition: vi.fn().mockImplementation(
-      async (
-        _cycleId: string,
-        _from: BillingCycleState,
-        _to: BillingCycleState,
-        _lockVersion: number,
-      ) => true,
-    ),
+    applyTransition: vi
+      .fn()
+      .mockImplementation(
+        async (
+          _cycleId: string,
+          _from: BillingCycleState,
+          _to: BillingCycleState,
+          _lockVersion: number,
+        ) => true,
+      ),
     recordFinalization: vi.fn().mockResolvedValue(true),
     // Internal test helpers
     _setState(cycleId: string, state: BillingCycleState, lockVersion = 1) {
@@ -513,9 +519,7 @@ describe('E2E: SettlementCron', () => {
 
   it('should settle a FINALIZED cycle with below-threshold usage', async () => {
     // Override aggregate result to return small usage
-    mockPrisma.billingRecord.aggregate = vi
-      .fn()
-      .mockResolvedValue({ _sum: { usageAmount: 10n } });
+    mockPrisma.billingRecord.aggregate = vi.fn().mockResolvedValue({ _sum: { usageAmount: 10n } });
 
     (mockStore as any)._setState('cycle-small', BillingCycleState.FINALIZED);
     const result = await cron.settleCycle('cycle-small', 'account-1');

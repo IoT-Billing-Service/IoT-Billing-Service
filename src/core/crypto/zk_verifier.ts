@@ -135,7 +135,10 @@ export class ZkRangeProofVerifier {
   ): VerificationResult {
     // ── Guard: range validity ──────────────────────────────────────────────
     if (lowerBound >= upperBound) {
-      return { valid: false, reason: `${VERIFIER_ERROR_CODES.INVALID_RANGE}: lower bound >= upper bound` };
+      return {
+        valid: false,
+        reason: `${VERIFIER_ERROR_CODES.INVALID_RANGE}: lower bound >= upper bound`,
+      };
     }
 
     // ── Guard: buffer length ───────────────────────────────────────────────
@@ -168,7 +171,10 @@ export class ZkRangeProofVerifier {
     const expectedChallenge = Buffer.from(nacl.hash(chInput)).subarray(0, 16);
 
     if (!challenge.equals(expectedChallenge)) {
-      return { valid: false, reason: `${VERIFIER_ERROR_CODES.CHALLENGE_MISMATCH}: challenge-response verification failed` };
+      return {
+        valid: false,
+        reason: `${VERIFIER_ERROR_CODES.CHALLENGE_MISMATCH}: challenge-response verification failed`,
+      };
     }
 
     // ── Step 2: verify the response segment (knowledge of value) ───────────
@@ -180,7 +186,10 @@ export class ZkRangeProofVerifier {
       const expectedResponse = Buffer.from(nacl.hash(respInput)).subarray(0, 32);
 
       if (!response.equals(expectedResponse)) {
-        return { valid: false, reason: `${VERIFIER_ERROR_CODES.RESPONSE_MISMATCH}: response does not match the expected value` };
+        return {
+          valid: false,
+          reason: `${VERIFIER_ERROR_CODES.RESPONSE_MISMATCH}: response does not match the expected value`,
+        };
       }
     }
 

@@ -204,10 +204,7 @@ export class IngestionService {
       }
 
       // ── Step 6: Persist telemetry via Prisma transaction ────────────────
-      const recordsWritten = await this.persistTelemetry(
-        request.payload.deviceId,
-        metrics,
-      );
+      const recordsWritten = await this.persistTelemetry(request.payload.deviceId, metrics);
 
       return {
         success: true,
