@@ -3,25 +3,26 @@ import { DashboardProviders } from '@/components/providers/DashboardProviders';
 import { NotificationToast } from '@/components/NotificationToast';
 
 /**
- * Dashboard layout
+ * Fleet route layout — reuses DashboardProviders so the Stellar SDK chunks
+ * remain excluded from the initial / route.
  *
- * Wraps all /dashboard/** routes with DashboardProviders so that the
- * Stellar/Soroban SDK chunks are only fetched when the user navigates here,
- * keeping the initial / route bundle small.
+ * A shared sub-navigation bar allows switching between the default fleet
+ * overview and sub-pages (device grid, ingestion logs) without leaving the
+ * /fleet hierarchy.
  */
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+export default function FleetLayout({ children }: { children: ReactNode }) {
   return (
     <DashboardProviders>
       <div className="flex flex-1 flex-col">
         <nav className="border-b border-gray-800 bg-gray-950 px-6 py-3">
           <div className="flex items-center gap-6 text-sm">
-            <span className="font-semibold text-green-400">Dashboard</span>
             <a
-              href="/fleet"
+              href="/dashboard"
               className="text-gray-400 hover:text-gray-200 transition-colors"
             >
-              Fleet
+              Dashboard
             </a>
+            <span className="font-semibold text-green-400">Fleet</span>
             <a
               href="/escrow"
               className="text-gray-400 hover:text-gray-200 transition-colors"

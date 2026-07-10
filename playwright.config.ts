@@ -22,4 +22,19 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },
+
+  projects: [
+    {
+      name: 'default',
+      testIgnore: ['**/freighterMetricsFlow.spec.ts'],
+    },
+    {
+      name: 'freighter-mocked',
+      testMatch: ['**/freighterMetricsFlow.spec.ts'],
+      use: {
+        baseURL,
+        trace: 'on-first-retry',
+      },
+    },
+  ],
 });

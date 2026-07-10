@@ -146,3 +146,85 @@ export interface AppNotification {
   timestamp: number;
   dismissed: boolean;
 }
+
+// ─── Fleet / Multi-Tenant ────────────────────────────────────────────
+
+export interface FleetDevice {
+  deviceId: string;
+  fleetId: string;
+  name: string;
+  status: 'online' | 'offline' | 'degraded' | 'provisioning';
+  lastSeen: number;
+  metrics: {
+    powerUsage: number;
+    signalStrength: number;
+    temperature: number;
+    batteryLevel: number;
+    dataRate: number;
+  };
+  location?: {
+    lat: number;
+    lng: number;
+  };
+  metadata?: Record<string, string>;
+}
+
+export interface FleetMetricsSummary {
+  fleetId: string;
+  fleetName: string;
+  totalDevices: number;
+  onlineDevices: number;
+  offlineDevices: number;
+  degradedDevices: number;
+  averagePowerUsage: number;
+  totalDataRate: number;
+  ingestionFailureCount: number;
+  lastUpdated: number;
+}
+
+export interface IngestionFailure {
+  id: string;
+  fleetId: string;
+  deviceId: string;
+  failedAt: number;
+  errorCode: string;
+  errorMessage: string;
+  retryCount: number;
+  resolved: boolean;
+  resolvedAt?: number;
+}
+
+export interface MetricStreamPoint {
+  timestamp: number;
+  fleetId: string;
+  metricName: string;
+  value: number;
+  unit: string;
+}
+
+export interface SorobanContractPayment {
+  transactionHash: string;
+  contractId: string;
+  type: 'escrow_deposit' | 'escrow_withdrawal' | 'billing_settlement' | 'funding_adjustment';
+  amount: string;
+  asset: string;
+  status: 'pending' | 'confirmed' | 'failed';
+  source: string;
+  destination: string;
+  timestamp: number;
+  memo?: string;
+  ledger?: number;
+  fee?: string;
+}
+
+export interface EscrowAccountState {
+  contractId: string;
+  totalLocked: string;
+  available: string;
+  pendingRelease: string;
+  totalDeposited: string;
+  totalWithdrawn: string;
+  asset: string;
+  lastActivity: number;
+  disputeActive: boolean;
+}
