@@ -1,20 +1,14 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# IoT Billing Service Monorepo
 
-# Run and deploy your AI Studio app
+This repository consolidates the IoT Billing Service platform into a single monorepo.
 
-This contains everything you need to run your app locally.
+## Repository Layout
 
-View your app in AI Studio: https://ai.studio/apps/d9f8540e-a027-4769-ae1b-9bcb98e907a3
+- `backend/` — Fastify/TypeScript backend for telemetry ingestion, auth, billing orchestration, and blockchain integration
+- `frontend/` — Next.js frontend application
+- `contracts/` — Stellar Soroban smart contracts and related workspace files
+- `dashboard-prototype/` — preserved AI Studio prototype/dashboard app from the repository's initial state
 
-## Run Locally
+## Notes
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+The production application code now lives in the `backend/`, `frontend/`, and `contracts/` directories. The `dashboard-prototype/` directory is kept to preserve the original prototype that initialized this repository.
