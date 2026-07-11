@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Device {
+  id        String   @id @default(cuid())
+  serial    String   @unique
+  publicKey String   @map("public_key")
+  ownerId   String   @map("owner_id")
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  billingRecords BillingRecord[]
+  telemetryData  TelemetryData[]
+
+  @@map("devices")
+}
+
+model Account {
+  id              String   @id @default(cuid())
+  stellarAddress  String   @unique @map("stellar_address")
+  balance         BigInt   @default(0)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  billingRecords  BillingRecord[]
+  webhookSecrets  WebhookSecret[]
+  billingCycles   BillingCycle[]
+
+  @@map("accounts")
+}
+
+model BillingRecord {
+  id          String   @id @default(cuid())
+  deviceId    String   @map("device_id")
+  accountId   String   @map("account_id")
+  usageAmount BigInt   @map("usage_amount")
+  txHash      String?  @map("tx_hash")
+  status      String   @default("pending")
+  createdAt   DateTime @default(now()) @map("created_at")
+  cycleId     String?  @map("cycle_id")
+
+  device Device @relation(fields: [deviceId], references: [id])
+  account Account @relation(fields: [accountId], references: [id])
+  cycle   BillingCycle? @relation(fields: [cycleId], references: [id])
+
+  @@map("billing_records")
+}
+
+/// A billing cycle transitions OPEN -> FINALIZING -> FINALIZED -> SETTLED.
+/// `lockVersion` is an optimistic-concurrency token: every state write does
+/// `WHERE id = ? AND lock_version = ?` and bumps the version, so two callers
+/// racing the same transition cannot both win (issue #42).
+model BillingCycle {
+  id          String   @id @default(cuid())
+  accountId   String   @map("account_id")
+  state       String   @default("OPEN")
+  lockVersion Int      @default(1) @map("lock_version")
+  periodStart DateTime @map("period_start")
+  periodEnd   DateTime @map("period_end")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  account         Account                  @relation(fields: [accountId], references: [id])
+  billingRecords  BillingRecord[]
+  finalizationLog BillingFinalizationLog[]
+
+  @@index([state])
+  @@map("billing_cycles")
+}
+
+/// Append-only log making finalization idempotent: a unique idempotency_key
+/// means a replayed finalization for the same logical attempt is a no-op.
+model BillingFinalizationLog {
+  id             String   @id @default(cuid())
+  cycleId        String   @map("cycle_id")
+  idempotencyKey String   @unique @map("idempotency_key")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  cycle BillingCycle @relation(fields: [cycleId], references: [id])
+
+  @@map("billing_finalization_log")
+}
+
+model TelemetryData {
+  id          String   @id @default(cuid())
+  deviceId    String   @map("device_id")
+  metricId    Int      @map("metric_id")
+  metricValue Float    @map("metric_value")
+  ingestedAt  DateTime @default(now()) @map("ingested_at")
+
+  device Device @relation(fields: [deviceId], references: [id])
+
+  @@map("telemetry_data")
+}
+
+model IngestionJob {
+  id         String   @id @default(cuid())
+  deviceId   String   @map("device_id")
+  status     String   @default("pending")
+  stateData  Json?    @map("state_data")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("ingestion_jobs")
+}
+
+model WebhookSecret {
+  id        String   @id @default(cuid())
+  accountId String   @map("account_id")
+  secret    String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@map("webhook_secrets")
+}
+
+model HardwareCertificate {
+  serial    String   @id
+  model     String
+  batch     String
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("hardware_certificates")
+}
+
+model LedgerSyncState {
+  syncId           String   @id @map("sync_id")
+  lastSyncedLedger Int      @map("last_synced_ledger")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("ledger_sync_state")
+}

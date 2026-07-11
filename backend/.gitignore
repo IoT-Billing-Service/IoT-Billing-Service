@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.log
+*.pid
+.DS_Store
+coverage/
+.turbo/
+prisma/migrations/
+tests/load/dist/k6/
+load-test-results.json
