@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "contracts/escrow",
+    "contracts/price_oracle"
+]
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = false
+panic = "abort"
+lto = true
+codegen-units = 1

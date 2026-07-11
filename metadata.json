@@ -1,0 +1,6 @@
+{
+  "name": "IoT Billing Service Dashboard",
+  "description": "Enterprise-grade Web3 DePIN billing dashboard and smart contract simulator for hardware telemetry metering and payment processing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
