@@ -1,7 +1,7 @@
-import DashboardSimulatorApp from '@/aiStudioDashboard/App';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-static';
 
 export default function DashboardSimulatorPage() {
-  return <DashboardSimulatorApp />;
+  redirect('/dashboard');
 }
