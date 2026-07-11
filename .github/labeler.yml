@@ -1,0 +1,44 @@
+# Label rules for Pull Request Labeler action.
+# Labels are applied automatically based on changed file paths.
+
+# ── Workspaces ──────────────────────────────────────────
+backend:
+  - changed-files:
+      - any-glob-to-any-file: backend/**/*
+
+frontend:
+  - changed-files:
+      - any-glob-to-any-file: frontend/**/*
+
+contracts:
+  - changed-files:
+      - any-glob-to-any-file: contracts/**/*
+
+# ── Infrastructure ──────────────────────────────────────
+docker:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/Dockerfile*'
+          - '**/docker-compose*'
+          - '**/.dockerignore'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: .github/**/*
+
+# ── Documentation ───────────────────────────────────────
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/README.md'
+          - '**/CONTRIBUTING.md'
+          - '**/docs/**/*'
+
+# ── Dependencies ────────────────────────────────────────
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '**/package-lock.json'
+          - '**/Cargo.lock'
+          - '**/Cargo.toml'
+          - '**/package.json'
