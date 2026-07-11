@@ -1,0 +1,18 @@
+[package]
+name = "utility_contracts"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+cargo-fuzz = "0.11"
+proptest = "1.4"
+lazy_static = "1.4"
