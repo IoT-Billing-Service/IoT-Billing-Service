@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#0a0a0a"/>
+  <rect x="0" y="0" width="1280" height="60" fill="#111118"/>
+  <text x="24" y="38" font-family="monospace" font-size="18" fill="#22c55e" font-weight="bold">IoT Billing Service</text>
+  <text x="1160" y="38" font-family="monospace" font-size="14" fill="#666" text-anchor="end">0x1a2b...3c4d</text>
+  <rect x="24" y="76" width="900" height="200" rx="8" fill="#111118" stroke="#1e293b" stroke-width="1"/>
+  <text x="40" y="104" font-family="system-ui" font-size="18" fill="#fff" font-weight="600">Fleet Telemetry</text>
+  <rect x="40" y="116" width="180" height="60" rx="6" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+  <text x="60" y="140" font-family="system-ui" font-size="12" fill="#888">Devices Online</text>
+  <text x="60" y="166" font-family="system-ui" font-size="24" fill="#22c55e" font-weight="700">42</text>
+  <rect x="240" y="116" width="180" height="60" rx="6" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+  <text x="260" y="140" font-family="system-ui" font-size="12" fill="#888">Active Escrows</text>
+  <text x="260" y="166" font-family="system-ui" font-size="24" fill="#3b82f6" font-weight="700">18</text>
+  <rect x="440" y="116" width="180" height="60" rx="6" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+  <text x="460" y="140" font-family="system-ui" font-size="12" fill="#888">Total Locked (XLM)</text>
+  <text x="460" y="166" font-family="system-ui" font-size="24" fill="#eab308" font-weight="700">248.5k</text>
+  <rect x="24" y="292" width="900" height="140" rx="8" fill="#111118" stroke="#1e293b" stroke-width="1"/>
+  <text x="40" y="320" font-family="system-ui" font-size="16" fill="#fff" font-weight="600">Data Usage (24h)</text>
+  <rect x="40" y="336" width="860" height="6" rx="3" fill="#1e293b"/>
+  <rect x="44" y="336" width="430" height="6" rx="3" fill="#22c55e" opacity="0.8"/>
+  <rect x="44" y="336" width="560" height="6" rx="3" fill="#3b82f6" opacity="0.5"/>
+  <rect x="44" y="336" width="688" height="6" rx="3" fill="#eab308" opacity="0.3"/>
+  <text x="40" y="400" font-family="system-ui" font-size="12" fill="#888">Last 24h · 3.2 TB processed</text>
+  <text x="860" y="400" font-family="system-ui" font-size="12" fill="#22c55e" text-anchor="end">+12.4%</text>
+  <rect x="950" y="76" width="306" height="356" rx="8" fill="#111118" stroke="#1e293b" stroke-width="1"/>
+  <text x="966" y="104" font-family="system-ui" font-size="16" fill="#fff" font-weight="600">Escrow Contracts</text>
+  <rect x="966" y="118" width="274" height="44" rx="4" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+  <text x="978" y="136" font-family="system-ui" font-size="13" fill="#fff">Device-0942</text>
+  <text x="978" y="152" font-family="system-ui" font-size="11" fill="#22c55e">12,500 XLM</text>
+  <rect x="966" y="170" width="274" height="44" rx="4" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+  <text x="978" y="188" font-family="system-ui" font-size="13" fill="#fff">Sensor-Group-7</text>
+  <text x="978" y="204" font-family="system-ui" font-size="11" fill="#eab308">8,200 XLM</text>
+  <rect x="966" y="222" width="274" height="44" rx="4" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+  <text x="978" y="240" font-family="system-ui" font-size="13" fill="#fff">Gateway-23</text>
+  <text x="978" y="256" font-family="system-ui" font-size="11" fill="#3b82f6">22,000 XLM</text>
+  <rect x="24" y="448" width="1232" height="248" rx="8" fill="#111118" stroke="#1e293b" stroke-width="1"/>
+  <text x="40" y="476" font-family="system-ui" font-size="16" fill="#fff" font-weight="600">Device Grid</text>
+  <rect x="40" y="496" width="80" height="72" rx="6" fill="#0f172a" stroke="#22c55e" stroke-width="1"/>
+  <circle cx="80" cy="516" r="4" fill="#22c55e"/>
+  <text x="56" y="540" font-family="system-ui" font-size="9" fill="#aaa">ACTIVE</text>
+  <text x="56" y="556" font-family="system-ui" font-size="10" fill="#fff">D-001</text>
+  <rect x="134" y="496" width="80" height="72" rx="6" fill="#0f172a" stroke="#22c55e" stroke-width="1"/>
+  <circle cx="174" cy="516" r="4" fill="#22c55e"/>
+  <text x="150" y="540" font-family="system-ui" font-size="9" fill="#aaa">ACTIVE</text>
+  <text x="150" y="556" font-family="system-ui" font-size="10" fill="#fff">D-002</text>
+  <rect x="228" y="496" width="80" height="72" rx="6" fill="#0f172a" stroke="#eab308" stroke-width="1"/>
+  <circle cx="268" cy="516" r="4" fill="#eab308"/>
+  <text x="244" y="540" font-family="system-ui" font-size="9" fill="#eab308">WARNING</text>
+  <text x="244" y="556" font-family="system-ui" font-size="10" fill="#fff">D-003</text>
+  <rect x="322" y="496" width="80" height="72" rx="6" fill="#0f172a" stroke="#ef4444" stroke-width="1"/>
+  <circle cx="362" cy="516" r="4" fill="#ef4444"/>
+  <text x="338" y="540" font-family="system-ui" font-size="9" fill="#ef4444">OFFLINE</text>
+  <text x="338" y="556" font-family="system-ui" font-size="10" fill="#fff">D-004</text>
+  <rect x="416" y="496" width="80" height="72" rx="6" fill="#0f172a" stroke="#22c55e" stroke-width="1"/>
+  <circle cx="456" cy="516" r="4" fill="#22c55e"/>
+  <text x="432" y="540" font-family="system-ui" font-size="9" fill="#aaa">ACTIVE</text>
+  <text x="432" y="556" font-family="system-ui" font-size="10" fill="#fff">D-005</text>
+  <rect x="510" y="496" width="80" height="72" rx="6" fill="#0f172a" stroke="#22c55e" stroke-width="1"/>
+  <circle cx="550" cy="516" r="4" fill="#22c55e"/>
+  <text x="526" y="540" font-family="system-ui" font-size="9" fill="#aaa">ACTIVE</text>
+  <text x="526" y="556" font-family="system-ui" font-size="10" fill="#fff">D-006</text>
+  <rect x="40" y="582" width="120" height="24" rx="4" fill="#22c55e"/>
+  <text x="100" y="598" font-family="system-ui" font-size="12" fill="#000" text-anchor="middle" font-weight="600">View All</text>
+</svg>

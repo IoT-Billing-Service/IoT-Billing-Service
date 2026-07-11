@@ -1,0 +1,54 @@
+{
+  "name": "iot-billing-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "analyze": "next experimental-analyze",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "generate-pwa-assets": "node scripts/generate-pwa-assets.mjs",
+    "validate:css": "node scripts/validate-css.mjs"
+  },
+  "dependencies": {
+    "@stellar/freighter-api": "^6.0.1",
+    "@stellar/stellar-sdk": "^16.0.1",
+    "@tanstack/react-query": "^5.101.0",
+    "bignumber.js": "^11.1.3",
+    "dompurify": "^3.4.11",
+    "lucide-react": "^1.24.0",
+    "next": "16.2.9",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@next/bundle-analyzer": "^16.2.9",
+    "@playwright/test": "^1.60.0",
+    "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.9",
+    "eslint-config-prettier": "^10.1.8",
+    "fake-indexeddb": "^6.2.5",
+    "fast-check": "^4.8.0",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.8.4",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
+  },
+  "optionalDependencies": {
+    "@tailwindcss/oxide-linux-x86_64": "npm:null@*"
+  }
+}
