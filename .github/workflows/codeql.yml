@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
@@ -40,7 +40,7 @@ jobs:
       # For JavaScript/TypeScript, CodeQL automatically detects the build.
       # For Rust, we provide the build command.
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
         if: matrix.language != 'rust'
 
       - name: Build Rust (for CodeQL)
@@ -51,6 +51,6 @@ jobs:
           CARGO_TERM_COLOR: always
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: '/language:${{ matrix.language }}'
