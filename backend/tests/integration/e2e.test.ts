@@ -44,6 +44,7 @@ import {
   extractMetrics,
 } from '../../src/core/ingestion/ingestion_service.js';
 import type { SignedPayload, NonceCache } from '../../src/core/ingestion/validator.js';
+import { minePowSolution } from '../../src/core/crypto/pow_verifier.js';
 
 // ── Settlement Cron ────────────────────────────────────────────────────────────
 import {
@@ -391,11 +392,16 @@ describe('E2E: IngestionService — full pipeline', () => {
     return proof.toString('base64');
   }
 
+  function makePowSolution(deviceIdForPow: string = deviceId): import('../../src/core/crypto/pow_verifier.js').PowSolution {
+    return minePowSolution(deviceIdForPow, Date.now(), 4);
+  }
+
   it('should return SUCCESS for a valid ingestion request', async () => {
     const result = await service.ingestTelemetry({
       payload: makePayload(),
       publicKey: Buffer.from(nacl.randomBytes(32)).toString('hex'),
       proof: makeProof(),
+      powSolution: makePowSolution(),
     });
 
     // Note: we use PassthroughNonceCache so signature verification will fail
@@ -411,6 +417,7 @@ describe('E2E: IngestionService — full pipeline', () => {
       payload: makePayload(),
       publicKey: Buffer.from(nacl.randomBytes(32)).toString('hex'),
       proof: Buffer.alloc(10), // too short
+      powSolution: makePowSolution(),
     });
 
     expect(result.success).toBe(false);
@@ -422,6 +429,7 @@ describe('E2E: IngestionService — full pipeline', () => {
       payload: makePayload(),
       publicKey: 'aabb', // 2 bytes, not 32
       proof: makeProof(),
+      powSolution: makePowSolution(),
     });
 
     expect(result.success).toBe(false);
@@ -468,6 +476,7 @@ describe('E2E: IngestionService — PRIVACY_VIOLATION short-circuit', () => {
       },
       publicKey: Buffer.from(nacl.randomBytes(32)).toString('hex'),
       proof: makeProof(),
+      powSolution: makePowSolution(),
     });
 
     // The signature will fail verification before bounds check, so we expect
@@ -478,6 +487,10 @@ describe('E2E: IngestionService — PRIVACY_VIOLATION short-circuit', () => {
 
   function makeProof(): Buffer {
     return RangeProofGenerator.generate(25n, 'device-001', 0n, 150n);
+  }
+
+  function makePowSolution(): import('../../src/core/crypto/pow_verifier.js').PowSolution {
+    return minePowSolution('device-001', Date.now(), 4);
   }
 });
 

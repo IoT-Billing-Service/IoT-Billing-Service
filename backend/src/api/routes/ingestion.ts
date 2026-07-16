@@ -21,9 +21,10 @@
  * | `ERR_SIGNATURE_MISMATCH`| 401         | Ed25519 signature verification fail |
  * | `ERR_REPLAY_DETECTED`   | 409         | Nonce already consumed (replay)     |
  * | `PRIVACY_VIOLATION`     | 422         | Metric value outside physical range |
- * | `ERR_DEVICE_NOT_FOUND`  | 404         | Device serial not registered        |
- * | `ERR_DEVICE_DISABLED`   | 403         | Device is disabled                  |
- * | `ERR_INVALID_PAYLOAD`   | 400         | Payload schema validation failure   |
+ * | `DEVICE_NOT_FOUND`      | 404         | Device serial not registered        |
+ * | `DEVICE_DISABLED`       | 403         | Device is disabled                  |
+ * | `INVALID_PAYLOAD`       | 400         | Payload schema validation failure   |
+ * | `ERR_POW_VERIFICATION_FAILED` | 400 | Proof-of-work verification failed  |
  * | `ERR_INTERNAL`          | 500         | Unexpected server error             |
  */
 
@@ -31,6 +32,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { IngestionService, INGESTION_ERROR_CODES } from '../../core/ingestion/ingestion_service.js';
 import { InMemoryNonceCache, type SignedPayload } from '../../core/ingestion/validator.js';
+import type { PowSolution } from '../../core/crypto/pow_verifier.js';
 
 // ── Schema ─────────────────────────────────────────────────────────────────────
 
@@ -41,6 +43,8 @@ interface IngestBody {
   publicKey: string;
   /** 64-byte ZK range proof buffer (base64-encoded, 88 base64 chars). */
   proof: string;
+  /** Proof-of-work solution (nonce + difficulty). */
+  powSolution: PowSolution;
 }
 
 // ── HTTP status mapping ────────────────────────────────────────────────────────
@@ -54,6 +58,7 @@ const ERROR_TO_HTTP_STATUS: Record<string, number> = {
   [INGESTION_ERROR_CODES.DEVICE_NOT_FOUND]: 404,
   [INGESTION_ERROR_CODES.DEVICE_DISABLED]: 403,
   [INGESTION_ERROR_CODES.INVALID_PAYLOAD]: 400,
+  [INGESTION_ERROR_CODES.POW_VERIFICATION_FAILED]: 400,
   [INGESTION_ERROR_CODES.INTERNAL_ERROR]: 500,
 };
 
@@ -105,17 +110,25 @@ export function registerIngestionRoutes(app: FastifyInstance): void {
       schema: {
         body: {
           type: 'object',
-          required: ['payload', 'publicKey', 'proof'],
+          required: ['payload', 'publicKey', 'proof', 'powSolution'],
           properties: {
             payload: { type: 'object' },
             publicKey: { type: 'string' },
             proof: { type: 'string' },
+            powSolution: {
+              type: 'object',
+              required: ['nonce', 'difficulty'],
+              properties: {
+                nonce: { type: 'string' },
+                difficulty: { type: 'number' },
+              },
+            },
           },
         },
       },
     },
     async (request: FastifyRequest<{ Body: IngestBody }>, reply: FastifyReply) => {
-      const { payload, publicKey, proof } = request.body;
+      const { payload, publicKey, proof, powSolution } = request.body;
 
       // Basic payload shape validation.
       if (typeof payload.deviceId !== 'string') {
@@ -131,6 +144,7 @@ export function registerIngestionRoutes(app: FastifyInstance): void {
         payload,
         publicKey,
         proof,
+        powSolution,
       });
 
       const httpStatus = result.success ? 200 : statusForError(result.errorCode);
