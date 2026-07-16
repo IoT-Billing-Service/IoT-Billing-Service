@@ -57,6 +57,26 @@ const envSchema = z.object({
   TELEMETRY_TARGET_CHUNK_SIZE_GB: z.coerce.number().min(1).max(10).default(5),
   TELEMETRY_COMPRESSION_DAYS: z.coerce.number().int().positive().default(7),
   TELEMETRY_NUM_PARTITIONS: z.coerce.number().int().positive().default(8),
+
+  // ---------------------------------------------------------------------------
+  // OAuth2 — Issue #57: Third-party billing access
+  // ---------------------------------------------------------------------------
+  // Lifetime of the short-lived authorisation code (seconds). RFC 6749 §4.1.2
+  // recommends ≤ 10 minutes; we default to 5 for tighter security.
+  OAUTH2_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  // Lifetime of an issued OAuth2 access token (seconds). Default 15 minutes,
+  // well under the 200ms P99 billing SLA — the token itself never touches the
+  // hot path, only the verification step does.
+  OAUTH2_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  // Lifetime of an OAuth2 refresh token (seconds). Default 30 days.
+  OAUTH2_REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(2592000),
+  // Signing secret for OAuth2 access tokens (HMAC-SHA256).  Must be at least
+  // 32 bytes.  Defaults to the platform JWT_SECRET so single-secret deployments
+  // work out of the box; production deployments SHOULD set a separate value.
+  OAUTH2_TOKEN_SECRET: z.string().min(32).optional(),
+  // Maximum number of active OAuth2 tokens per client (guards against runaway
+  // token issuance that could indicate a compromised client_secret).
+  OAUTH2_MAX_TOKENS_PER_CLIENT: z.coerce.number().int().positive().default(100),
 });
 
 export type Env = z.infer<typeof envSchema>;

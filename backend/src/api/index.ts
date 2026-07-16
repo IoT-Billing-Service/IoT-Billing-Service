@@ -8,6 +8,7 @@ import { initTelemetry, shutdownTelemetry } from '../core/diagnostics/otel.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerAdminRoutes } from './routes/admin.js';
+import { registerOAuth2Routes } from './routes/oauth2.js';
 import { registerTracingHooks } from './middleware/tracing.js';
 import {
   TelemetryNotificationListener,
@@ -59,6 +60,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerAuthRoutes(app);
   registerAnalyticsRoutes(app);
   registerCircuitHealth(app);
+  registerOAuth2Routes(app);
 
   // Initialise the SSE manager singleton early so the admin event-stream
   // endpoint can register clients immediately on first request.
