@@ -443,6 +443,37 @@ export function recordRedisPubsubMessagesLost(stream: string, count: number): vo
   }
 }
 
+// --- Geographic Pricing Tier metrics (issue #54) ---------------------------------
+// Tracks billing charge adjustments applied per geographic region so operators
+// can verify correct multiplier application and detect anomalies.
+
+export const geoPricingChargesTotal: promClient.Counter = new promClient.Counter({
+  name: 'geo_pricing_charges_total',
+  help: 'Total billing charges adjusted by the geographic pricing engine, by region',
+  labelNames: ['region'],
+});
+
+export const geoPricingMultiplierApplied: promClient.Histogram = new promClient.Histogram({
+  name: 'geo_pricing_multiplier_applied',
+  help: 'Distribution of geographic pricing multipliers applied to billing charges',
+  labelNames: ['region'],
+  buckets: [0.5, 0.75, 0.8, 0.9, 1.0, 1.1, 1.15, 1.2, 1.5],
+});
+
+export const geoPricingUnknownCountryCodes: promClient.Counter = new promClient.Counter({
+  name: 'geo_pricing_unknown_country_codes_total',
+  help: 'Billing charges where the device country code was unknown or missing (fell back to ROW tier)',
+});
+
+/** Record a geo pricing multiplier application. */
+export function recordGeoPricingCharge(region: string, multiplier: number, unknown: boolean): void {
+  geoPricingChargesTotal.inc({ region });
+  geoPricingMultiplierApplied.observe({ region }, multiplier);
+  if (unknown) {
+    geoPricingUnknownCountryCodes.inc();
+  }
+}
+
 // --- SSE (Server-Sent Events) connection metrics (issue #68) ---------------------
 // Tracks backpressure behaviour on the admin SSE stream: active connections,
 // dropped events when per-client queues are full, and successfully delivered events.
