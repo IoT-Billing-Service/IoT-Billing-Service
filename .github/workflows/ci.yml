@@ -356,12 +356,32 @@ jobs:
   docker-build:
     name: Docker Build Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Docker cache configuration
+        run: node scripts/verify-docker-cache.mjs
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: Build backend Docker image
-        run: docker build -t iot-billing-backend -f backend/Dockerfile backend/
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: false
+          tags: iot-billing-backend:ci
+          cache-from: type=gha,scope=backend-image
+          cache-to: type=gha,mode=max,scope=backend-image
       - name: Build frontend Docker image
-        run: docker build -t iot-billing-frontend -f frontend/Dockerfile.frontend frontend/
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: false
+          tags: iot-billing-frontend:ci
+          cache-from: type=gha,scope=frontend-image
+          cache-to: type=gha,mode=max,scope=frontend-image
 
   # ─────────────────────────────────────────────────────────
   #  Dependency Audit
