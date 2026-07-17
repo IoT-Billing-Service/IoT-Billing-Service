@@ -166,7 +166,7 @@ export async function runExperiment(
       Math.max(...experiment.faults.map((f) => f.durationMs)),
     );
   } finally {
-    handles.forEach((h) => h.stop());
+    handles.forEach((h) => { h.stop(); });
     clearAllFaults();
   }
   const faultEnd = new Date();

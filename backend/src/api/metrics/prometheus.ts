@@ -485,6 +485,73 @@ export function setSseQueueDepth(clientId: string, depth: number): void {
   sseQueueDepth.set({ client_id: clientId }, depth);
 }
 
+// --- Backup verification metrics (issue #67) ----------------------------------
+// Tracks scheduled backup verification and restore-test outcomes so on-call
+// teams are alerted before an unrecoverable backup situation arises.
+
+/** Unix timestamp (seconds) of the last known backup file. 0 = unknown. */
+export const backupLastBackupTimestamp: promClient.Gauge = new promClient.Gauge({
+  name: 'backup_last_backup_timestamp_seconds',
+  help: 'Unix timestamp of the most recently detected backup file',
+});
+
+/** Unix timestamp (seconds) of the last successful verification run. 0 = never. */
+export const backupLastVerificationTimestamp: promClient.Gauge = new promClient.Gauge({
+  name: 'backup_last_verification_timestamp_seconds',
+  help: 'Unix timestamp of the last successful backup verification',
+});
+
+/** 1 = last verification passed, 0 = failed or never run. */
+export const backupVerificationStatus: promClient.Gauge = new promClient.Gauge({
+  name: 'backup_verification_status',
+  help: 'Last backup verification result: 1=ok, 0=failed',
+});
+
+/** Cumulative count of backup verification failures. */
+export const backupVerificationFailuresTotal: promClient.Counter = new promClient.Counter({
+  name: 'backup_verification_failures_total',
+  help: 'Total number of backup verification failures since process start',
+});
+
+/** Unix timestamp (seconds) of the last restore test. 0 = never run. */
+export const backupLastRestoreTestTimestamp: promClient.Gauge = new promClient.Gauge({
+  name: 'backup_last_restore_test_timestamp_seconds',
+  help: 'Unix timestamp of the last backup restore test',
+});
+
+/** 1 = last restore test passed, 0 = failed or never run. */
+export const backupRestoreTestStatus: promClient.Gauge = new promClient.Gauge({
+  name: 'backup_restore_test_status',
+  help: 'Last restore test result: 1=ok, 0=failed',
+});
+
+/** Cumulative count of restore test failures. */
+export const backupRestoreFailuresTotal: promClient.Counter = new promClient.Counter({
+  name: 'backup_restore_failures_total',
+  help: 'Total number of restore test failures since process start',
+});
+
+export function recordBackupVerificationSuccess(nowSecs: number, backupTimeSecs: number): void {
+  backupLastBackupTimestamp.set(backupTimeSecs);
+  backupLastVerificationTimestamp.set(nowSecs);
+  backupVerificationStatus.set(1);
+}
+
+export function recordBackupVerificationFailure(): void {
+  backupVerificationStatus.set(0);
+  backupVerificationFailuresTotal.inc();
+}
+
+export function recordRestoreTestSuccess(nowSecs: number): void {
+  backupLastRestoreTestTimestamp.set(nowSecs);
+  backupRestoreTestStatus.set(1);
+}
+
+export function recordRestoreTestFailure(): void {
+  backupRestoreTestStatus.set(0);
+  backupRestoreFailuresTotal.inc();
+}
+
 // Metrics endpoint -------------------------------------------------------------
 
 export function getMetricsRegistry(): promClient.Registry {

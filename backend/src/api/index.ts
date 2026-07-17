@@ -25,11 +25,16 @@ import {
   recordLedgerSyncPollError,
   registerMetricsRoute,
   setLedgerSyncMetrics,
+  recordBackupVerificationSuccess,
+  recordBackupVerificationFailure,
+  recordRestoreTestSuccess,
+  recordRestoreTestFailure,
 } from './metrics/prometheus.js';
-import { registerCircuitHealth } from './health.js';
+import { registerCircuitHealth, registerBackupHealth } from './health.js';
 import { GcPauseMonitor } from './metrics/gc_monitor.js';
 import { PoolMetricsCollector } from './metrics/pool_metrics_collector.js';
 import { getSseManager } from '../core/ingestion/sse_manager.js';
+import { BackupVerificationService } from '../database/backup_verification.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -118,12 +123,32 @@ async function start(): Promise<void> {
   const poolCollector = new PoolMetricsCollector(poolManager);
   poolCollector.start();
 
+  // Issue #67: scheduled backup verification and restore testing.
+  // BACKUP_DIR defaults to /var/backups/postgres; override with the env var.
+  const backupDir = process.env['BACKUP_DIR'] ?? '/var/backups/postgres';
+  const backupVerifier = new BackupVerificationService({
+    backupDir,
+    adminDatabaseUrl: env.DATABASE_URL,
+    metrics: {
+      onVerificationSuccess: recordBackupVerificationSuccess,
+      onVerificationFailure: recordBackupVerificationFailure,
+      onRestoreTestSuccess: recordRestoreTestSuccess,
+      onRestoreTestFailure: recordRestoreTestFailure,
+    },
+    onError: (err): void => {
+      app.log.error({ err }, '[backup-verification] tick failed');
+    },
+  });
+  registerBackupHealth(app, () => backupVerifier.status);
+  backupVerifier.start();
+
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info(`Received ${signal}, shutting down`);
     synchronizer.stop();
     getSseManager().shutdown();
     gcMonitor.stop();
     poolCollector.stop();
+    backupVerifier.stop();
     await listener.stop();
     await closeTimescalePool();
     await app.close();
@@ -148,6 +173,7 @@ async function start(): Promise<void> {
     getSseManager().shutdown();
     gcMonitor.stop();
     poolCollector.stop();
+    backupVerifier.stop();
     await listener.stop();
     await closeTimescalePool();
     await prisma.$disconnect();
