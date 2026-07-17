@@ -7,6 +7,7 @@ import {
 import pg from 'pg';
 import { Redis } from 'ioredis';
 import { getEnv } from '../config/env.js';
+import { getConfigStatus } from '../config/index.js';
 import { reportHealthCheckCompleted } from './metrics/gc_monitor.js';
 import { isMigrationInProgress, getLastAggregateRefreshTime } from '../database/pool_manager.js';
 
@@ -79,6 +80,30 @@ export function registerCircuitHealth(app: FastifyInstance): void {
       state: stateMetric ? stateMetric.value : 0,
       queueDepth: queueMetric ? queueMetric.value : 0,
     };
+  });
+}
+
+/**
+ * Register `GET /config-status` (issue #74).
+ *
+ * Returns the current MetricRangesConfig version, last successful reload
+ * timestamp, total reload count, and the last validation error (if any).
+ * Responds 200 when the config is valid and 503 when the last validation
+ * attempt failed, so probes can alert on a stuck bad config.
+ */
+export function registerConfigStatus(app: FastifyInstance): void {
+  app.get('/config-status', async (_request, reply) => {
+    const status = getConfigStatus();
+    const body = {
+      currentVersionId: status.currentVersionId,
+      lastReloadAt: status.lastReloadAt,
+      reloadCount: status.reloadCount,
+      lastValidationError: status.lastValidationError,
+    };
+    if (status.lastValidationError !== null) {
+      void reply.status(503);
+    }
+    return body;
   });
 }
 
