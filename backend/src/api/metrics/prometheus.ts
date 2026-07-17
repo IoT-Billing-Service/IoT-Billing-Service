@@ -443,6 +443,76 @@ export function recordRedisPubsubMessagesLost(stream: string, count: number): vo
   }
 }
 
+// --- Capacity planning metrics (issue #87) ----------------------------------------
+// These gauges track the output of the /api/analytics/capacity-planning endpoint so
+// Grafana dashboards and Alertmanager rules can observe utilization trends without
+// issuing API calls.  Labels are kept to a single dimension (device_id or account_id)
+// plus period to keep cardinality bounded at the same level as other analytics gauges.
+
+export const capacityUtilizationRatio: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_utilization_ratio',
+  help: 'Projected growth rate relative to average usage from the capacity planning endpoint',
+  labelNames: ['dimension', 'period'],
+});
+
+export const capacityProjectedGrowthRate: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_projected_growth_rate',
+  help: 'Linear trend slope (usage units per day) from the capacity planning endpoint',
+  labelNames: ['dimension', 'period'],
+});
+
+export const capacityTrendDataPoints: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_trend_data_points',
+  help: 'Number of historical data points used for the capacity trend calculation',
+  labelNames: ['dimension', 'period'],
+});
+
+export const capacityTrendLastUpdated: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_trend_last_updated_timestamp',
+  help: 'Unix timestamp (seconds) of the last capacity planning computation',
+  labelNames: ['dimension', 'period'],
+});
+
+export function setCapacityUtilizationRatio(
+  dimension: string,
+  period: string,
+  value: number,
+): void {
+  if (Number.isFinite(value)) {
+    capacityUtilizationRatio.set({ dimension, period }, value);
+  }
+}
+
+export function setCapacityProjectedGrowthRate(
+  dimension: string,
+  period: string,
+  value: number,
+): void {
+  if (Number.isFinite(value)) {
+    capacityProjectedGrowthRate.set({ dimension, period }, value);
+  }
+}
+
+export function setCapacityTrendDataPoints(
+  dimension: string,
+  period: string,
+  value: number,
+): void {
+  if (Number.isFinite(value) && value >= 0) {
+    capacityTrendDataPoints.set({ dimension, period }, value);
+  }
+}
+
+export function setCapacityTrendLastUpdated(
+  dimension: string,
+  period: string,
+  unixSeconds: number,
+): void {
+  if (Number.isFinite(unixSeconds)) {
+    capacityTrendLastUpdated.set({ dimension, period }, unixSeconds);
+  }
+}
+
 // --- SSE (Server-Sent Events) connection metrics (issue #68) ---------------------
 // Tracks backpressure behaviour on the admin SSE stream: active connections,
 // dropped events when per-client queues are full, and successfully delivered events.
