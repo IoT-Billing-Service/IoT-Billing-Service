@@ -485,6 +485,20 @@ export function setSseQueueDepth(clientId: string, depth: number): void {
   sseQueueDepth.set({ client_id: clientId }, depth);
 }
 
+// --- Operational Dashboard metrics (issue #ops-dashboard) -----------------------
+
+export const opsDashboardRequests: promClient.Counter = new promClient.Counter({
+  name: 'ops_dashboard_requests_total',
+  help: 'Total requests to the ops dashboard endpoints',
+  labelNames: ['status'],
+});
+
+export const opsDashboardLatency: promClient.Histogram = new promClient.Histogram({
+  name: 'ops_dashboard_latency_ms',
+  help: 'Latency of the aggregated ops dashboard endpoint in ms',
+  buckets: [10, 25, 50, 100, 200, 500, 1000, 2000],
+});
+
 // Metrics endpoint -------------------------------------------------------------
 
 export function getMetricsRegistry(): promClient.Registry {

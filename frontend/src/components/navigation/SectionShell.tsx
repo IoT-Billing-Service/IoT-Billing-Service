@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { DashboardProviders } from '@/components/providers/DashboardProviders';
 import { NotificationToast } from '@/components/NotificationToast';
-import { Code2, Cpu, BarChart3, Key, Shield } from 'lucide-react';
+import { Code2, Cpu, BarChart3, Key, Shield, Activity } from 'lucide-react';
 
 interface NavItem {
   href: string;
@@ -18,6 +18,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/fleet', label: 'Fleet', icon: <Cpu className="w-3.5 h-3.5" /> },
   { href: '/escrow', label: 'Escrow', icon: <Shield className="w-3.5 h-3.5" /> },
   { href: '/payments', label: 'Payments', icon: <Key className="w-3.5 h-3.5" /> },
+  { href: '/ops', label: 'Ops', icon: <Activity className="w-3.5 h-3.5" /> },
 ];
 
 /**
