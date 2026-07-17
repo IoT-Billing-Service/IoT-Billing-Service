@@ -1,61 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Server } from '@stellar/stellar-sdk/rpc';
+import { SOROBAN_RPC_URL } from '@/utils/sorobanConfig';
+
+type TransactionStatus = 'pending' | 'confirmed' | 'failed';
+
+interface TransactionStatusPayload {
+  status: TransactionStatus;
+  ledger?: number;
+  hash: string;
+}
+
+function normalizeTransactionStatus(rawStatus?: string): TransactionStatus {
+  switch ((rawStatus ?? '').toUpperCase()) {
+    case 'SUCCESS':
+    case 'CONFIRMED':
+      return 'confirmed';
+    case 'FAILED':
+    case 'ERROR':
+      return 'failed';
+    default:
+      return 'pending';
+  }
+}
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const hash = searchParams.get('hash');
+  const hash = request.nextUrl.searchParams.get('hash');
 
   if (!hash) {
     return NextResponse.json({ error: 'Transaction hash is required' }, { status: 400 });
   }
 
   try {
-    // TODO: Replace with actual Soroban RPC call to check transaction status
-    // For now, this is a mock implementation
-    // In production, you would:
-    // 1. Query the Soroban RPC endpoint with the transaction hash
-    // 2. Check if the transaction has been included in a ledger
-    // 3. Return the status and ledger number
+    const rpcUrl =
+      process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? process.env.SOROBAN_RPC_URL ?? SOROBAN_RPC_URL;
+    const server = new Server(rpcUrl);
+    const tx = await server.getTransaction(hash);
 
-    // Mock implementation - randomly simulate transaction progression
-    const mockStatus = simulateTransactionStatus(hash);
+    const status = normalizeTransactionStatus((tx as { status?: string } | undefined)?.status);
+    const ledger = (tx as { ledger?: unknown } | undefined)?.ledger;
 
-    return NextResponse.json(mockStatus);
+    const payload: TransactionStatusPayload = {
+      status,
+      hash,
+      ...(typeof ledger === 'number' ? { ledger } : {}),
+    };
+
+    return NextResponse.json(payload);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (message.toLowerCase().includes('not found') || message.toLowerCase().includes('404')) {
+      return NextResponse.json({ status: 'pending', hash } satisfies TransactionStatusPayload);
+    }
+
     console.error('Error checking transaction status:', error);
     return NextResponse.json({ error: 'Failed to check transaction status' }, { status: 500 });
   }
-}
-
-// Mock function to simulate transaction status
-// Replace this with actual Soroban RPC calls in production
-function simulateTransactionStatus(hash: string): {
-  status: 'pending' | 'confirmed' | 'failed';
-  ledger?: number;
-  hash: string;
-} {
-  // Use hash to create deterministic behavior for testing
-  const hashNum = hash.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const elapsed = Date.now() - (hashNum % 60000); // Simulate elapsed time
-
-  // Simulate confirmation after ~30 seconds
-  if (elapsed > 30000) {
-    return {
-      status: 'confirmed',
-      ledger: 1000000 + Math.floor(elapsed / 5000),
-      hash,
-    };
-  }
-
-  // Simulate failure 5% of the time
-  if (hashNum % 20 === 0) {
-    return {
-      status: 'failed',
-      hash,
-    };
-  }
-
-  return {
-    status: 'pending',
-    hash,
-  };
 }
