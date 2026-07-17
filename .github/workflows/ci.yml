@@ -35,6 +35,15 @@ jobs:
           found=$(find . -name '.env' -not -path './.env.example' -not -path '*/node_modules/*' -not -path '*/.next/*' 2>/dev/null | head -5)
           if [ -n "$found" ]; then echo "Committed .env files found:"; echo "$found"; exit 1; fi
 
+  onboarding-script-tests:
+    name: Developer Onboarding Script Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test onboarding dry run and safeguards
+        shell: pwsh
+        run: ./scripts/test-setup-local.ps1
+
   # ─────────────────────────────────────────────────────────
   #  Backend CI
   # ─────────────────────────────────────────────────────────
