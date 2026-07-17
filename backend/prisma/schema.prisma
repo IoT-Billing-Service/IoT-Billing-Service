@@ -32,6 +32,7 @@ model Account {
   billingRecords  BillingRecord[]
   webhookSecrets  WebhookSecret[]
   billingCycles   BillingCycle[]
+  subscriptions   Subscription[]
 
   @@map("accounts")
 }
@@ -140,4 +141,33 @@ model LedgerSyncState {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("ledger_sync_state")
+}
+
+/// A subscription that may auto-renew before its expiry date.
+/// `lockVersion` is an optimistic-concurrency token matching the billing-cycle
+/// pattern: every renewal write does `WHERE id = ? AND lock_version = ?` and
+/// bumps the version so two racing renewal attempts can't both win (issue #36).
+model Subscription {
+  id            String   @id @default(cuid())
+  accountId     String   @map("account_id")
+  planId        String   @map("plan_id")
+  /// Amount (in stroop-equivalent units) charged per renewal period.
+  amountDue     BigInt   @map("amount_due")
+  /// Duration of one renewal period, in days.
+  periodDays    Int      @default(30) @map("period_days")
+  expiresAt     DateTime @map("expires_at")
+  autoRenew     Boolean  @default(true) @map("auto_renew")
+  /// ACTIVE | PENDING_RENEWAL | RENEWING | RENEWAL_FAILED | CANCELLED | EXPIRED
+  renewalStatus String   @default("ACTIVE") @map("renewal_status")
+  lockVersion   Int      @default(1) @map("lock_version")
+  renewedAt     DateTime? @map("renewed_at")
+  /// Last renewal failure message, if any.
+  lastError     String?  @map("last_error")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@index([renewalStatus, expiresAt])
+  @@map("subscriptions")
 }

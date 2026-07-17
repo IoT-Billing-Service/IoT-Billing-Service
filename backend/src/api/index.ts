@@ -30,6 +30,7 @@ import { registerCircuitHealth } from './health.js';
 import { GcPauseMonitor } from './metrics/gc_monitor.js';
 import { PoolMetricsCollector } from './metrics/pool_metrics_collector.js';
 import { getSseManager } from '../core/ingestion/sse_manager.js';
+import { RenewalCron } from '../billing/renewal_cron.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -118,9 +119,16 @@ async function start(): Promise<void> {
   const poolCollector = new PoolMetricsCollector(poolManager);
   poolCollector.start();
 
+  // Issue #36: start the subscription auto-renewal cron.
+  // The store is wired to Prisma via a thin adapter so we reuse the existing
+  // ORM connection pool and avoid a second database connection.
+  const renewalCron = new RenewalCron(buildPrismaSubscriptionStore(prisma));
+  renewalCron.start();
+
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info(`Received ${signal}, shutting down`);
     synchronizer.stop();
+    renewalCron.stop();
     getSseManager().shutdown();
     gcMonitor.stop();
     poolCollector.stop();
@@ -145,6 +153,7 @@ async function start(): Promise<void> {
   } catch (err) {
     app.log.error(err);
     synchronizer.stop();
+    renewalCron.stop();
     getSseManager().shutdown();
     gcMonitor.stop();
     poolCollector.stop();
@@ -182,6 +191,102 @@ function synchronizerPollToSse(
       timestamp: Date.now(),
     });
   }, pollIntervalMs).unref();
+}
+
+/**
+ * Build a {@link SubscriptionStore} backed by Prisma so the renewal cron can
+ * reuse the existing ORM connection pool without a second database connection.
+ */
+import type { SubscriptionStore, SubscriptionRow } from '../billing/subscription_renewal.js';
+import { SubscriptionRenewalStatus } from '../billing/subscription_renewal.js';
+
+function buildPrismaSubscriptionStore(prisma: PrismaClient): SubscriptionStore {
+  return {
+    async getSubscription(id: string): Promise<SubscriptionRow | null> {
+      const s = await prisma.subscription.findUnique({ where: { id } });
+      if (s === null) return null;
+      return {
+        id: s.id,
+        accountId: s.accountId,
+        planId: s.planId,
+        amountDue: s.amountDue,
+        periodDays: s.periodDays,
+        expiresAt: s.expiresAt,
+        autoRenew: s.autoRenew,
+        renewalStatus: s.renewalStatus as SubscriptionRenewalStatus,
+        lockVersion: s.lockVersion,
+      };
+    },
+
+    async applyStatusTransition(
+      id: string,
+      from: SubscriptionRenewalStatus,
+      to: SubscriptionRenewalStatus,
+      expectedLockVersion: number,
+    ): Promise<boolean> {
+      const result = await prisma.$executeRaw`
+        UPDATE subscriptions
+        SET renewal_status = ${to},
+            lock_version = lock_version + 1,
+            updated_at = now()
+        WHERE id = ${id}
+          AND renewal_status = ${from}
+          AND lock_version = ${expectedLockVersion}
+      `;
+      return result === 1;
+    },
+
+    async recordRenewalSuccess(id: string, newExpiresAt: Date, lockVersion: number): Promise<void> {
+      await prisma.$executeRaw`
+        UPDATE subscriptions
+        SET renewal_status = 'ACTIVE',
+            expires_at = ${newExpiresAt},
+            renewed_at = now(),
+            last_error = NULL,
+            lock_version = lock_version + 1,
+            updated_at = now()
+        WHERE id = ${id}
+          AND lock_version = ${lockVersion}
+      `;
+    },
+
+    async recordRenewalFailure(id: string, error: string, lockVersion: number): Promise<void> {
+      await prisma.$executeRaw`
+        UPDATE subscriptions
+        SET renewal_status = 'RENEWAL_FAILED',
+            last_error = ${error},
+            lock_version = lock_version + 1,
+            updated_at = now()
+        WHERE id = ${id}
+          AND lock_version = ${lockVersion}
+      `;
+    },
+
+    async findDueForRenewal(renewalHorizon: Date): Promise<SubscriptionRow[]> {
+      const rows = await prisma.subscription.findMany({
+        where: {
+          autoRenew: true,
+          renewalStatus: {
+            in: [SubscriptionRenewalStatus.ACTIVE, SubscriptionRenewalStatus.RENEWAL_FAILED],
+          },
+          expiresAt: { lte: renewalHorizon },
+        },
+        take: 50,
+        orderBy: { expiresAt: 'asc' },
+      });
+      return rows.map((s) => ({
+        id: s.id,
+        accountId: s.accountId,
+        planId: s.planId,
+        amountDue: s.amountDue,
+        periodDays: s.periodDays,
+        expiresAt: s.expiresAt,
+        autoRenew: s.autoRenew,
+        renewalStatus: s.renewalStatus as SubscriptionRenewalStatus,
+        lockVersion: s.lockVersion,
+      }));
+    },
+  };
 }
 
 const isDirectEntry =

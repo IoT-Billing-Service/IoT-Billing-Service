@@ -485,6 +485,46 @@ export function setSseQueueDepth(clientId: string, depth: number): void {
   sseQueueDepth.set({ client_id: clientId }, depth);
 }
 
+// --- Subscription auto-renewal metrics (issue #36) ----------------------------
+// Tracks renewal pipeline health: successful/failed renewals and the current
+// number of subscriptions queued for renewal in each cron tick.
+
+export const subscriptionRenewalsSucceeded: promClient.Counter = new promClient.Counter({
+  name: 'subscription_renewals_succeeded_total',
+  help: 'Total subscription auto-renewals that completed successfully',
+});
+
+export const subscriptionRenewalsFailed: promClient.Counter = new promClient.Counter({
+  name: 'subscription_renewals_failed_total',
+  help: 'Total subscription auto-renewal attempts that failed (payment error)',
+});
+
+export const subscriptionRenewalQueueDepth: promClient.Gauge = new promClient.Gauge({
+  name: 'subscription_renewal_queue_depth',
+  help: 'Number of subscriptions queued for renewal in the current cron tick',
+});
+
+export const subscriptionRenewalRunning: promClient.Gauge = new promClient.Gauge({
+  name: 'subscription_renewal_running',
+  help: '1 when the renewal cron tick is actively processing, 0 otherwise',
+});
+
+export function incrementSubscriptionRenewalsSucceeded(): void {
+  subscriptionRenewalsSucceeded.inc();
+}
+
+export function incrementSubscriptionRenewalsFailed(): void {
+  subscriptionRenewalsFailed.inc();
+}
+
+export function setSubscriptionRenewalQueueDepth(depth: number): void {
+  subscriptionRenewalQueueDepth.set(depth);
+}
+
+export function setSubscriptionRenewalRunning(active: boolean): void {
+  subscriptionRenewalRunning.set(active ? 1 : 0);
+}
+
 // Metrics endpoint -------------------------------------------------------------
 
 export function getMetricsRegistry(): promClient.Registry {
