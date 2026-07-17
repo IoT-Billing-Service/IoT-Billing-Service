@@ -485,6 +485,65 @@ export function setSseQueueDepth(clientId: string, depth: number): void {
   sseQueueDepth.set({ client_id: clientId }, depth);
 }
 
+// --- Refund processing metrics -------------------------------------------------
+// Tracks the full refund lifecycle: requests, submissions, verifications,
+// completions, failures, and retries.
+
+export const refundRequestsTotal: promClient.Counter = new promClient.Counter({
+  name: 'refund_requests_total',
+  help: 'Total refund requests received',
+  labelNames: ['status'],
+});
+
+export const refundProcessingDuration: promClient.Histogram = new promClient.Histogram({
+  name: 'refund_processing_duration_ms',
+  help: 'Duration of refund processing operations in ms',
+  labelNames: ['outcome'],
+  buckets: [10, 25, 50, 100, 200, 500, 1000, 2000, 5000],
+});
+
+export const refundOnChainSubmissions: promClient.Counter = new promClient.Counter({
+  name: 'refund_on_chain_submissions_total',
+  help: 'Total on-chain refund transaction submissions',
+  labelNames: ['status'],
+});
+
+export const refundOnChainVerifications: promClient.Counter = new promClient.Counter({
+  name: 'refund_on_chain_verifications_total',
+  help: 'Total on-chain refund transaction verifications',
+  labelNames: ['outcome'],
+});
+
+export const refundRetries: promClient.Counter = new promClient.Counter({
+  name: 'refund_retries_total',
+  help: 'Total refund retry attempts',
+});
+
+export const refundActiveCount: promClient.Gauge = new promClient.Gauge({
+  name: 'refund_active_count',
+  help: 'Number of refunds currently in non-terminal state',
+});
+
+export function recordRefundRequest(success: boolean): void {
+  refundRequestsTotal.inc({ status: success ? 'success' : 'failure' });
+}
+
+export function recordRefundProcessing(outcome: string, durationMs: number): void {
+  refundProcessingDuration.observe({ outcome }, durationMs);
+}
+
+export function recordRefundOnChainSubmission(status: 'submitted' | 'failed'): void {
+  refundOnChainSubmissions.inc({ status });
+}
+
+export function recordRefundOnChainVerification(outcome: string): void {
+  refundOnChainVerifications.inc({ outcome });
+}
+
+export function incrementRefundRetries(): void {
+  refundRetries.inc();
+}
+
 // Metrics endpoint -------------------------------------------------------------
 
 export function getMetricsRegistry(): promClient.Registry {

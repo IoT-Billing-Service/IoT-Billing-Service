@@ -32,6 +32,7 @@ model Account {
   billingRecords  BillingRecord[]
   webhookSecrets  WebhookSecret[]
   billingCycles   BillingCycle[]
+  refunds         RefundRecord[]
 
   @@map("accounts")
 }
@@ -49,6 +50,7 @@ model BillingRecord {
   device Device @relation(fields: [deviceId], references: [id])
   account Account @relation(fields: [accountId], references: [id])
   cycle   BillingCycle? @relation(fields: [cycleId], references: [id])
+  refunds RefundRecord[]
 
   @@map("billing_records")
 }
@@ -140,4 +142,31 @@ model LedgerSyncState {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("ledger_sync_state")
+}
+
+/// Tracks automated refund requests with on-chain verification.
+/// Transitions: REQUESTED -> ON_CHAIN_SUBMITTED -> ON_CHAIN_CONFIRMED -> COMPLETED
+///              (with ON_CHAIN_FAILED -> RETRYING retry loop, and FAILED terminal).
+/// `lockVersion` is an optimistic-concurrency token (same pattern as BillingCycle).
+model RefundRecord {
+  id              String   @id @default(cuid())
+  billingRecordId String   @map("billing_record_id")
+  accountId       String   @map("account_id")
+  amount          BigInt
+  state           String   @default("REQUESTED")
+  lockVersion     Int      @default(1) @map("lock_version")
+  txHash          String?  @map("tx_hash")
+  retryCount      Int      @default(0) @map("retry_count")
+  reason          String?
+  idempotencyKey  String   @unique @map("idempotency_key")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  billingRecord BillingRecord @relation(fields: [billingRecordId], references: [id])
+  account       Account       @relation(fields: [accountId], references: [id])
+
+  @@index([state])
+  @@index([accountId])
+  @@index([billingRecordId])
+  @@map("refund_records")
 }
