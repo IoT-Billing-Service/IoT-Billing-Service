@@ -182,6 +182,13 @@ export const blockchainTxCounter: promClient.Counter = new promClient.Counter({
   labelNames: ['status'],
 });
 
+export const billingOperationDuration: promClient.Histogram = new promClient.Histogram({
+  name: 'billing_operation_duration_ms',
+  help: 'Duration of billing operations in ms',
+  labelNames: ['outcome'],
+  buckets: [10, 50, 100, 150, 200, 250, 500, 1000],
+});
+
 // Billing-tier config hot-reload observability (issue #63). Incremented when a
 // batch observes the active config version change mid-processing, so the batch
 // is re-processed under the new version. Labelled by the start/end version so
@@ -389,6 +396,12 @@ export function recordRateLimiterRedisHit(decision: 'allowed' | 'denied'): void 
 export function recordGcPause(durationMs: number): void {
   if (Number.isFinite(durationMs) && durationMs > 0) {
     gcPauseDuration.observe(durationMs);
+  }
+}
+
+export function recordBillingOperationDuration(outcome: string, durationMs: number): void {
+  if (Number.isFinite(durationMs) && durationMs > 0) {
+    billingOperationDuration.observe({ outcome }, durationMs);
   }
 }
 
