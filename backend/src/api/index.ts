@@ -31,6 +31,7 @@ import { registerCircuitHealth } from './health.js';
 import { GcPauseMonitor } from './metrics/gc_monitor.js';
 import { PoolMetricsCollector } from './metrics/pool_metrics_collector.js';
 import { getSseManager } from '../core/ingestion/sse_manager.js';
+import { getReplicationMonitor } from '../replication/replication_monitor.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -120,12 +121,18 @@ async function start(): Promise<void> {
   const poolCollector = new PoolMetricsCollector(poolManager);
   poolCollector.start();
 
+  // Issue #88: start the multi-region replication monitor. Uses the singleton
+  // so the module-level state can be overridden in tests.
+  const replicationMonitor = getReplicationMonitor();
+  replicationMonitor.start();
+
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info(`Received ${signal}, shutting down`);
     synchronizer.stop();
     getSseManager().shutdown();
     gcMonitor.stop();
     poolCollector.stop();
+    replicationMonitor.stop();
     await listener.stop();
     await closeTimescalePool();
     await app.close();
@@ -150,6 +157,7 @@ async function start(): Promise<void> {
     getSseManager().shutdown();
     gcMonitor.stop();
     poolCollector.stop();
+    replicationMonitor.stop();
     await listener.stop();
     await closeTimescalePool();
     await prisma.$disconnect();
