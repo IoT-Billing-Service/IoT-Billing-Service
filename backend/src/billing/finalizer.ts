@@ -5,6 +5,7 @@ import {
 } from './state_machine.js';
 import type { BillingCycleStore } from './billing_cycle_repository.js';
 import { uuidv7 } from './uuidv7.js';
+import { recordBillingOperationDuration } from '../api/metrics/prometheus.js';
 
 /**
  * Concurrency-safe billing-cycle finalization (issue #42).
@@ -62,13 +63,14 @@ export async function finalizeBillingCycle(
   cycleId: string,
   options: FinalizeOptions = {},
 ): Promise<FinalizationResult> {
+  const startTime = performance.now();
   const cycle = await store.getCycle(cycleId);
   if (cycle === null) {
-    return result(cycleId, 'not_found', null, null);
+    return result(cycleId, 'not_found', null, null, startTime);
   }
   if (cycle.state !== BillingCycleState.OPEN) {
     // Already being / been finalized by another path.
-    return result(cycleId, 'not_open', cycle.state, null);
+    return result(cycleId, 'not_open', cycle.state, null, startTime);
   }
 
   // Validate the DAG up front so an illegal target is a programming error, not
@@ -84,14 +86,14 @@ export async function finalizeBillingCycle(
   );
   if (!won) {
     const latest = await store.getCycle(cycleId);
-    return result(cycleId, 'lost_race', latest?.state ?? null, null);
+    return result(cycleId, 'lost_race', latest?.state ?? null, null, startTime);
   }
 
   // Idempotency gate for replays of this same logical attempt.
   const idempotencyKey = options.idempotencyKey ?? uuidv7();
   const fresh = await store.recordFinalization(cycleId, idempotencyKey);
   if (!fresh) {
-    return result(cycleId, 'duplicate_replay', BillingCycleState.FINALIZING, idempotencyKey);
+    return result(cycleId, 'duplicate_replay', BillingCycleState.FINALIZING, idempotencyKey, startTime);
   }
 
   // The single, exactly-once billing computation.
@@ -108,7 +110,7 @@ export async function finalizeBillingCycle(
     cycle.lockVersion + 1,
   );
 
-  return result(cycleId, 'finalized', BillingCycleState.FINALIZED, idempotencyKey);
+  return result(cycleId, 'finalized', BillingCycleState.FINALIZED, idempotencyKey, startTime);
 }
 
 function result(
@@ -116,7 +118,11 @@ function result(
   outcome: FinalizationOutcome,
   state: BillingCycleState | null,
   idempotencyKey: string | null,
+  startTime?: number,
 ): FinalizationResult {
+  if (startTime !== undefined) {
+    recordBillingOperationDuration(outcome, performance.now() - startTime);
+  }
   return { cycleId, outcome, finalized: outcome === 'finalized', state, idempotencyKey };
 }
 
