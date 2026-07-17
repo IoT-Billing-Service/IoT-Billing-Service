@@ -1,0 +1,50 @@
+groups:
+  - name: iot-billing-forecast
+    interval: 30s
+    rules:
+      # Forecast accuracy drift
+      - alert: RevenueForecastAccuracyDrift
+        expr: forecast_mape > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: billing-platform
+          service: iot-billing
+        annotations:
+          summary: "Revenue forecast accuracy has degraded beyond acceptable threshold"
+          description: "MAPE is {{ $value }}% (threshold: 10%). Model may need retraining or investigation into billing anomalies."
+          runbook_url: "https://wiki.internal/iot-billing/forecast-accuracy"
+
+      # Forecast generation latency
+      - alert: ForecastGenerationLatencyHigh
+        expr: forecast_generation_duration_ms > 5000
+        for: 2m
+        labels:
+          severity: warning
+          team: billing-platform
+        annotations:
+          summary: "Forecast generation is taking too long"
+          description: "P99 generation time is {{ $value }}ms. Check DB connection pool and query performance."
+
+      # Revenue data integrity failure
+      - alert: RevenueSignatureVerificationFailure
+        expr: increase(revenue_signature_verify_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+          service: iot-billing
+        annotations:
+          summary: "Revenue data integrity violation detected"
+          description: "A revenue snapshot or forecast failed HMAC verification. Potential tampering or key rotation issue."
+
+      # Cache effectiveness
+      - alert: ForecastCacheHitRatioLow
+        expr: forecast_cache_hit_ratio < 0.5
+        for: 10m
+        labels:
+          severity: info
+          team: billing-platform
+        annotations:
+          summary: "Forecast cache hit ratio is low"
+          description: "Cache hit ratio is {{ $value | humanizePercentage }}. Consider increasing TTL or investigating cache eviction."
