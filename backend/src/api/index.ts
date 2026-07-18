@@ -60,6 +60,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerAuthRoutes(app);
   registerAnalyticsRoutes(app);
+  registerOpsRoutes(app);
   registerCircuitHealth(app);
   registerGeoPricingRoutes(app);
 
