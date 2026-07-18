@@ -62,7 +62,12 @@ export function enterTenantContext(tenantId: string, request?: FastifyRequest): 
 
 // --- Versioned configuration registry, two-phase commit, and Redis watcher ---
 import crypto from 'node:crypto';
+import { z } from 'zod';
 import type { Redis } from 'ioredis';
+import {
+  incrementConfigReloadTotal,
+  incrementConfigValidationFailures,
+} from '../api/metrics/prometheus.js';
 
 let lastTimestamp = 0;
 let sequence = 0;
@@ -98,8 +103,100 @@ export interface MetricRangesConfig {
   tiers: Record<string, BillingTier>;
 }
 
+// ---------------------------------------------------------------------------
+// Schema validation (issue #74)
+// ---------------------------------------------------------------------------
+
+/**
+ * Zod schema for a single billing tier.
+ * - Both bounds must be finite numbers except `max` which may be Infinity.
+ * - `min` must be >= 0 and strictly less than `max`.
+ */
+const billingTierSchema = z.object({
+  min: z.number().nonnegative('Tier min must be >= 0'),
+  max: z
+    .number()
+    .refine((v) => v > 0, { message: 'Tier max must be > 0' })
+    .refine((v) => v !== -Infinity, { message: 'Tier max must not be -Infinity' }),
+});
+
+/**
+ * Zod schema for the full {@link MetricRangesConfig} as stored in Redis.
+ *
+ * Rules:
+ * - `version_id` must be a non-empty string.
+ * - `tiers` must have at least one entry.
+ * - Each tier value must satisfy {@link billingTierSchema}.
+ * - Within each tier `min < max`.
+ */
+export const metricRangesConfigSchema = z
+  .object({
+    version_id: z.string().min(1, 'version_id must not be empty'),
+    tiers: z.record(billingTierSchema).refine((t) => Object.keys(t).length > 0, {
+      message: 'tiers must contain at least one entry',
+    }),
+  })
+  .superRefine((cfg, ctx) => {
+    for (const [name, tier] of Object.entries(cfg.tiers)) {
+      if (tier.min >= tier.max) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['tiers', name],
+          message: `Tier "${name}": min (${String(tier.min)}) must be < max (${String(tier.max)})`,
+        });
+      }
+    }
+  });
+
+/**
+ * Validate a raw {@link MetricRangesConfig}-shaped object.
+ *
+ * Returns `{ success: true, data }` on success or `{ success: false, errors }`
+ * with one human-readable string per failing field on failure.
+ */
+export function validateMetricRangesConfig(
+  raw: unknown,
+): { success: true; data: MetricRangesConfig } | { success: false; errors: string[] } {
+  const result = metricRangesConfigSchema.safeParse(raw);
+  if (!result.success) {
+    const errors = result.error.issues.map(
+      (issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`,
+    );
+    return { success: false, errors };
+  }
+  return { success: true, data: result.data };
+}
+
+// ---------------------------------------------------------------------------
+// Config state
+// ---------------------------------------------------------------------------
+
 const configRegistry = new Map<string, MetricRangesConfig>();
 let currentConfigVersionId = '';
+
+/** Tracks hot-reload observability state (issue #74). */
+interface ConfigStatus {
+  /** Version currently active. */
+  currentVersionId: string;
+  /** ISO timestamp of the last successful reload, or null if never reloaded. */
+  lastReloadAt: string | null;
+  /** Number of successful reloads since startup. */
+  reloadCount: number;
+  /** Validation error messages from the last failed reload attempt, or null. */
+  lastValidationError: string[] | null;
+}
+
+const configStatus: ConfigStatus = {
+  currentVersionId: '',
+  lastReloadAt: null,
+  reloadCount: 0,
+  lastValidationError: null,
+};
+
+/** Return a snapshot of the current config reload/validation status. */
+export function getConfigStatus(): Readonly<ConfigStatus> {
+  return { ...configStatus };
+}
 
 const fallbackVersionId = '00000000-0000-7000-8000-000000000000';
 const fallbackConfig: MetricRangesConfig = {
@@ -112,6 +209,7 @@ const fallbackConfig: MetricRangesConfig = {
 };
 configRegistry.set(fallbackVersionId, fallbackConfig);
 currentConfigVersionId = fallbackVersionId;
+configStatus.currentVersionId = fallbackVersionId;
 
 interface SerializedBillingTier {
   min: number;
@@ -137,6 +235,11 @@ export function getConfig(versionId?: string): MetricRangesConfig {
 export function setConfig(config: MetricRangesConfig): void {
   configRegistry.set(config.version_id, config);
   currentConfigVersionId = config.version_id;
+  configStatus.currentVersionId = config.version_id;
+  configStatus.lastReloadAt = new Date().toISOString();
+  configStatus.reloadCount += 1;
+  configStatus.lastValidationError = null;
+  incrementConfigReloadTotal();
 }
 
 export async function commitConfig(
@@ -161,6 +264,48 @@ export async function commitConfig(
   return version_id;
 }
 
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Deserialise the raw Redis JSON into a {@link MetricRangesConfig}, substituting
+ * `null` for `Infinity` in the serialised form.  Returns `null` if parsing or
+ * schema validation fails — the caller retains the previous config (rollback).
+ */
+function parseAndValidateRedisConfig(raw: string): MetricRangesConfig | null {
+  let parsed: SerializedConfig;
+  try {
+    parsed = JSON.parse(raw) as SerializedConfig;
+  } catch {
+    configStatus.lastValidationError = ['Failed to parse config JSON'];
+    return null;
+  }
+
+  // Re-hydrate Infinity (stored as null in JSON)
+  const hydrated: MetricRangesConfig = {
+    version_id: parsed.version_id,
+    tiers: {},
+  };
+  for (const [key, tier] of Object.entries(parsed.tiers)) {
+    hydrated.tiers[key] = {
+      min: tier.min,
+      max: tier.max ?? Infinity,
+    };
+  }
+
+  const validation = validateMetricRangesConfig(hydrated);
+  if (!validation.success) {
+    configStatus.lastValidationError = validation.errors;
+    incrementConfigValidationFailures();
+    console.error('Config validation failed (retaining previous config):', validation.errors);
+    return null;
+  }
+
+  configStatus.lastValidationError = null;
+  return validation.data;
+}
+
 let activeWatcherInterval: ReturnType<typeof setInterval> | null = null;
 
 export async function initializeConfigWatcher(redis: Redis, intervalMs = 50): Promise<void> {
@@ -180,18 +325,12 @@ export async function initializeConfigWatcher(redis: Redis, intervalMs = 50): Pr
   } else {
     const activeVal = await redis.get('config:active');
     if (activeVal !== null) {
-      const parsed = JSON.parse(activeVal) as SerializedConfig;
-      const config: MetricRangesConfig = {
-        version_id: parsed.version_id,
-        tiers: {},
-      };
-      for (const [key, tier] of Object.entries(parsed.tiers)) {
-        config.tiers[key] = {
-          min: tier.min,
-          max: tier.max ?? Infinity,
-        };
+      const config = parseAndValidateRedisConfig(activeVal);
+      if (config !== null) {
+        setConfig(config);
       }
-      setConfig(config);
+      // If validation fails at startup we keep the in-memory fallback but do
+      // NOT throw — the watcher will retry on the next poll cycle.
     }
   }
 
@@ -206,20 +345,25 @@ export async function initializeConfigWatcher(redis: Redis, intervalMs = 50): Pr
       try {
         const activeVal = await redis.get('config:active');
         if (activeVal !== null) {
-          const parsed = JSON.parse(activeVal) as SerializedConfig;
-          const config: MetricRangesConfig = {
-            version_id: parsed.version_id,
-            tiers: {},
-          };
-          for (const [key, tier] of Object.entries(parsed.tiers)) {
-            config.tiers[key] = {
-              min: tier.min,
-              max: tier.max ?? Infinity,
-            };
+          // Quick version-id check before full parse to avoid redundant work
+          let candidateVersionId: string | undefined;
+          try {
+            const quick = JSON.parse(activeVal) as { version_id?: unknown };
+            candidateVersionId = typeof quick.version_id === 'string' ? quick.version_id : undefined;
+          } catch {
+            // Will be caught by parseAndValidateRedisConfig below
           }
-          if (config.version_id !== currentConfigVersionId) {
+
+          if (candidateVersionId === currentConfigVersionId) {
+            // No change — skip parse and validation
+            return;
+          }
+
+          const config = parseAndValidateRedisConfig(activeVal);
+          if (config !== null && config.version_id !== currentConfigVersionId) {
             setConfig(config);
           }
+          // If config is null, validation failed; previous config retained (rollback).
         }
       } catch (err) {
         console.error('Error polling Redis config:', err);
