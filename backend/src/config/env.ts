@@ -57,26 +57,33 @@ const envSchema = z.object({
   TELEMETRY_TARGET_CHUNK_SIZE_GB: z.coerce.number().min(1).max(10).default(5),
   TELEMETRY_COMPRESSION_DAYS: z.coerce.number().int().positive().default(7),
   TELEMETRY_NUM_PARTITIONS: z.coerce.number().int().positive().default(8),
-
-  // ---------------------------------------------------------------------------
-  // OAuth2 — Issue #57: Third-party billing access
-  // ---------------------------------------------------------------------------
-  // Lifetime of the short-lived authorisation code (seconds). RFC 6749 §4.1.2
-  // recommends ≤ 10 minutes; we default to 5 for tighter security.
-  OAUTH2_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
-  // Lifetime of an issued OAuth2 access token (seconds). Default 15 minutes,
-  // well under the 200ms P99 billing SLA — the token itself never touches the
-  // hot path, only the verification step does.
-  OAUTH2_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
-  // Lifetime of an OAuth2 refresh token (seconds). Default 30 days.
-  OAUTH2_REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(2592000),
-  // Signing secret for OAuth2 access tokens (HMAC-SHA256).  Must be at least
-  // 32 bytes.  Defaults to the platform JWT_SECRET so single-secret deployments
-  // work out of the box; production deployments SHOULD set a separate value.
-  OAUTH2_TOKEN_SECRET: z.string().min(32).optional(),
-  // Maximum number of active OAuth2 tokens per client (guards against runaway
-  // token issuance that could indicate a compromised client_secret).
-  OAUTH2_MAX_TOKENS_PER_CLIENT: z.coerce.number().int().positive().default(100),
+  // --- Proof-of-Work settings --------------------------------------------------
+  // Enable PoW verification for telemetry submissions.  Disable only for
+  // local development / testing where devices cannot perform the computation.
+  POW_ENABLED: z.coerce.boolean().default(true),
+  // Number of leading zero bits required in the PoW hash.  Higher values
+  // exponentially increase the cost of finding a valid nonce.  Range: [1, 24].
+  // Default 4 = ~16 hashes average; 8 = ~256 hashes; 12 = ~4096 hashes.
+  POW_DIFFICULTY: z.coerce.number().int().min(1).max(24).default(4),
+  // --- Multi-region replication and disaster recovery (issue #88) -----------
+  // The region this instance is serving. Used for metrics labelling and
+  // routing decisions. Examples: "us-east-1", "eu-west-1".
+  REGION: z.string().default('us-east-1'),
+  // Comma-separated list of secondary region names. Empty string disables
+  // multi-region mode. Example: "eu-west-1,ap-southeast-1"
+  SECONDARY_REGIONS: z.string().default(''),
+  // Maximum tolerated replication lag before the region is marked degraded.
+  REPLICATION_LAG_WARN_MS: z.coerce.number().int().nonnegative().default(5000),
+  REPLICATION_LAG_CRITICAL_MS: z.coerce.number().int().nonnegative().default(30000),
+  // How frequently (ms) the replication monitor polls replica health.
+  REPLICATION_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(10000),
+  // Whether this instance is currently acting as the primary region.
+  IS_PRIMARY_REGION: z.coerce.boolean().default(true),
+  // Optional connection string for a read-replica / standby database. When
+  // set, the replication monitor probes this endpoint to measure lag.
+  REPLICA_DATABASE_URL: z.string().url().optional(),
+  // Optional secondary Redis URL for cross-region state replication checks.
+  REPLICA_REDIS_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

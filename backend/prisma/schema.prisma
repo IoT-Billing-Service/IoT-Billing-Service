@@ -8,13 +8,18 @@ datasource db {
 }
 
 model Device {
-  id        String   @id @default(cuid())
-  serial    String   @unique
-  publicKey String   @map("public_key")
-  ownerId   String   @map("owner_id")
-  enabled   Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(cuid())
+  serial      String   @unique
+  publicKey   String   @map("public_key")
+  ownerId     String   @map("owner_id")
+  enabled     Boolean  @default(true)
+  /// ISO 3166-1 alpha-2 country code of the node's physical location.
+  /// Used by the geographic pricing engine (issue #54) to select the correct
+  /// billing tier multiplier. NULL devices fall back to the ROW (rest-of-world)
+  /// tier with a 1.0× multiplier.
+  countryCode String?  @map("country_code") @db.Char(2)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   billingRecords BillingRecord[]
   telemetryData  TelemetryData[]
@@ -70,6 +75,7 @@ model BillingCycle {
   account         Account                  @relation(fields: [accountId], references: [id])
   billingRecords  BillingRecord[]
   finalizationLog BillingFinalizationLog[]
+  geoPricingSnapshot GeoPricingSnapshot?
 
   @@index([state])
   @@map("billing_cycles")
@@ -142,99 +148,18 @@ model LedgerSyncState {
   @@map("ledger_sync_state")
 }
 
-// ---------------------------------------------------------------------------
-// OAuth2 — Issue #57: Third-party billing access
-// ---------------------------------------------------------------------------
+/// Audit snapshot of the pricing tier table captured at finalization time
+/// (issue #54). One row per billing cycle; the digest field lets auditors
+/// verify that the rate table was not mutated between charge calculation and
+/// settlement (PCI-DSS / SOC2 requirement).
+model GeoPricingSnapshot {
+  id          String   @id @default(cuid())
+  cycleId     String   @unique @map("cycle_id")
+  tableDigest String   @map("table_digest")
+  tableJson   Json     @map("table_json")
+  createdAt   DateTime @default(now()) @map("created_at")
 
-/// A registered third-party application that may request delegated access to
-/// the billing platform via the OAuth2 Authorization Code + PKCE flow.
-/// `clientSecret` is stored as a bcrypt hash; it is never returned in API
-/// responses after initial registration.
-model OAuth2Client {
-  id                  String   @id @default(cuid())
-  /// Human-readable name shown on the consent screen.
-  name                String
-  /// bcrypt hash of the client secret (for confidential clients).
-  /// NULL for public clients that rely solely on PKCE.
-  clientSecretHash    String?  @map("client_secret_hash")
-  /// Comma-separated list of allowed redirect URIs. All redirect_uri values
-  /// supplied in authorisation requests must exactly match one of these.
-  redirectUris        String   @map("redirect_uris")
-  /// Space-separated list of OAuth2 scopes the client is allowed to request
-  /// (e.g. "billing:read billing:write devices:read").
-  allowedScopes       String   @map("allowed_scopes")
-  /// Whether this client is still accepting new authorisation requests.
-  active              Boolean  @default(true)
-  /// The wallet address of the platform owner who registered this client.
-  ownerWallet         String   @map("owner_wallet")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt     @map("updated_at")
+  cycle BillingCycle @relation(fields: [cycleId], references: [id])
 
-  authCodes  OAuth2AuthCode[]
-  tokens     OAuth2Token[]
-
-  @@map("oauth2_clients")
-}
-
-/// A short-lived authorisation code issued at the end of the redirect step.
-/// Exchanged once for an access + refresh token pair; single-use via the
-/// `used` flag, enforced in the token endpoint with a DB transaction.
-model OAuth2AuthCode {
-  id                  String   @id @default(cuid())
-  clientId            String   @map("client_id")
-  /// The resource owner (Stellar wallet address) who granted consent.
-  walletAddress       String   @map("wallet_address")
-  /// The exact redirect_uri that was presented in the authorisation request.
-  redirectUri         String   @map("redirect_uri")
-  /// Space-separated scopes that were actually granted by the resource owner.
-  grantedScopes       String   @map("granted_scopes")
-  /// SHA-256 of the PKCE code_verifier supplied at the token endpoint.
-  codeChallenge       String   @map("code_challenge")
-  codeChallengeMethod String   @default("S256") @map("code_challenge_method")
-  /// The opaque code value sent to the client (stored as its SHA-256 hash
-  /// so plaintext never persists beyond the redirect response).
-  codeHash            String   @unique @map("code_hash")
-  used                Boolean  @default(false)
-  expiresAt           DateTime @map("expires_at")
-  createdAt           DateTime @default(now()) @map("created_at")
-
-  client OAuth2Client @relation(fields: [clientId], references: [id])
-
-  @@index([clientId])
-  @@index([walletAddress])
-  @@map("oauth2_auth_codes")
-}
-
-/// An issued OAuth2 access or refresh token.  Access tokens are short-lived
-/// (configurable, default 15 min); refresh tokens are longer-lived (default
-/// 30 days).  Revocation sets `revokedAt`; the token introspection endpoint
-/// checks this before returning `active: true`.
-///
-/// `tokenHash` is the SHA-256 of the raw bearer value so the plaintext never
-/// rests in the database — a compromise of the DB does not expose live tokens.
-model OAuth2Token {
-  id            String    @id @default(cuid())
-  clientId      String    @map("client_id")
-  walletAddress String    @map("wallet_address")
-  /// "access" | "refresh"
-  tokenType     String    @map("token_type")
-  /// SHA-256 of the raw bearer string.
-  tokenHash     String    @unique @map("token_hash")
-  /// Space-separated scopes carried by this token.
-  scopes        String
-  expiresAt     DateTime  @map("expires_at")
-  revokedAt     DateTime? @map("revoked_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
-
-  /// For refresh tokens, points to the access token it was issued alongside.
-  parentTokenId String?     @map("parent_token_id")
-  parentToken   OAuth2Token? @relation("TokenFamily", fields: [parentTokenId], references: [id])
-  childTokens   OAuth2Token[] @relation("TokenFamily")
-
-  client OAuth2Client @relation(fields: [clientId], references: [id])
-
-  @@index([clientId])
-  @@index([walletAddress])
-  @@index([tokenType])
-  @@map("oauth2_tokens")
+  @@map("geo_pricing_snapshots")
 }
