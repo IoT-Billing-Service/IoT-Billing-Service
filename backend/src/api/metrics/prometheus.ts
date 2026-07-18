@@ -182,6 +182,13 @@ export const blockchainTxCounter: promClient.Counter = new promClient.Counter({
   labelNames: ['status'],
 });
 
+export const billingOperationDuration: promClient.Histogram = new promClient.Histogram({
+  name: 'billing_operation_duration_ms',
+  help: 'Duration of billing operations in ms',
+  labelNames: ['outcome'],
+  buckets: [10, 50, 100, 150, 200, 250, 500, 1000],
+});
+
 // Billing-tier config hot-reload observability (issue #63). Incremented when a
 // batch observes the active config version change mid-processing, so the batch
 // is re-processed under the new version. Labelled by the start/end version so
@@ -197,6 +204,28 @@ export function incrementConfigTransitionEvents(
   endVersion: string | number,
 ): void {
   configTransitionEvents.inc({ start_version: startVersion, end_version: endVersion });
+}
+
+// Config hot-reload counters (issue #74).
+// configReloadTotal: incremented on every successful hot-reload of MetricRangesConfig.
+// configValidationFailuresTotal: incremented whenever a candidate config is rejected
+// by schema validation; the previous config is retained (rollback).
+export const configReloadTotal: promClient.Counter = new promClient.Counter({
+  name: 'config_reload_total',
+  help: 'Total successful hot-reloads of MetricRangesConfig from Redis',
+});
+
+export const configValidationFailuresTotal: promClient.Counter = new promClient.Counter({
+  name: 'config_validation_failures_total',
+  help: 'Total MetricRangesConfig validation failures (previous config retained on each failure)',
+});
+
+export function incrementConfigReloadTotal(): void {
+  configReloadTotal.inc();
+}
+
+export function incrementConfigValidationFailures(): void {
+  configValidationFailuresTotal.inc();
 }
 
 // Rate-limiter observability (issue #50). Every decision is served from
@@ -392,6 +421,12 @@ export function recordGcPause(durationMs: number): void {
   }
 }
 
+export function recordBillingOperationDuration(outcome: string, durationMs: number): void {
+  if (Number.isFinite(durationMs) && durationMs > 0) {
+    billingOperationDuration.observe({ outcome }, durationMs);
+  }
+}
+
 export function setConnectionBufferBytes(
   tenantId: string,
   deviceTier: string,
@@ -443,6 +478,37 @@ export function recordRedisPubsubMessagesLost(stream: string, count: number): vo
   }
 }
 
+// --- Geographic Pricing Tier metrics (issue #54) ---------------------------------
+// Tracks billing charge adjustments applied per geographic region so operators
+// can verify correct multiplier application and detect anomalies.
+
+export const geoPricingChargesTotal: promClient.Counter = new promClient.Counter({
+  name: 'geo_pricing_charges_total',
+  help: 'Total billing charges adjusted by the geographic pricing engine, by region',
+  labelNames: ['region'],
+});
+
+export const geoPricingMultiplierApplied: promClient.Histogram = new promClient.Histogram({
+  name: 'geo_pricing_multiplier_applied',
+  help: 'Distribution of geographic pricing multipliers applied to billing charges',
+  labelNames: ['region'],
+  buckets: [0.5, 0.75, 0.8, 0.9, 1.0, 1.1, 1.15, 1.2, 1.5],
+});
+
+export const geoPricingUnknownCountryCodes: promClient.Counter = new promClient.Counter({
+  name: 'geo_pricing_unknown_country_codes_total',
+  help: 'Billing charges where the device country code was unknown or missing (fell back to ROW tier)',
+});
+
+/** Record a geo pricing multiplier application. */
+export function recordGeoPricingCharge(region: string, multiplier: number, unknown: boolean): void {
+  geoPricingChargesTotal.inc({ region });
+  geoPricingMultiplierApplied.observe({ region }, multiplier);
+  if (unknown) {
+    geoPricingUnknownCountryCodes.inc();
+  }
+}
+
 // --- SSE (Server-Sent Events) connection metrics (issue #68) ---------------------
 // Tracks backpressure behaviour on the admin SSE stream: active connections,
 // dropped events when per-client queues are full, and successfully delivered events.
@@ -485,71 +551,125 @@ export function setSseQueueDepth(clientId: string, depth: number): void {
   sseQueueDepth.set({ client_id: clientId }, depth);
 }
 
-// --- Backup verification metrics (issue #67) ----------------------------------
-// Tracks scheduled backup verification and restore-test outcomes so on-call
-// teams are alerted before an unrecoverable backup situation arises.
+// --- Multi-region replication metrics (issue #88) ----------------------------
+// Tracks replication lag, region availability, failover state, and recovery
+// success so existing Prometheus/Grafana dashboards can observe DR activity.
 
-/** Unix timestamp (seconds) of the last known backup file. 0 = unknown. */
-export const backupLastBackupTimestamp: promClient.Gauge = new promClient.Gauge({
-  name: 'backup_last_backup_timestamp_seconds',
-  help: 'Unix timestamp of the most recently detected backup file',
+/**
+ * Current replication lag in milliseconds between primary and each replica.
+ * Label `source_region` is the primary; `target_region` is the replica.
+ * A value of -1 indicates the replica is unreachable.
+ */
+export const replicationLagMs: promClient.Gauge = new promClient.Gauge({
+  name: 'replication_lag_ms',
+  help: 'Replication lag in ms between primary and replica region (-1 = unreachable)',
+  labelNames: ['source_region', 'target_region'],
 });
 
-/** Unix timestamp (seconds) of the last successful verification run. 0 = never. */
-export const backupLastVerificationTimestamp: promClient.Gauge = new promClient.Gauge({
-  name: 'backup_last_verification_timestamp_seconds',
-  help: 'Unix timestamp of the last successful backup verification',
+/**
+ * Region availability (1 = healthy, 0 = degraded, -1 = unavailable).
+ */
+export const regionAvailability: promClient.Gauge = new promClient.Gauge({
+  name: 'region_availability',
+  help: 'Region availability: 1=healthy, 0=degraded, -1=unavailable',
+  labelNames: ['region'],
 });
 
-/** 1 = last verification passed, 0 = failed or never run. */
-export const backupVerificationStatus: promClient.Gauge = new promClient.Gauge({
-  name: 'backup_verification_status',
-  help: 'Last backup verification result: 1=ok, 0=failed',
+/**
+ * Failover state: 1 if this instance is currently acting as primary, 0 if secondary.
+ * Transitions increment `replication_failover_events_total`.
+ */
+export const replicationIsPrimary: promClient.Gauge = new promClient.Gauge({
+  name: 'replication_is_primary',
+  help: '1 if this instance is currently the primary region, 0 if secondary/standby',
+  labelNames: ['region'],
 });
 
-/** Cumulative count of backup verification failures. */
-export const backupVerificationFailuresTotal: promClient.Counter = new promClient.Counter({
-  name: 'backup_verification_failures_total',
-  help: 'Total number of backup verification failures since process start',
+/**
+ * Total number of failover events (planned or emergency) triggered.
+ */
+export const replicationFailoverEventsTotal: promClient.Counter = new promClient.Counter({
+  name: 'replication_failover_events_total',
+  help: 'Total failover events triggered, by type (planned | emergency) and direction',
+  labelNames: ['type', 'from_region', 'to_region'],
 });
 
-/** Unix timestamp (seconds) of the last restore test. 0 = never run. */
-export const backupLastRestoreTestTimestamp: promClient.Gauge = new promClient.Gauge({
-  name: 'backup_last_restore_test_timestamp_seconds',
-  help: 'Unix timestamp of the last backup restore test',
+/**
+ * Total number of successful recovery verifications after failover.
+ */
+export const replicationRecoverySuccessTotal: promClient.Counter = new promClient.Counter({
+  name: 'replication_recovery_success_total',
+  help: 'Successful DR recovery verifications after a failover event',
+  labelNames: ['region'],
 });
 
-/** 1 = last restore test passed, 0 = failed or never run. */
-export const backupRestoreTestStatus: promClient.Gauge = new promClient.Gauge({
-  name: 'backup_restore_test_status',
-  help: 'Last restore test result: 1=ok, 0=failed',
+/**
+ * Total number of failed recovery verifications after failover.
+ */
+export const replicationRecoveryFailureTotal: promClient.Counter = new promClient.Counter({
+  name: 'replication_recovery_failure_total',
+  help: 'Failed DR recovery verifications after a failover event',
+  labelNames: ['region', 'reason'],
 });
 
-/** Cumulative count of restore test failures. */
-export const backupRestoreFailuresTotal: promClient.Counter = new promClient.Counter({
-  name: 'backup_restore_failures_total',
-  help: 'Total number of restore test failures since process start',
+/**
+ * Total number of billing transactions replicated to secondary regions.
+ * Used to verify no data loss after failover.
+ */
+export const replicatedBillingTransactionsTotal: promClient.Counter = new promClient.Counter({
+  name: 'replicated_billing_transactions_total',
+  help: 'Billing transactions replicated to secondary regions',
+  labelNames: ['source_region', 'target_region', 'status'],
 });
 
-export function recordBackupVerificationSuccess(nowSecs: number, backupTimeSecs: number): void {
-  backupLastBackupTimestamp.set(backupTimeSecs);
-  backupLastVerificationTimestamp.set(nowSecs);
-  backupVerificationStatus.set(1);
+// Setters --------------------------------------------------------------------
+
+export function setReplicationLagMs(
+  sourceRegion: string,
+  targetRegion: string,
+  lagMs: number,
+): void {
+  replicationLagMs.set({ source_region: sourceRegion, target_region: targetRegion }, lagMs);
 }
 
-export function recordBackupVerificationFailure(): void {
-  backupVerificationStatus.set(0);
-  backupVerificationFailuresTotal.inc();
+export function setRegionAvailability(
+  region: string,
+  status: 'healthy' | 'degraded' | 'unavailable',
+): void {
+  const val = status === 'healthy' ? 1 : status === 'degraded' ? 0 : -1;
+  regionAvailability.set({ region }, val);
 }
 
-export function recordRestoreTestSuccess(nowSecs: number): void {
-  backupLastRestoreTestTimestamp.set(nowSecs);
-  backupRestoreTestStatus.set(1);
+export function setReplicationIsPrimary(region: string, isPrimary: boolean): void {
+  replicationIsPrimary.set({ region }, isPrimary ? 1 : 0);
 }
 
-export function recordRestoreTestFailure(): void {
-  backupRestoreTestStatus.set(0);
-  backupRestoreFailuresTotal.inc();
+export function recordFailoverEvent(
+  type: 'planned' | 'emergency',
+  fromRegion: string,
+  toRegion: string,
+): void {
+  replicationFailoverEventsTotal.inc({ type, from_region: fromRegion, to_region: toRegion });
+}
+
+export function recordRecoverySuccess(region: string): void {
+  replicationRecoverySuccessTotal.inc({ region });
+}
+
+export function recordRecoveryFailure(region: string, reason: string): void {
+  replicationRecoveryFailureTotal.inc({ region, reason });
+}
+
+export function recordReplicatedTransaction(
+  sourceRegion: string,
+  targetRegion: string,
+  status: 'ok' | 'failed',
+): void {
+  replicatedBillingTransactionsTotal.inc({
+    source_region: sourceRegion,
+    target_region: targetRegion,
+    status,
+  });
 }
 
 // Metrics endpoint -------------------------------------------------------------

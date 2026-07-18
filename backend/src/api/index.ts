@@ -8,6 +8,7 @@ import { initTelemetry, shutdownTelemetry } from '../core/diagnostics/otel.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerAdminRoutes } from './routes/admin.js';
+import { registerGeoPricingRoutes } from './routes/geo_pricing.js';
 import { registerTracingHooks } from './middleware/tracing.js';
 import {
   TelemetryNotificationListener,
@@ -34,7 +35,7 @@ import { registerCircuitHealth, registerBackupHealth } from './health.js';
 import { GcPauseMonitor } from './metrics/gc_monitor.js';
 import { PoolMetricsCollector } from './metrics/pool_metrics_collector.js';
 import { getSseManager } from '../core/ingestion/sse_manager.js';
-import { BackupVerificationService } from '../database/backup_verification.js';
+import { getReplicationMonitor } from '../replication/replication_monitor.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -63,7 +64,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerAuthRoutes(app);
   registerAnalyticsRoutes(app);
+  registerOpsRoutes(app);
   registerCircuitHealth(app);
+  registerGeoPricingRoutes(app);
 
   // Initialise the SSE manager singleton early so the admin event-stream
   // endpoint can register clients immediately on first request.
@@ -123,24 +126,10 @@ async function start(): Promise<void> {
   const poolCollector = new PoolMetricsCollector(poolManager);
   poolCollector.start();
 
-  // Issue #67: scheduled backup verification and restore testing.
-  // BACKUP_DIR defaults to /var/backups/postgres; override with the env var.
-  const backupDir = process.env['BACKUP_DIR'] ?? '/var/backups/postgres';
-  const backupVerifier = new BackupVerificationService({
-    backupDir,
-    adminDatabaseUrl: env.DATABASE_URL,
-    metrics: {
-      onVerificationSuccess: recordBackupVerificationSuccess,
-      onVerificationFailure: recordBackupVerificationFailure,
-      onRestoreTestSuccess: recordRestoreTestSuccess,
-      onRestoreTestFailure: recordRestoreTestFailure,
-    },
-    onError: (err): void => {
-      app.log.error({ err }, '[backup-verification] tick failed');
-    },
-  });
-  registerBackupHealth(app, () => backupVerifier.status);
-  backupVerifier.start();
+  // Issue #88: start the multi-region replication monitor. Uses the singleton
+  // so the module-level state can be overridden in tests.
+  const replicationMonitor = getReplicationMonitor();
+  replicationMonitor.start();
 
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info(`Received ${signal}, shutting down`);
@@ -148,7 +137,7 @@ async function start(): Promise<void> {
     getSseManager().shutdown();
     gcMonitor.stop();
     poolCollector.stop();
-    backupVerifier.stop();
+    replicationMonitor.stop();
     await listener.stop();
     await closeTimescalePool();
     await app.close();
@@ -173,7 +162,7 @@ async function start(): Promise<void> {
     getSseManager().shutdown();
     gcMonitor.stop();
     poolCollector.stop();
-    backupVerifier.stop();
+    replicationMonitor.stop();
     await listener.stop();
     await closeTimescalePool();
     await prisma.$disconnect();

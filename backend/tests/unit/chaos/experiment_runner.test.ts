@@ -84,18 +84,16 @@ function makeSlowDriver(normalMs: number, slowMs: number): WorkloadDriver {
 
 /** A driver that reports double-finalization (simulates the pre-fix bug). */
 function makeDoubleFinalizeDriver(): WorkloadDriver {
-  return (_durationMs: number): Promise<WorkloadSample[]> =>
-    Promise.resolve([
-      { latencyMs: 5, completed: true, spuriousComputation: false, doubleFinalization: true },
-    ]);
+  return (_durationMs: number): Promise<WorkloadSample[]> => Promise.resolve([
+    { latencyMs: 5, completed: true, spuriousComputation: false, doubleFinalization: true },
+  ]);
 }
 
 /** A driver that reports spurious computations (simulates lost CAS race bug). */
 function makeSpuriousComputeDriver(): WorkloadDriver {
-  return (_durationMs: number): Promise<WorkloadSample[]> =>
-    Promise.resolve([
-      { latencyMs: 5, completed: true, spuriousComputation: true, doubleFinalization: false },
-    ]);
+  return (_durationMs: number): Promise<WorkloadSample[]> => Promise.resolve([
+    { latencyMs: 5, completed: true, spuriousComputation: true, doubleFinalization: false },
+  ]);
 }
 
 // ---------------------------------------------------------------------------
