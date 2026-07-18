@@ -1,0 +1,69 @@
+groups:
+  - name: billing_slo_alerts
+    rules:
+      # Metric: billing_operation_duration_ms
+      # SLO: 99% of billing operations should complete in < 200ms
+      # Error Budget: 1%
+
+      # --- 1. Burn Rate Calculation ---
+      # We calculate the error rate as the ratio of operations taking >= 200ms to the total operations.
+      # To do this, we measure (Total - operations <= 200ms) / Total
+
+      - record: job:billing_operation_duration_ms:error_rate1h
+        expr: |
+          1 - (
+            sum by (job) (rate(billing_operation_duration_ms_bucket{le="200"}[1h]))
+            /
+            sum by (job) (rate(billing_operation_duration_ms_count[1h]))
+          )
+
+      - record: job:billing_operation_duration_ms:error_rate6h
+        expr: |
+          1 - (
+            sum by (job) (rate(billing_operation_duration_ms_bucket{le="200"}[6h]))
+            /
+            sum by (job) (rate(billing_operation_duration_ms_count[6h]))
+          )
+
+      - record: job:billing_operation_duration_ms:error_rate3d
+        expr: |
+          1 - (
+            sum by (job) (rate(billing_operation_duration_ms_bucket{le="200"}[3d]))
+            /
+            sum by (job) (rate(billing_operation_duration_ms_count[3d]))
+          )
+
+      # --- 2. Alerting Rules ---
+
+      # Critical: 14.4x burn rate over 1h. Indicates 2% of error budget burned in 1 hour.
+      - alert: BillingOperationsSLO_CriticalBurnRate
+        expr: |
+          job:billing_operation_duration_ms:error_rate1h > (14.4 * 0.01)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical burn rate for Billing Operations SLO"
+          description: "The 1h burn rate for the Billing operations P99 < 200ms SLO is over 14.4x. Immediate action required."
+
+      # Warning: 6x burn rate over 6h. Indicates 5% of error budget burned in 6 hours.
+      - alert: BillingOperationsSLO_HighBurnRate
+        expr: |
+          job:billing_operation_duration_ms:error_rate6h > (6 * 0.01)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High burn rate for Billing Operations SLO"
+          description: "The 6h burn rate for the Billing operations P99 < 200ms SLO is over 6x. Needs attention."
+
+      # Info: 1x burn rate over 3d. Indicates slow burn of error budget.
+      - alert: BillingOperationsSLO_ElevatedBurnRate
+        expr: |
+          job:billing_operation_duration_ms:error_rate3d > (1 * 0.01)
+        for: 2h
+        labels:
+          severity: info
+        annotations:
+          summary: "Elevated burn rate for Billing Operations SLO"
+          description: "The 3d burn rate for the Billing operations P99 < 200ms SLO is > 1x. Investigate long-term trends."

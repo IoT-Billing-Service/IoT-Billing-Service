@@ -1,0 +1,47 @@
+groups:
+  - name: iot_billing_alerts
+    rules:
+      - alert: HighBillingLatency
+        expr: billing_operation_duration_seconds{quantile="0.99"} > 0.2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Billing P99 latency exceeds 200ms"
+          description: "P99 billing latency is {{ $value }}s, exceeding 200ms target"
+
+      - alert: FailedSignatureVerification
+        expr: rate(billing_signature_failures_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of signature verification failures"
+          description: "Signature failure rate is {{ $value }} per second"
+
+      - alert: TimelockOperationPending
+        expr: timelock_pending_operations > 0
+        for: 1h
+        labels:
+          severity: info
+        annotations:
+          summary: "Pending timelock operation detected"
+          description: "{{ $value }} operation(s) pending execution"
+
+      - alert: ContractPaused
+        expr: billing_contract_paused == 1
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Billing contract is paused"
+          description: "Contract has been emergency paused - investigate immediately"
+
+      - alert: UnexpectedUpgrade
+        expr: billing_implementation_version != expected_version
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Unexpected contract upgrade detected"
+          description: "Contract upgraded to unexpected version {{ $value }}"

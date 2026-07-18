@@ -1,52 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Server, Api } from '@stellar/stellar-sdk/rpc';
+import { Server } from '@stellar/stellar-sdk/rpc';
+import { SOROBAN_RPC_URL } from '@/utils/sorobanConfig';
 
-const SOROBAN_RPC_URL =
-  process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? 'https://soroban-testnet.stellar.org';
+type TransactionStatus = 'pending' | 'confirmed' | 'failed';
 
-/** Stellar transaction hash is a 64-character lowercase hex string. */
-const TX_HASH_RE = /^[0-9a-f]{64}$/i;
+interface TransactionStatusPayload {
+  status: TransactionStatus;
+  ledger?: number;
+  hash: string;
+}
+
+function normalizeTransactionStatus(rawStatus?: string): TransactionStatus {
+  switch ((rawStatus ?? '').toUpperCase()) {
+    case 'SUCCESS':
+    case 'CONFIRMED':
+      return 'confirmed';
+    case 'FAILED':
+    case 'ERROR':
+      return 'failed';
+    default:
+      return 'pending';
+  }
+}
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const hash = searchParams.get('hash');
+  const hash = request.nextUrl.searchParams.get('hash');
 
   if (!hash) {
     return NextResponse.json({ error: 'Transaction hash is required' }, { status: 400 });
   }
 
-  if (!TX_HASH_RE.test(hash)) {
-    return NextResponse.json({ error: 'Invalid transaction hash format' }, { status: 400 });
-  }
-
   try {
-    const server = new Server(SOROBAN_RPC_URL);
-    const txResponse = await server.getTransaction(hash);
+    const rpcUrl =
+      process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? process.env.SOROBAN_RPC_URL ?? SOROBAN_RPC_URL;
+    const server = new Server(rpcUrl);
+    const tx = await server.getTransaction(hash);
 
-    switch (txResponse.status) {
-      case Api.GetTransactionStatus.SUCCESS:
-        return NextResponse.json({
-          status: 'confirmed' as const,
-          ledger: txResponse.ledger,
-          hash,
-        });
+    const status = normalizeTransactionStatus((tx as { status?: string } | undefined)?.status);
+    const ledger = (tx as { ledger?: unknown } | undefined)?.ledger;
 
-      case Api.GetTransactionStatus.FAILED:
-        return NextResponse.json({
-          status: 'failed' as const,
-          ledger: txResponse.ledger,
-          hash,
-        });
+    const payload: TransactionStatusPayload = {
+      status,
+      hash,
+      ...(typeof ledger === 'number' ? { ledger } : {}),
+    };
 
-      case Api.GetTransactionStatus.NOT_FOUND:
-      default:
-        // Transaction not yet included in a ledger — still pending.
-        return NextResponse.json({
-          status: 'pending' as const,
-          hash,
-        });
-    }
+    return NextResponse.json(payload);
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (message.toLowerCase().includes('not found') || message.toLowerCase().includes('404')) {
+      return NextResponse.json({ status: 'pending', hash } satisfies TransactionStatusPayload);
+    }
+
     console.error('Error checking transaction status:', error);
     return NextResponse.json({ error: 'Failed to check transaction status' }, { status: 500 });
   }
