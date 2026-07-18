@@ -189,6 +189,21 @@ export const billingOperationDuration: promClient.Histogram = new promClient.His
   buckets: [10, 50, 100, 150, 200, 250, 500, 1000],
 });
 
+// --- End-to-End Encryption (issue #89) ------------------------------------------
+
+export const e2eEncryptionOperations: promClient.Counter = new promClient.Counter({
+  name: 'e2e_encryption_operations_total',
+  help: 'Total number of E2E encryption operations',
+  labelNames: ['operation', 'result'],
+});
+
+export const e2eEncryptionDuration: promClient.Histogram = new promClient.Histogram({
+  name: 'e2e_encryption_duration_us',
+  help: 'Duration of E2E encryption operations in microseconds',
+  labelNames: ['operation'],
+  buckets: [1, 5, 10, 25, 50, 100, 250, 500, 1000],
+});
+
 // Billing-tier config hot-reload observability (issue #63). Incremented when a
 // batch observes the active config version change mid-processing, so the batch
 // is re-processed under the new version. Labelled by the start/end version so
@@ -476,6 +491,15 @@ export function recordRedisPubsubMessagesLost(stream: string, count: number): vo
   if (Number.isFinite(count) && count > 0) {
     redisPubsubMessagesLost.inc({ stream }, count);
   }
+}
+
+export function recordE2eEncryptionOperation(
+  operation: 'encrypt' | 'decrypt' | 'batch_encrypt' | 'batch_decrypt',
+  result: 'success' | 'failure',
+  durationUs: number,
+): void {
+  e2eEncryptionOperations.inc({ operation, result });
+  e2eEncryptionDuration.observe({ operation }, durationUs);
 }
 
 // --- Geographic Pricing Tier metrics (issue #54) ---------------------------------
