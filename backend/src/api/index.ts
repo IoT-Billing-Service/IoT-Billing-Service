@@ -8,6 +8,7 @@ import { initTelemetry, shutdownTelemetry } from '../core/diagnostics/otel.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerAdminRoutes } from './routes/admin.js';
+import { registerGeoPricingRoutes } from './routes/geo_pricing.js';
 import { registerTracingHooks } from './middleware/tracing.js';
 import {
   TelemetryNotificationListener,
@@ -25,12 +26,16 @@ import {
   recordLedgerSyncPollError,
   registerMetricsRoute,
   setLedgerSyncMetrics,
+  recordBackupVerificationSuccess,
+  recordBackupVerificationFailure,
+  recordRestoreTestSuccess,
+  recordRestoreTestFailure,
 } from './metrics/prometheus.js';
-import { registerCircuitHealth } from './health.js';
+import { registerCircuitHealth, registerBackupHealth } from './health.js';
 import { GcPauseMonitor } from './metrics/gc_monitor.js';
 import { PoolMetricsCollector } from './metrics/pool_metrics_collector.js';
 import { getSseManager } from '../core/ingestion/sse_manager.js';
-import { RenewalCron } from '../billing/renewal_cron.js';
+import { getReplicationMonitor } from '../replication/replication_monitor.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -59,7 +64,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   registerAuthRoutes(app);
   registerAnalyticsRoutes(app);
+  registerOpsRoutes(app);
   registerCircuitHealth(app);
+  registerGeoPricingRoutes(app);
 
   // Initialise the SSE manager singleton early so the admin event-stream
   // endpoint can register clients immediately on first request.
@@ -119,11 +126,10 @@ async function start(): Promise<void> {
   const poolCollector = new PoolMetricsCollector(poolManager);
   poolCollector.start();
 
-  // Issue #36: start the subscription auto-renewal cron.
-  // The store is wired to Prisma via a thin adapter so we reuse the existing
-  // ORM connection pool and avoid a second database connection.
-  const renewalCron = new RenewalCron(buildPrismaSubscriptionStore(prisma));
-  renewalCron.start();
+  // Issue #88: start the multi-region replication monitor. Uses the singleton
+  // so the module-level state can be overridden in tests.
+  const replicationMonitor = getReplicationMonitor();
+  replicationMonitor.start();
 
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info(`Received ${signal}, shutting down`);
@@ -132,6 +138,7 @@ async function start(): Promise<void> {
     getSseManager().shutdown();
     gcMonitor.stop();
     poolCollector.stop();
+    replicationMonitor.stop();
     await listener.stop();
     await closeTimescalePool();
     await app.close();
@@ -157,6 +164,7 @@ async function start(): Promise<void> {
     getSseManager().shutdown();
     gcMonitor.stop();
     poolCollector.stop();
+    replicationMonitor.stop();
     await listener.stop();
     await closeTimescalePool();
     await prisma.$disconnect();

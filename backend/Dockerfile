@@ -6,7 +6,6 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++
 
 COPY package*.json ./
-COPY prisma ./prisma/
 
 # Install all dependencies (including devDependencies for TypeScript compilation)
 RUN npm ci

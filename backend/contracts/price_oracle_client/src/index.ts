@@ -1,33 +1,25 @@
 import { Buffer } from "buffer";
-import { Address } from "@stellar/stellar-sdk";
 import {
   AssembledTransaction,
   Client as ContractClient,
   ClientOptions as ContractClientOptions,
   MethodOptions,
-  Result,
   Spec as ContractSpec,
 } from "@stellar/stellar-sdk/contract";
 import type {
   u32,
-  i32,
   u64,
-  i64,
-  u128,
   i128,
-  u256,
-  i256,
-  Option,
-  Timepoint,
-  Duration,
 } from "@stellar/stellar-sdk/contract";
 export * from "@stellar/stellar-sdk";
 export * as contract from "@stellar/stellar-sdk/contract";
 export * as rpc from "@stellar/stellar-sdk/rpc";
 
 if (typeof window !== "undefined") {
-  //@ts-ignore Buffer exists
-  window.Buffer = window.Buffer || Buffer;
+  const win = window as Record<string, unknown>;
+  if (win.Buffer === undefined) {
+    win.Buffer = Buffer;
+  }
 }
 
 
@@ -38,7 +30,7 @@ export const networks = {
   }
 } as const
 
-export type DataKey = {tag: "Price", values: void} | {tag: "Admin", values: void} | {tag: "Updater", values: void};
+export type DataKey = {tag: "Price", values: undefined} | {tag: "Admin", values: undefined} | {tag: "Updater", values: undefined};
 
 
 export interface PriceData {
@@ -54,7 +46,7 @@ export const ContractError = {
   4: {message:"NotInitialized"}
 }
 
-export interface Client {
+export interface ClientMethods {
   /**
    * Construct and simulate a get_admin transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Get admin address
@@ -133,7 +125,7 @@ export interface Client {
   xlm_to_usd_cents: ({xlm_amount}: {xlm_amount: i128}, options?: MethodOptions) => Promise<AssembledTransaction<i128>>
 
 }
-export class Client extends ContractClient {
+export class Client extends ContractClient implements ClientMethods {
   static async deploy<T = Client>(
     /** Options for initializing a Client as well as for calling a method, with extras specific to deploying. */
     options: MethodOptions &

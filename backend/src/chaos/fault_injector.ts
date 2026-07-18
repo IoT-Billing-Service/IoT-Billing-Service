@@ -125,8 +125,8 @@ export function getActiveLatencyMs(
 ): number {
   const fault = _active.get(type);
   if (fault === undefined) return 0;
-  const ms = (fault.config.params as Record<string, unknown>)['addedLatencyMs']
-    ?? (fault.config.params as Record<string, unknown>)['delayMs'];
+  const ms = fault.config.params['addedLatencyMs']
+    ?? fault.config.params['delayMs'];
   return typeof ms === 'number' ? ms : 0;
 }
 
@@ -144,7 +144,7 @@ export function isBlockingFaultActive(
 export function getCorruptionRate(): number {
   const fault = _active.get('payload_corruption');
   if (fault === undefined) return 0;
-  const rate = (fault.config.params as Record<string, unknown>)['corruptionRate'];
+  const rate = fault.config.params['corruptionRate'];
   return typeof rate === 'number' ? Math.min(1, Math.max(0, rate)) : 0;
 }
 
@@ -159,9 +159,8 @@ export function getCorruptionRate(): number {
  */
 export function blockEventLoopFor(durationMs: number): void {
   const deadline = Date.now() + durationMs;
-  // eslint-disable-next-line no-empty
   while (Date.now() < deadline) {
-    // spin
+    // spin — intentional busy-loop
   }
 }
 
