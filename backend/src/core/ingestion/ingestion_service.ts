@@ -6,11 +6,12 @@
  * ```
  * Ingest payload
  *   ├── 1. Quick-reject malformed proof buffers
- *   ├── 2. Verify Ed25519 signature (authenticity)
- *   ├── 3. Verify ZK range proof (privacy)
- *   ├── 4. Enforce metric bounds (privacy violation check)
- *   ├── 5. Write telemetry to DB via Prisma (transactional)
- *   └── 6. Return result
+ *   ├── 2. Verify PoW solution (anti-spam / computational cost)
+ *   ├── 3. Verify Ed25519 signature (authenticity)
+ *   ├── 4. Verify ZK range proof (privacy)
+ *   ├── 5. Enforce metric bounds (privacy violation check)
+ *   ├── 6. Write telemetry to DB via Prisma (transactional)
+ *   └── 7. Return result
  * ```
  *
  * Every step is kept synchronous where possible to stay under the 10ms
@@ -20,6 +21,7 @@
 import { Buffer } from 'node:buffer';
 import type { PrismaClient } from '@prisma/client';
 import { ZkRangeProofVerifier } from '../crypto/zk_verifier.js';
+import { PowVerifier, type PowSolution, DEFAULT_DIFFICULTY } from '../crypto/pow_verifier.js';
 import { MetricBoundsEnforcer, PRIVACY_VIOLATION_ERROR_CODE } from '../../config/metric_ranges.js';
 import { validateSignature, type SignedPayload, type NonceCache } from './validator.js';
 
@@ -39,6 +41,7 @@ export const INGESTION_ERROR_CODES = {
   DEVICE_DISABLED: 'ERR_DEVICE_DISABLED',
   STALE_TIMESTAMP: 'ERR_STALE_TIMESTAMP',
   INVALID_PAYLOAD: 'ERR_INVALID_PAYLOAD',
+  POW_VERIFICATION_FAILED: 'ERR_POW_VERIFICATION_FAILED',
   INTERNAL_ERROR: 'ERR_INTERNAL',
 } as const;
 
@@ -53,6 +56,8 @@ export interface IngestMetricsRequest {
   publicKey: string | Uint8Array;
   /** 64-byte ZK range proof buffer base64-encoded or raw. */
   proof: string | Buffer;
+  /** Proof-of-work solution demonstrating computational work. */
+  powSolution: PowSolution;
 }
 
 export interface TelemetryEntry {
@@ -75,6 +80,10 @@ export interface IngestMetricsResult {
 export interface IngestionServiceOptions {
   /** If true, skip the optional ZK proof verification (not recommended). */
   skipProofVerification?: boolean;
+  /** If true, skip the PoW verification (not recommended for production). */
+  skipPowVerification?: boolean;
+  /** Override the default PoW difficulty level. */
+  powDifficulty?: number;
 }
 
 // ── Service ────────────────────────────────────────────────────────────────────
@@ -88,13 +97,16 @@ export interface IngestionServiceOptions {
  */
 export class IngestionService {
   private readonly verifier = new ZkRangeProofVerifier();
+  private readonly powVerifier: PowVerifier;
   private readonly boundsEnforcer = new MetricBoundsEnforcer();
 
   constructor(
     private readonly prisma: PrismaClient,
     private readonly nonceCache: NonceCache,
     private readonly options: IngestionServiceOptions = {},
-  ) {}
+  ) {
+    this.powVerifier = new PowVerifier(options.powDifficulty ?? DEFAULT_DIFFICULTY);
+  }
 
   /**
    * Ingest a single telemetry payload.
@@ -102,10 +114,11 @@ export class IngestionService {
    * Steps:
    * 1. **Quick-reject** malformed proof buffers (< 1 µs)
    * 2. **Resolve public key** from hex / raw bytes
-   * 3. **Verify Ed25519 signature** (authenticity + nonce replay)
-   * 4. **Verify ZK range proof** — validates value commitment
-   * 5. **Enforce metric bounds** — short-circuit on PRIVACY_VIOLATION
-   * 6. **Persist telemetry** via Prisma transaction
+   * 3. **Verify PoW solution** — validates computational work (anti-spam)
+   * 4. **Verify Ed25519 signature** (authenticity + nonce replay)
+   * 5. **Verify ZK range proof** — validates value commitment
+   * 6. **Enforce metric bounds** — short-circuit on PRIVACY_VIOLATION
+   * 7. **Persist telemetry** via Prisma transaction
    */
   async ingestTelemetry(request: IngestMetricsRequest): Promise<IngestMetricsResult> {
     try {
@@ -141,7 +154,36 @@ export class IngestionService {
         };
       }
 
-      // ── Step 3: Verify Ed25519 signature + nonce replay ────────────────
+      // ── Step 3: Verify PoW solution ───────────────────────────────────────
+      // PoW is checked early to reject spam before performing expensive
+      // cryptographic operations (signature, ZK proof verification).
+      if (this.options.skipPowVerification !== true) {
+        const powResult = this.powVerifier.quickReject(request.powSolution);
+        if (!powResult.valid) {
+          return {
+            success: false,
+            errorCode: INGESTION_ERROR_CODES.POW_VERIFICATION_FAILED,
+            reason: powResult.reason,
+            deviceId: request.payload.deviceId,
+          };
+        }
+
+        const powVerifyResult = this.powVerifier.verify(
+          request.payload.deviceId,
+          request.payload.timestamp,
+          request.powSolution,
+        );
+        if (!powVerifyResult.valid) {
+          return {
+            success: false,
+            errorCode: INGESTION_ERROR_CODES.POW_VERIFICATION_FAILED,
+            reason: powVerifyResult.reason,
+            deviceId: request.payload.deviceId,
+          };
+        }
+      }
+
+      // ── Step 4: Verify Ed25519 signature + nonce replay ────────────────
       const sigResult = validateSignature(publicKeyBytes, request.payload);
       if (!sigResult.valid) {
         const errorCode =
@@ -161,7 +203,7 @@ export class IngestionService {
         };
       }
 
-      // ── Step 4: Verify ZK range proof ───────────────────────────────────
+      // ── Step 5: Verify ZK range proof ───────────────────────────────────
       // We verify against the metric_ranges bounds.  Each metric value in the
       // payload is checked on a per-key basis against the relevant range.
       const metrics = request.payload.metrics as Record<string, number>;
@@ -192,7 +234,7 @@ export class IngestionService {
         }
       }
 
-      // ── Step 5: Enforce metric bounds (privacy violation gate) ──────────
+      // ── Step 6: Enforce metric bounds (privacy violation gate) ──────────
       const boundsResult = this.boundsEnforcer.enforceBatch(metrics);
       if (!boundsResult.allowed) {
         return {
@@ -203,7 +245,7 @@ export class IngestionService {
         };
       }
 
-      // ── Step 6: Persist telemetry via Prisma transaction ────────────────
+      // ── Step 7: Persist telemetry via Prisma transaction ────────────────
       const recordsWritten = await this.persistTelemetry(request.payload.deviceId, metrics);
 
       return {

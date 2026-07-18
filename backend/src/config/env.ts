@@ -57,6 +57,33 @@ const envSchema = z.object({
   TELEMETRY_TARGET_CHUNK_SIZE_GB: z.coerce.number().min(1).max(10).default(5),
   TELEMETRY_COMPRESSION_DAYS: z.coerce.number().int().positive().default(7),
   TELEMETRY_NUM_PARTITIONS: z.coerce.number().int().positive().default(8),
+  // --- Proof-of-Work settings --------------------------------------------------
+  // Enable PoW verification for telemetry submissions.  Disable only for
+  // local development / testing where devices cannot perform the computation.
+  POW_ENABLED: z.coerce.boolean().default(true),
+  // Number of leading zero bits required in the PoW hash.  Higher values
+  // exponentially increase the cost of finding a valid nonce.  Range: [1, 24].
+  // Default 4 = ~16 hashes average; 8 = ~256 hashes; 12 = ~4096 hashes.
+  POW_DIFFICULTY: z.coerce.number().int().min(1).max(24).default(4),
+  // --- Multi-region replication and disaster recovery (issue #88) -----------
+  // The region this instance is serving. Used for metrics labelling and
+  // routing decisions. Examples: "us-east-1", "eu-west-1".
+  REGION: z.string().default('us-east-1'),
+  // Comma-separated list of secondary region names. Empty string disables
+  // multi-region mode. Example: "eu-west-1,ap-southeast-1"
+  SECONDARY_REGIONS: z.string().default(''),
+  // Maximum tolerated replication lag before the region is marked degraded.
+  REPLICATION_LAG_WARN_MS: z.coerce.number().int().nonnegative().default(5000),
+  REPLICATION_LAG_CRITICAL_MS: z.coerce.number().int().nonnegative().default(30000),
+  // How frequently (ms) the replication monitor polls replica health.
+  REPLICATION_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(10000),
+  // Whether this instance is currently acting as the primary region.
+  IS_PRIMARY_REGION: z.coerce.boolean().default(true),
+  // Optional connection string for a read-replica / standby database. When
+  // set, the replication monitor probes this endpoint to measure lag.
+  REPLICA_DATABASE_URL: z.string().url().optional(),
+  // Optional secondary Redis URL for cross-region state replication checks.
+  REPLICA_REDIS_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
