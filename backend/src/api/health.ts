@@ -10,6 +10,7 @@ import { getEnv } from '../config/env.js';
 import { getConfigStatus } from '../config/index.js';
 import { reportHealthCheckCompleted } from './metrics/gc_monitor.js';
 import { isMigrationInProgress, getLastAggregateRefreshTime } from '../database/pool_manager.js';
+import type { BackupStatus } from '../database/backup_verification.js';
 
 interface MetricEntry {
   labels: Partial<Record<string, string | number>>;
@@ -164,5 +165,35 @@ export function registerReadinessHealthCheck(app: FastifyInstance): void {
       healthCache = { status: 'error', timestamp: Date.now() };
       return await reply.status(503).send({ status: 'error' });
     }
+  });
+}
+
+/**
+ * Register `GET /backup-health` (issue #67).
+ *
+ * Returns the current backup-verification status as a JSON payload and
+ * responds 503 when the last verification failed or has never run. The
+ * `getStatus` callback lets callers inject the live {@link BackupStatus}
+ * object from the running {@link BackupVerificationService}.
+ */
+export function registerBackupHealth(
+  app: FastifyInstance,
+  getStatus: () => BackupStatus,
+): void {
+  app.get('/backup-health', async (_request, reply) => {
+    const s = getStatus();
+    const healthy = s.lastVerificationOk && s.lastVerificationTime !== null;
+    if (!healthy) {
+      void reply.status(503);
+    }
+    return {
+      lastBackupTime: s.lastBackupTime,
+      lastVerificationTime: s.lastVerificationTime,
+      lastVerificationOk: s.lastVerificationOk,
+      lastRestoreTestTime: s.lastRestoreTestTime,
+      lastRestoreTestOk: s.lastRestoreTestOk,
+      verificationFailures: s.verificationFailures,
+      restoreFailures: s.restoreFailures,
+    };
   });
 }

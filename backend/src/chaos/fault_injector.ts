@@ -160,7 +160,7 @@ export function getCorruptionRate(): number {
 export function blockEventLoopFor(durationMs: number): void {
   const deadline = Date.now() + durationMs;
   while (Date.now() < deadline) {
-    // spin
+    // spin — intentional busy-loop
   }
 }
 

@@ -26,8 +26,12 @@ import {
   recordLedgerSyncPollError,
   registerMetricsRoute,
   setLedgerSyncMetrics,
+  recordBackupVerificationSuccess,
+  recordBackupVerificationFailure,
+  recordRestoreTestSuccess,
+  recordRestoreTestFailure,
 } from './metrics/prometheus.js';
-import { registerCircuitHealth } from './health.js';
+import { registerCircuitHealth, registerBackupHealth } from './health.js';
 import { GcPauseMonitor } from './metrics/gc_monitor.js';
 import { PoolMetricsCollector } from './metrics/pool_metrics_collector.js';
 import { getSseManager } from '../core/ingestion/sse_manager.js';
