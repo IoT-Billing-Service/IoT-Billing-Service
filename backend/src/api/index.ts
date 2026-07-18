@@ -36,6 +36,8 @@ import { GcPauseMonitor } from './metrics/gc_monitor.js';
 import { PoolMetricsCollector } from './metrics/pool_metrics_collector.js';
 import { getSseManager } from '../core/ingestion/sse_manager.js';
 import { getReplicationMonitor } from '../replication/replication_monitor.js';
+import { createIncidentResponseModule } from '../incident_response/index.js';
+import { registerIncidentResponseRoutes } from '../incident_response/routes.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -131,6 +133,23 @@ async function start(): Promise<void> {
   const replicationMonitor = getReplicationMonitor();
   replicationMonitor.start();
 
+  // Issue #85: Incident Response Runbook Automation with PagerDuty Integration.
+  // Initialise the module and register admin API routes.
+  const incidentResponseConfig = {
+    pagerDuty: {
+      routingKey: process.env['PAGERDUTY_ROUTING_KEY'] ?? '',
+      apiBaseUrl: process.env['PAGERDUTY_API_BASE_URL'],
+    },
+    detectionIntervalMs: Number(process.env['INCIDENT_DETECTION_INTERVAL_MS']) || 30_000,
+    maxConcurrentExecutions: Number(process.env['INCIDENT_MAX_CONCURRENT_EXECUTIONS']) || 10,
+    autoResolveEnabled: true,
+    autoResolveGracePeriodMs: 60_000,
+  };
+
+  const incidentResponse = createIncidentResponseModule(incidentResponseConfig);
+  registerIncidentResponseRoutes(app, incidentResponse.engine, incidentResponse.detector);
+  incidentResponse.start();
+
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info(`Received ${signal}, shutting down`);
     synchronizer.stop();
@@ -139,6 +158,7 @@ async function start(): Promise<void> {
     gcMonitor.stop();
     poolCollector.stop();
     replicationMonitor.stop();
+    incidentResponse.stop();
     await listener.stop();
     await closeTimescalePool();
     await app.close();
@@ -165,6 +185,7 @@ async function start(): Promise<void> {
     gcMonitor.stop();
     poolCollector.stop();
     replicationMonitor.stop();
+    incidentResponse.stop();
     await listener.stop();
     await closeTimescalePool();
     await prisma.$disconnect();
