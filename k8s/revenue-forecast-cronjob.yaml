@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: revenue-forecast-generation
+  namespace: billing
+spec:
+  schedule: "0 */6 * * *"  # Every 6 hours
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: forecast-generation
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: forecast-generator
+              image: iot-billing/forecast-service:latest
+              command: ["node", "jobs/forecastGenerationJob.js"]
+              env:
+                - name: NODE_ENV
+                  value: "production"
+                - name: REVENUE_SIGNING_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: billing-secrets
+                      key: revenue-signing-key
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: billing-secrets
+                      key: database-url
+                - name: REDIS_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: billing-secrets
+                      key: redis-url
+              resources:
+                requests:
+                  memory: "256Mi"
+                  cpu: "250m"
+                limits:
+                  memory: "512Mi"
+                  cpu: "500m"
+              securityContext:
+                runAsNonRoot: true
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false

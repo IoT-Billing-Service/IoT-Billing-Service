@@ -37,6 +37,7 @@ model Account {
   billingRecords  BillingRecord[]
   webhookSecrets  WebhookSecret[]
   billingCycles   BillingCycle[]
+  refunds         RefundRecord[]
 
   @@map("accounts")
 }
@@ -54,6 +55,7 @@ model BillingRecord {
   device Device @relation(fields: [deviceId], references: [id])
   account Account @relation(fields: [accountId], references: [id])
   cycle   BillingCycle? @relation(fields: [cycleId], references: [id])
+  refunds RefundRecord[]
 
   @@map("billing_records")
 }

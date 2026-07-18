@@ -206,6 +206,28 @@ export function incrementConfigTransitionEvents(
   configTransitionEvents.inc({ start_version: startVersion, end_version: endVersion });
 }
 
+// Config hot-reload counters (issue #74).
+// configReloadTotal: incremented on every successful hot-reload of MetricRangesConfig.
+// configValidationFailuresTotal: incremented whenever a candidate config is rejected
+// by schema validation; the previous config is retained (rollback).
+export const configReloadTotal: promClient.Counter = new promClient.Counter({
+  name: 'config_reload_total',
+  help: 'Total successful hot-reloads of MetricRangesConfig from Redis',
+});
+
+export const configValidationFailuresTotal: promClient.Counter = new promClient.Counter({
+  name: 'config_validation_failures_total',
+  help: 'Total MetricRangesConfig validation failures (previous config retained on each failure)',
+});
+
+export function incrementConfigReloadTotal(): void {
+  configReloadTotal.inc();
+}
+
+export function incrementConfigValidationFailures(): void {
+  configValidationFailuresTotal.inc();
+}
+
 // Rate-limiter observability (issue #50). Every decision is served from
 // centralized Redis state (the token bucket is a server-side Lua script), so
 // the limiter is pod-agnostic by construction. This counter makes that visible
