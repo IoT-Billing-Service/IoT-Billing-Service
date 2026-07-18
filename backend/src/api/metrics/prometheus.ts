@@ -182,6 +182,13 @@ export const blockchainTxCounter: promClient.Counter = new promClient.Counter({
   labelNames: ['status'],
 });
 
+export const billingOperationDuration: promClient.Histogram = new promClient.Histogram({
+  name: 'billing_operation_duration_ms',
+  help: 'Duration of billing operations in ms',
+  labelNames: ['outcome'],
+  buckets: [10, 50, 100, 150, 200, 250, 500, 1000],
+});
+
 // Billing-tier config hot-reload observability (issue #63). Incremented when a
 // batch observes the active config version change mid-processing, so the batch
 // is re-processed under the new version. Labelled by the start/end version so
@@ -392,6 +399,12 @@ export function recordGcPause(durationMs: number): void {
   }
 }
 
+export function recordBillingOperationDuration(outcome: string, durationMs: number): void {
+  if (Number.isFinite(durationMs) && durationMs > 0) {
+    billingOperationDuration.observe({ outcome }, durationMs);
+  }
+}
+
 export function setConnectionBufferBytes(
   tenantId: string,
   deviceTier: string,
@@ -443,6 +456,37 @@ export function recordRedisPubsubMessagesLost(stream: string, count: number): vo
   }
 }
 
+// --- Geographic Pricing Tier metrics (issue #54) ---------------------------------
+// Tracks billing charge adjustments applied per geographic region so operators
+// can verify correct multiplier application and detect anomalies.
+
+export const geoPricingChargesTotal: promClient.Counter = new promClient.Counter({
+  name: 'geo_pricing_charges_total',
+  help: 'Total billing charges adjusted by the geographic pricing engine, by region',
+  labelNames: ['region'],
+});
+
+export const geoPricingMultiplierApplied: promClient.Histogram = new promClient.Histogram({
+  name: 'geo_pricing_multiplier_applied',
+  help: 'Distribution of geographic pricing multipliers applied to billing charges',
+  labelNames: ['region'],
+  buckets: [0.5, 0.75, 0.8, 0.9, 1.0, 1.1, 1.15, 1.2, 1.5],
+});
+
+export const geoPricingUnknownCountryCodes: promClient.Counter = new promClient.Counter({
+  name: 'geo_pricing_unknown_country_codes_total',
+  help: 'Billing charges where the device country code was unknown or missing (fell back to ROW tier)',
+});
+
+/** Record a geo pricing multiplier application. */
+export function recordGeoPricingCharge(region: string, multiplier: number, unknown: boolean): void {
+  geoPricingChargesTotal.inc({ region });
+  geoPricingMultiplierApplied.observe({ region }, multiplier);
+  if (unknown) {
+    geoPricingUnknownCountryCodes.inc();
+  }
+}
+
 // --- SSE (Server-Sent Events) connection metrics (issue #68) ---------------------
 // Tracks backpressure behaviour on the admin SSE stream: active connections,
 // dropped events when per-client queues are full, and successfully delivered events.
@@ -485,19 +529,126 @@ export function setSseQueueDepth(clientId: string, depth: number): void {
   sseQueueDepth.set({ client_id: clientId }, depth);
 }
 
-// --- Operational Dashboard metrics (issue #ops-dashboard) -----------------------
+// --- Multi-region replication metrics (issue #88) ----------------------------
+// Tracks replication lag, region availability, failover state, and recovery
+// success so existing Prometheus/Grafana dashboards can observe DR activity.
 
-export const opsDashboardRequests: promClient.Counter = new promClient.Counter({
-  name: 'ops_dashboard_requests_total',
-  help: 'Total requests to the ops dashboard endpoints',
-  labelNames: ['status'],
+/**
+ * Current replication lag in milliseconds between primary and each replica.
+ * Label `source_region` is the primary; `target_region` is the replica.
+ * A value of -1 indicates the replica is unreachable.
+ */
+export const replicationLagMs: promClient.Gauge = new promClient.Gauge({
+  name: 'replication_lag_ms',
+  help: 'Replication lag in ms between primary and replica region (-1 = unreachable)',
+  labelNames: ['source_region', 'target_region'],
 });
 
-export const opsDashboardLatency: promClient.Histogram = new promClient.Histogram({
-  name: 'ops_dashboard_latency_ms',
-  help: 'Latency of the aggregated ops dashboard endpoint in ms',
-  buckets: [10, 25, 50, 100, 200, 500, 1000, 2000],
+/**
+ * Region availability (1 = healthy, 0 = degraded, -1 = unavailable).
+ */
+export const regionAvailability: promClient.Gauge = new promClient.Gauge({
+  name: 'region_availability',
+  help: 'Region availability: 1=healthy, 0=degraded, -1=unavailable',
+  labelNames: ['region'],
 });
+
+/**
+ * Failover state: 1 if this instance is currently acting as primary, 0 if secondary.
+ * Transitions increment `replication_failover_events_total`.
+ */
+export const replicationIsPrimary: promClient.Gauge = new promClient.Gauge({
+  name: 'replication_is_primary',
+  help: '1 if this instance is currently the primary region, 0 if secondary/standby',
+  labelNames: ['region'],
+});
+
+/**
+ * Total number of failover events (planned or emergency) triggered.
+ */
+export const replicationFailoverEventsTotal: promClient.Counter = new promClient.Counter({
+  name: 'replication_failover_events_total',
+  help: 'Total failover events triggered, by type (planned | emergency) and direction',
+  labelNames: ['type', 'from_region', 'to_region'],
+});
+
+/**
+ * Total number of successful recovery verifications after failover.
+ */
+export const replicationRecoverySuccessTotal: promClient.Counter = new promClient.Counter({
+  name: 'replication_recovery_success_total',
+  help: 'Successful DR recovery verifications after a failover event',
+  labelNames: ['region'],
+});
+
+/**
+ * Total number of failed recovery verifications after failover.
+ */
+export const replicationRecoveryFailureTotal: promClient.Counter = new promClient.Counter({
+  name: 'replication_recovery_failure_total',
+  help: 'Failed DR recovery verifications after a failover event',
+  labelNames: ['region', 'reason'],
+});
+
+/**
+ * Total number of billing transactions replicated to secondary regions.
+ * Used to verify no data loss after failover.
+ */
+export const replicatedBillingTransactionsTotal: promClient.Counter = new promClient.Counter({
+  name: 'replicated_billing_transactions_total',
+  help: 'Billing transactions replicated to secondary regions',
+  labelNames: ['source_region', 'target_region', 'status'],
+});
+
+// Setters --------------------------------------------------------------------
+
+export function setReplicationLagMs(
+  sourceRegion: string,
+  targetRegion: string,
+  lagMs: number,
+): void {
+  replicationLagMs.set({ source_region: sourceRegion, target_region: targetRegion }, lagMs);
+}
+
+export function setRegionAvailability(
+  region: string,
+  status: 'healthy' | 'degraded' | 'unavailable',
+): void {
+  const val = status === 'healthy' ? 1 : status === 'degraded' ? 0 : -1;
+  regionAvailability.set({ region }, val);
+}
+
+export function setReplicationIsPrimary(region: string, isPrimary: boolean): void {
+  replicationIsPrimary.set({ region }, isPrimary ? 1 : 0);
+}
+
+export function recordFailoverEvent(
+  type: 'planned' | 'emergency',
+  fromRegion: string,
+  toRegion: string,
+): void {
+  replicationFailoverEventsTotal.inc({ type, from_region: fromRegion, to_region: toRegion });
+}
+
+export function recordRecoverySuccess(region: string): void {
+  replicationRecoverySuccessTotal.inc({ region });
+}
+
+export function recordRecoveryFailure(region: string, reason: string): void {
+  replicationRecoveryFailureTotal.inc({ region, reason });
+}
+
+export function recordReplicatedTransaction(
+  sourceRegion: string,
+  targetRegion: string,
+  status: 'ok' | 'failed',
+): void {
+  replicatedBillingTransactionsTotal.inc({
+    source_region: sourceRegion,
+    target_region: targetRegion,
+    status,
+  });
+}
 
 // Metrics endpoint -------------------------------------------------------------
 
