@@ -150,7 +150,6 @@ export async function finalizeBillingCycle(
   );
 
   return result(cycleId, 'finalized', BillingCycleState.FINALIZED, idempotencyKey, startTime);
-  return result(cycleId, 'finalized', BillingCycleState.FINALIZED, idempotencyKey, geo);
 }
 
 function result(
@@ -164,9 +163,6 @@ function result(
     recordBillingOperationDuration(outcome, performance.now() - startTime);
   }
   return { cycleId, outcome, finalized: outcome === 'finalized', state, idempotencyKey };
-  geo: FinalizationResult['geo'],
-): FinalizationResult {
-  return { cycleId, outcome, finalized: outcome === 'finalized', state, idempotencyKey, geo };
 }
 
 export { InvalidStateTransitionError };

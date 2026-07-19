@@ -98,7 +98,10 @@ export function resetIngestionService(): void {
   ingestionService = null;
 }
 
-export function registerIngestionRoutes(app: FastifyInstance): void {
+export function registerIngestionRoutes(
+  app: FastifyInstance,
+  tenantRateLimitMiddleware?: (request: FastifyRequest, reply: FastifyReply) => Promise<void>,
+): void {
   /**
    * POST /ingest
    *
@@ -107,6 +110,7 @@ export function registerIngestionRoutes(app: FastifyInstance): void {
   app.post<{ Body: IngestBody }>(
     '/ingest',
     {
+      preHandler: tenantRateLimitMiddleware ? [tenantRateLimitMiddleware] : [],
       schema: {
         body: {
           type: 'object',

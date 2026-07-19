@@ -2,12 +2,7 @@ import type { Redis } from 'ioredis';
 import { getRedis } from '../../database/redis.js';
 import { recordRateLimiterRedisHit } from '../metrics/prometheus.js';
 
-export interface DeviceProfile {
-  deviceId: string;
-  billingTier: 'free' | 'standard' | 'enterprise';
-  historicalCompliance: number;
-  currentBalance: bigint;
-}
+import { type TenantProfile, type TenantCache } from '../../core/ingestion/tenant_cache.js';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -33,12 +28,12 @@ const BURST_COOLDOWN_S = 60;
 const COMPLIANCE_BURST_THRESHOLD = 0.95;
 const COMPLIANCE_WINDOW_SIZE = 1000;
 
-function bucketKey(deviceId: string): string {
-  return `rate:bucket:${deviceId}`;
+function bucketKey(tenantId: string): string {
+  return `rate:bucket:tenant:${tenantId}`;
 }
 
-function complianceKey(deviceId: string): string {
-  return `rate:compliance:${deviceId}`;
+function complianceKey(tenantId: string): string {
+  return `rate:compliance:tenant:${tenantId}`;
 }
 
 // Atomic token-bucket update.
@@ -126,11 +121,11 @@ end
 return total
 `;
 
-export class DeviceComplianceTracker {
+export class TenantComplianceTracker {
   constructor(private readonly redis: Redis) {}
 
-  async recordSubmission(deviceId: string, success: boolean): Promise<void> {
-    const key = complianceKey(deviceId);
+  async recordSubmission(tenantId: string, success: boolean): Promise<void> {
+    const key = complianceKey(tenantId);
     await this.redis.eval(
       COMPLIANCE_LUA,
       1,
@@ -141,8 +136,8 @@ export class DeviceComplianceTracker {
     );
   }
 
-  async getComplianceScore(deviceId: string): Promise<number> {
-    const key = complianceKey(deviceId);
+  async getComplianceScore(tenantId: string): Promise<number> {
+    const key = complianceKey(tenantId);
     const [successStr, totalStr] = await this.redis.hmget(key, 'success', 'total');
     const success = parseInt(successStr ?? '0', 10);
     const total = parseInt(totalStr ?? '0', 10);
@@ -151,22 +146,22 @@ export class DeviceComplianceTracker {
   }
 }
 
-export class DynamicRateLimiter {
+export class TenantRateLimiter {
   private readonly redis: Redis;
-  readonly complianceTracker: DeviceComplianceTracker;
+  readonly complianceTracker: TenantComplianceTracker;
 
   constructor(redis?: Redis) {
     this.redis = redis ?? getRedis();
-    this.complianceTracker = new DeviceComplianceTracker(this.redis);
+    this.complianceTracker = new TenantComplianceTracker(this.redis);
   }
 
-  async checkLimit(deviceProfile: DeviceProfile): Promise<RateLimitResult> {
-    const tier = TIER_CONFIG[deviceProfile.billingTier];
-    const compliance = Math.max(0, Math.min(1, deviceProfile.historicalCompliance));
+  async checkLimit(tenantProfile: TenantProfile): Promise<RateLimitResult> {
+    const tier = TIER_CONFIG[tenantProfile.billingTier];
+    const compliance = Math.max(0, Math.min(1, tenantProfile.historicalCompliance));
     const effectiveRate = tier.baseRate * (0.5 + 0.5 * compliance);
     const burstRate = effectiveRate * BURST_MULTIPLIER;
     const burstMax = tier.maxTokens * BURST_MULTIPLIER;
-    const key = bucketKey(deviceProfile.deviceId);
+    const key = bucketKey(tenantProfile.tenantId);
     const now = Date.now();
 
     const raw = await this.redis.eval(
@@ -191,8 +186,6 @@ export class DynamicRateLimiter {
     const [tokensRaw, maxRaw, resetAtRaw, allowedRaw] = raw as [number, number, number, number];
 
     const allowed = allowedRaw === 1;
-    // Every decision is resolved against shared Redis state — record it so the
-    // pod-agnostic limiter's Redis load is observable as replicas scale.
     recordRateLimiterRedisHit(allowed ? 'allowed' : 'denied');
     return {
       allowed,
@@ -203,9 +196,46 @@ export class DynamicRateLimiter {
     };
   }
 
-  async reset(deviceId: string): Promise<void> {
-    await this.redis.del(bucketKey(deviceId));
+  async reset(tenantId: string): Promise<void> {
+    await this.redis.del(bucketKey(tenantId));
   }
+}
+
+export function buildTenantRateLimitMiddleware(tenantCache: TenantCache, limiter: TenantRateLimiter) {
+  return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    // Basic extraction from ingestion payload: request.body.payload.deviceId
+    const body = request.body as any;
+    if (!body || !body.payload || typeof body.payload.deviceId !== 'string') {
+      // If there's no deviceId in payload, we let the route validation handle the 400 Bad Request
+      return;
+    }
+
+    const deviceId = body.payload.deviceId;
+    const profile = await tenantCache.getTenantProfile(deviceId);
+
+    if (!profile) {
+      // If we can't find a tenant for this device, we just bypass rate limiting
+      // and let the ingestion service reject the payload as ERR_DEVICE_NOT_FOUND.
+      return;
+    }
+
+    const result = await limiter.checkLimit(profile);
+
+    reply.header('X-RateLimit-Limit', String(result.maxTokens));
+    reply.header('X-RateLimit-Remaining', String(result.tokensRemaining));
+    reply.header('X-RateLimit-Reset', String(Math.ceil(result.resetAtMs / 1000)));
+
+    if (!result.allowed) {
+      if (result.retryAfterMs) {
+        reply.header('Retry-After', String(Math.ceil(result.retryAfterMs / 1000)));
+      }
+      return reply.status(429).send({
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Rate limit exceeded for this tenant. Please back off.',
+      });
+    }
+  };
 }
 import type { FastifyReply, FastifyRequest } from 'fastify';
 

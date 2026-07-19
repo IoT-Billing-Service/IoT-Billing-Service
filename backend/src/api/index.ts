@@ -9,6 +9,11 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerGeoPricingRoutes } from './routes/geo_pricing.js';
+import { registerOpsRoutes } from './routes/ops.js';
+import { registerIngestionRoutes, initIngestionService } from './routes/ingestion.js';
+import { TenantCache } from '../core/ingestion/tenant_cache.js';
+import { TenantRateLimiter, buildTenantRateLimitMiddleware } from './middleware/rate_limiter.js';
+import { getRedis } from '../database/redis.js';
 import { registerTracingHooks } from './middleware/tracing.js';
 import {
   TelemetryNotificationListener,
@@ -41,7 +46,9 @@ import { registerIncidentResponseRoutes } from '../incident_response/routes.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
-export async function buildApp(): Promise<FastifyInstance> {
+export async function buildApp(
+  tenantRateLimitMiddleware?: (request: any, reply: any) => Promise<void>
+): Promise<FastifyInstance> {
   const env = getEnv();
 
   const app = Fastify({
@@ -67,6 +74,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerAuthRoutes(app);
   registerAnalyticsRoutes(app);
   registerOpsRoutes(app);
+  registerIngestionRoutes(app, tenantRateLimitMiddleware);
   registerCircuitHealth(app);
   registerGeoPricingRoutes(app);
 
@@ -83,9 +91,16 @@ async function start(): Promise<void> {
   await runMigrationWithDistributedLock();
 
   const env = getEnv();
-  const app = await buildApp();
-
   const prisma = new PrismaClient();
+  const redis = getRedis();
+
+  const tenantCache = new TenantCache(redis, prisma);
+  const tenantRateLimiter = new TenantRateLimiter(redis);
+  const tenantRateLimitMiddleware = buildTenantRateLimitMiddleware(tenantCache, tenantRateLimiter);
+
+  const app = await buildApp(tenantRateLimitMiddleware);
+  
+  initIngestionService(prisma);
 
   // Ensure the timescale pool is created so it shows up on Prometheus gauges
   // before any traffic arrives.
