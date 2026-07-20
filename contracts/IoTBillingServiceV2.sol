@@ -52,7 +52,7 @@ contract IoTBillingServiceV2 is IoTBillingService {
         address _deviceId,
         Tier _tier,
         uint256 _duration
-    ) external onlyRole(BILLING_ADMIN_ROLE) onlyRegisteredDevice(_deviceId) {
+    ) external onlyRole(BILLING_ADMIN_ROLE) onlyRegisteredDevice(_deviceId) whenNotPaused {
         if (_tier == Tier.NONE) revert InvalidTier();
         if (subscriptions[_deviceId].endTime > block.timestamp) revert SubscriptionActive();
 
@@ -150,6 +150,7 @@ contract IoTBillingServiceV2 is IoTBillingService {
     function updateTierDiscount(Tier _tier, uint256 _discountBps) 
         external 
         onlyRole(BILLING_ADMIN_ROLE) 
+        whenNotPaused
     {
         if (_tier == Tier.NONE) revert InvalidTier();
         if (_discountBps > 5000) revert InvalidDiscount(); // Max 50%

@@ -37,6 +37,24 @@ groups:
           summary: "Billing contract is paused"
           description: "Contract has been emergency paused - investigate immediately"
 
+      - alert: EmergencyPauseEventMissing
+        expr: billing_contract_paused == 1 and increase(billing_emergency_pause_events_total[15m]) < 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Paused contract has no observed emergency-pause event"
+          description: "Check the contract-event exporter and chain RPC immediately."
+
+      - alert: EmergencyPauseEventDetected
+        expr: increase(billing_emergency_pause_events_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Emergency pause was triggered"
+          description: "{{ $value }} EmergencyPaused event(s) observed. Start the emergency-pause runbook."
+
       - alert: UnexpectedUpgrade
         expr: billing_implementation_version != expected_version
         for: 0s

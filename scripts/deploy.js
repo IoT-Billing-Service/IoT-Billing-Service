@@ -11,6 +11,9 @@ async function main() {
   const MIN_DELAY = 172800; // 48 hours
   const PROPOSERS = [process.env.PROPOSER_ADDRESS || deployer.address];
   const EXECUTORS = [process.env.EXECUTOR_ADDRESS || deployer.address];
+  // A hot emergency signer may pause immediately; recovery remains under the
+  // timelock. Use a hardware-backed multisig address in production.
+  const PAUSE_GUARDIAN = process.env.PAUSE_GUARDIAN_ADDRESS || deployer.address;
 
   // 1. Deploy Implementation V1
   console.log("\n📦 Deploying IoTBillingService V1...");
@@ -62,9 +65,16 @@ async function main() {
   await (await billing.grantRole(await billing.DEFAULT_ADMIN_ROLE(), await timelock.getAddress())).wait();
   console.log("  - DEFAULT_ADMIN_ROLE granted to Timelock");
 
-  // Renounce deployer admin (decentralization)
-  // await (await billing.renounceRole(await billing.DEFAULT_ADMIN_ROLE(), deployer.address)).wait();
-  // console.log("  - Deployer renounced DEFAULT_ADMIN_ROLE");
+  await (await billing.grantRole(await billing.EMERGENCY_PAUSER_ROLE(), PAUSE_GUARDIAN)).wait();
+  console.log(`  - EMERGENCY_PAUSER_ROLE granted to ${PAUSE_GUARDIAN}`);
+
+  await (await billing.grantRole(await billing.EMERGENCY_RECOVERY_ROLE(), await timelock.getAddress())).wait();
+  console.log("  - EMERGENCY_RECOVERY_ROLE granted to Timelock");
+
+  // No hot deployment account may retain default-admin powers after the
+  // timelock has been configured; otherwise it could grant itself recovery.
+  await (await billing.renounceRole(await billing.DEFAULT_ADMIN_ROLE(), deployer.address)).wait();
+  console.log("  - Deployer renounced DEFAULT_ADMIN_ROLE");
 
   // 6. Save deployment info
   const deploymentInfo = {
@@ -81,6 +91,8 @@ async function main() {
       minDelay: MIN_DELAY,
       proposers: PROPOSERS,
       executors: EXECUTORS,
+      pauseGuardian: PAUSE_GUARDIAN,
+      emergencyRecovery: await timelock.getAddress(),
     },
     timestamp: new Date().toISOString(),
   };

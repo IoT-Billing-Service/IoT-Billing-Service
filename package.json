@@ -1,0 +1,20 @@
+{
+  "name": "iot-billing-contracts",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:pause": "hardhat test test/EmergencyPause.test.js",
+    "deploy": "hardhat run scripts/deploy.js",
+    "verify:emergency-pause": "hardhat run scripts/verify-emergency-pause.js"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "@openzeppelin/contracts": "^4.9.6",
+    "@openzeppelin/contracts-upgradeable": "^4.9.6",
+    "@openzeppelin/hardhat-upgrades": "^3.0.5",
+    "hardhat": "^2.22.16",
+    "hardhat-gas-reporter": "^1.0.10",
+    "solidity-coverage": "^0.8.13"
+  }
+}
