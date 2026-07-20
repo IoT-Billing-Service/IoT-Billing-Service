@@ -196,28 +196,31 @@ export function registerOpsRoutes(app: FastifyInstance): void {
                 : Promise.resolve(null),
             ]);
 
+          // Types for Prisma groupBy result shapes (inference limitation with Promise.all).
+          type G = { _count: { id: number }; [key: string]: unknown };
+
           // Compute device summary
-          const totalDevices = deviceCounts.reduce((sum, g) => sum + g._count.id, 0);
+          const totalDevices = deviceCounts.reduce((sum: number, g: G) => sum + g._count.id, 0);
           const enabledDevices =
-            deviceCounts.find((g) => g.enabled)?._count.id ?? 0;
+            deviceCounts.find((g: G) => Boolean(g['enabled']))?._count.id ?? 0;
           const disabledDevices = totalDevices - enabledDevices;
 
           // Compute billing summary
-          const totalRecords = billingAggregates.reduce((sum, g) => sum + g._count.id, 0);
+          const totalRecords = billingAggregates.reduce((sum: number, g: G) => sum + g._count.id, 0);
           const pendingRecords =
-            billingAggregates.find((g) => g.status === 'pending')?._count.id ?? 0;
+            billingAggregates.find((g: G) => g['status'] === 'pending')?._count.id ?? 0;
           const settledRecords =
-            billingAggregates.find((g) => g.status === 'settled')?._count.id ?? 0;
+            billingAggregates.find((g: G) => g['status'] === 'settled')?._count.id ?? 0;
           const totalUsageAmount = billingAggregates.reduce(
-            (sum, g) => sum + (g._sum.usageAmount ?? 0n),
+            (sum: bigint, g: G) => sum + ((g['_sum'] as { usageAmount?: bigint | null } | undefined)?.usageAmount ?? 0n),
             0n,
           );
           const settledUsageAmount =
-            billingAggregates.find((g) => g.status === 'settled')?._sum.usageAmount ?? 0n;
+            (billingAggregates.find((g: G) => g['status'] === 'settled')?.['_sum'] as { usageAmount?: bigint | null } | undefined)?.usageAmount ?? 0n;
 
           // Compute cycle summary
           const getCycleCount = (state: string): number =>
-            cycleCounts.find((g) => g.state === state)?._count.id ?? 0;
+            cycleCounts.find((g: G) => g['state'] === state)?._count.id ?? 0;
 
           const summary: DashboardSummary = {
             devices: {
@@ -233,7 +236,7 @@ export function registerOpsRoutes(app: FastifyInstance): void {
               settledUsageAmount,
             },
             cycles: {
-              total: cycleCounts.reduce((sum, g) => sum + g._count.id, 0),
+              total: cycleCounts.reduce((sum: number, g: G) => sum + g._count.id, 0),
               open: getCycleCount('OPEN'),
               finalizing: getCycleCount('FINALIZING'),
               finalized: getCycleCount('FINALIZED'),
@@ -247,9 +250,9 @@ export function registerOpsRoutes(app: FastifyInstance): void {
 
           const response: DashboardResponse = {
             summary,
-            recentRecords: recentRecords.map((r) => ({
+            recentRecords: recentRecords.map((r: { createdAt: Date; [key: string]: unknown }) => ({
               ...r,
-              createdAt: r.createdAt.toISOString(),
+              createdAt: (r.createdAt as Date).toISOString(),
             })),
             systemHealth,
             generatedAt: Date.now(),

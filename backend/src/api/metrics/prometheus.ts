@@ -696,6 +696,138 @@ export function recordReplicatedTransaction(
   });
 }
 
+// --- Ops Dashboard metrics (issue #ops-dashboard) ----------------------------
+
+export const opsDashboardRequests: promClient.Counter = new promClient.Counter({
+  name: 'ops_dashboard_requests_total',
+  help: 'Total number of ops dashboard API requests',
+  labelNames: ['status'],
+});
+
+export const opsDashboardLatency: promClient.Histogram = new promClient.Histogram({
+  name: 'ops_dashboard_latency_ms',
+  help: 'Latency of ops dashboard API requests in ms',
+  buckets: [10, 50, 100, 150, 200, 250, 500, 1000, 2500],
+});
+
+// --- Subscription auto-renewal metrics (issue #36) ---------------------------
+
+const subscriptionRenewalsSucceededCounter: promClient.Counter = new promClient.Counter({
+  name: 'subscription_renewals_succeeded_total',
+  help: 'Total successful subscription auto-renewals',
+});
+
+export function incrementSubscriptionRenewalsSucceeded(): void {
+  subscriptionRenewalsSucceededCounter.inc();
+}
+
+const subscriptionRenewalsFailedCounter: promClient.Counter = new promClient.Counter({
+  name: 'subscription_renewals_failed_total',
+  help: 'Total failed subscription auto-renewals',
+});
+
+export function incrementSubscriptionRenewalsFailed(): void {
+  subscriptionRenewalsFailedCounter.inc();
+}
+
+const subscriptionRenewalQueueDepthGauge: promClient.Gauge = new promClient.Gauge({
+  name: 'subscription_renewal_queue_depth',
+  help: 'Number of subscriptions currently queued for renewal processing',
+});
+
+export function setSubscriptionRenewalQueueDepth(depth: number): void {
+  subscriptionRenewalQueueDepthGauge.set(depth);
+}
+
+const subscriptionRenewalRunningGauge: promClient.Gauge = new promClient.Gauge({
+  name: 'subscription_renewal_running',
+  help: '1 if a renewal tick is currently in progress, 0 otherwise',
+});
+
+export function setSubscriptionRenewalRunning(running: boolean): void {
+  subscriptionRenewalRunningGauge.set(running ? 1 : 0);
+}
+
+// --- Capacity planning metrics (issue #87) -----------------------------------
+
+export const capacityUtilizationRatio: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_utilization_ratio',
+  help: 'Projected capacity utilization ratio by dimension and period',
+  labelNames: ['dimension', 'period'],
+});
+
+export function setCapacityUtilizationRatio(dimension: string, period: string, ratio: number): void {
+  capacityUtilizationRatio.set({ dimension, period }, ratio);
+}
+
+export const capacityProjectedGrowthRate: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_projected_growth_rate',
+  help: 'Projected capacity growth rate (slope per day) by dimension and period',
+  labelNames: ['dimension', 'period'],
+});
+
+export function setCapacityProjectedGrowthRate(dimension: string, period: string, rate: number): void {
+  capacityProjectedGrowthRate.set({ dimension, period }, rate);
+}
+
+export const capacityTrendDataPoints: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_trend_data_points',
+  help: 'Number of data points used in capacity trend calculation',
+  labelNames: ['dimension', 'period'],
+});
+
+export function setCapacityTrendDataPoints(dimension: string, period: string, count: number): void {
+  capacityTrendDataPoints.set({ dimension, period }, count);
+}
+
+export const capacityTrendLastUpdated: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_trend_last_updated_seconds',
+  help: 'Unix timestamp of the last capacity trend update',
+  labelNames: ['dimension', 'period'],
+});
+
+export function setCapacityTrendLastUpdated(dimension: string, period: string, timestamp: number): void {
+  capacityTrendLastUpdated.set({ dimension, period }, timestamp);
+}
+
+// --- Backup verification metrics (issue #110) --------------------------------
+
+export const backupVerificationSuccessCounter: promClient.Counter = new promClient.Counter({
+  name: 'backup_verification_success_total',
+  help: 'Total successful database backup verifications',
+});
+
+export function recordBackupVerificationSuccess(): void {
+  backupVerificationSuccessCounter.inc();
+}
+
+export const backupVerificationFailureCounter: promClient.Counter = new promClient.Counter({
+  name: 'backup_verification_failure_total',
+  help: 'Total failed database backup verifications',
+});
+
+export function recordBackupVerificationFailure(): void {
+  backupVerificationFailureCounter.inc();
+}
+
+export const restoreTestSuccessCounter: promClient.Counter = new promClient.Counter({
+  name: 'restore_test_success_total',
+  help: 'Total successful database restore tests',
+});
+
+export function recordRestoreTestSuccess(): void {
+  restoreTestSuccessCounter.inc();
+}
+
+export const restoreTestFailureCounter: promClient.Counter = new promClient.Counter({
+  name: 'restore_test_failure_total',
+  help: 'Total failed database restore tests',
+});
+
+export function recordRestoreTestFailure(): void {
+  restoreTestFailureCounter.inc();
+}
+
 // Metrics endpoint -------------------------------------------------------------
 
 export function getMetricsRegistry(): promClient.Registry {

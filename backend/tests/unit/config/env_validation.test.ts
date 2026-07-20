@@ -75,9 +75,9 @@ describe('loadEnv', () => {
   it('returns an object with the expected validated fields', () => {
     setEnv();
     const env = loadEnv();
-    expect(env.DATABASE_URL).toBe(REQUIRED_ENV.DATABASE_URL);
-    expect(env.REDIS_URL).toBe(REQUIRED_ENV.REDIS_URL);
-    expect(env.JWT_SECRET).toBe(REQUIRED_ENV.JWT_SECRET);
+    expect(env.DATABASE_URL).toBe(REQUIRED_ENV['DATABASE_URL']);
+    expect(env.REDIS_URL).toBe(REQUIRED_ENV['REDIS_URL']);
+    expect(env.JWT_SECRET).toBe(REQUIRED_ENV['JWT_SECRET']);
   });
 
   it('applies default values for optional fields', () => {

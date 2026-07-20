@@ -93,8 +93,8 @@ export default function OpsPage() {
             totalRecords: 0,
             pending: 0,
             settled: 0,
-            totalUsageAmount: 0n,
-            settledUsageAmount: 0n,
+            totalUsageAmount: '0',
+            settledUsageAmount: '0',
           }}
           cycles={data?.summary.cycles ?? {
             total: 0,
@@ -110,8 +110,8 @@ export default function OpsPage() {
             totalRecords: 0,
             pending: 0,
             settled: 0,
-            totalUsageAmount: 0n,
-            settledUsageAmount: 0n,
+            totalUsageAmount: '0',
+            settledUsageAmount: '0',
           }}
           recentRecords={data?.recentRecords ?? []}
         />

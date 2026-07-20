@@ -98,6 +98,16 @@ async function start(): Promise<void> {
   const tenantRateLimiter = new TenantRateLimiter(redis);
   const tenantRateLimitMiddleware = buildTenantRateLimitMiddleware(tenantCache, tenantRateLimiter);
 
+  // Issue #36: Start the subscription auto-renewal cron for recurring billing.
+  const { RenewalCron } = await import('../billing/renewal_cron.js');
+  const renewalStore = buildPrismaSubscriptionStore(prisma);
+  const renewalCron = new RenewalCron(renewalStore, {
+    onError: (err: unknown): void => {
+      console.error('[startup] renewal cron error:', err);
+    },
+  });
+  renewalCron.start();
+
   const app = await buildApp(tenantRateLimitMiddleware);
   
   initIngestionService(prisma);
@@ -318,7 +328,7 @@ function buildPrismaSubscriptionStore(prisma: PrismaClient): SubscriptionStore {
         take: 50,
         orderBy: { expiresAt: 'asc' },
       });
-      return rows.map((s) => ({
+      return rows.map((s: SubscriptionRow & { id: string; accountId: string; planId: string; amountDue: number; periodDays: number; expiresAt: Date; autoRenew: boolean; renewalStatus: string; lockVersion: number }) => ({
         id: s.id,
         accountId: s.accountId,
         planId: s.planId,
