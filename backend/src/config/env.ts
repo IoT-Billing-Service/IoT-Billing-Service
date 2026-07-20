@@ -84,6 +84,12 @@ const envSchema = z.object({
   REPLICA_DATABASE_URL: z.string().url().optional(),
   // Optional secondary Redis URL for cross-region state replication checks.
   REPLICA_REDIS_URL: z.string().url().optional(),
+  // --- End-to-End Encryption (issue #89) ------------------------------------
+  // 64-character hex-encoded 32-byte key for NaCl secretbox field-level
+  // encryption of sensitive payload fields. When set, the ingestion pipeline
+  // will decrypt incoming encrypted fields and the billing/refund pipelines
+  // will encrypt sensitive fields before persistence.
+  E2E_ENCRYPTION_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

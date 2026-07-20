@@ -22,6 +22,13 @@ import { Buffer } from 'node:buffer';
 import type { PrismaClient } from '@prisma/client';
 import { ZkRangeProofVerifier } from '../crypto/zk_verifier.js';
 import { PowVerifier, type PowSolution, DEFAULT_DIFFICULTY } from '../crypto/pow_verifier.js';
+import {
+  decryptSensitiveFields,
+  tryParseEncryptedField,
+  ENCRYPTION_KEY_LENGTH,
+  E2E_ERROR_CODES,
+  type EncryptionKey,
+} from '../crypto/e2e_encryption.js';
 import { MetricBoundsEnforcer, PRIVACY_VIOLATION_ERROR_CODE } from '../../config/metric_ranges.js';
 import { validateSignature, type SignedPayload, type NonceCache } from './validator.js';
 
@@ -84,6 +91,13 @@ export interface IngestionServiceOptions {
   skipPowVerification?: boolean;
   /** Override the default PoW difficulty level. */
   powDifficulty?: number;
+  /**
+   * End-to-end encryption key for decrypting sensitive payload fields
+   * (issue #89). When set, the ingestion service will decrypt encrypted
+   * metric values after signature verification. Optional — without this
+   * key, encrypted fields are left as-is.
+   */
+  encryptionKey?: EncryptionKey;
 }
 
 // ── Service ────────────────────────────────────────────────────────────────────
@@ -100,12 +114,16 @@ export class IngestionService {
   private readonly powVerifier: PowVerifier;
   private readonly boundsEnforcer = new MetricBoundsEnforcer();
 
+  /** Cached encryption key bytes for rapid decryption on the hot path. */
+  private readonly encryptionKeyRaw: Uint8Array | null;
+
   constructor(
     private readonly prisma: PrismaClient,
     private readonly nonceCache: NonceCache,
     private readonly options: IngestionServiceOptions = {},
   ) {
     this.powVerifier = new PowVerifier(options.powDifficulty ?? DEFAULT_DIFFICULTY);
+    this.encryptionKeyRaw = options.encryptionKey?.raw ?? null;
   }
 
   /**
@@ -203,38 +221,73 @@ export class IngestionService {
         };
       }
 
-      // ── Step 5: Verify ZK range proof ───────────────────────────────────
-      // We verify against the metric_ranges bounds.  Each metric value in the
-      // payload is checked on a per-key basis against the relevant range.
-      const metrics = request.payload.metrics as Record<string, number>;
+      // ── Step 5: Decrypt E2E-encrypted fields ────────────────────────────
+      // After signature verification (which proves the payload hasn't been
+      // tampered with), we decrypt any sensitive fields that were encrypted
+      // by the device. This happens before ZK verification so the proofs
+      // are checked against the decrypted plaintext values.
+      let metrics = request.payload.metrics as Record<string, number>;
 
-      for (const [metricName, metricValue] of Object.entries(metrics)) {
-        const boundary = this.boundsEnforcer.getBoundary(metricName);
-        if (boundary === undefined) continue; // skip unknown metrics
-
-        const lowerBound = boundary.lowerBound;
-        const upperBound = boundary.upperBound;
-        const bigValue = BigInt(Math.round(metricValue));
-
-        const proofResult = this.verifier.verifyRangeProofStrict(
-          proofBuffer,
-          request.payload.deviceId,
-          lowerBound,
-          upperBound,
-          bigValue,
+      if (this.encryptionKeyRaw !== null && request.payload.encrypted !== undefined) {
+        const encryptedFields = request.payload.encrypted;
+        const { decrypted, count, failures } = decryptSensitiveFields(
+          encryptedFields,
+          this.encryptionKeyRaw,
         );
 
-        if (!proofResult.valid) {
+        if (Object.keys(failures).length > 0) {
+          const failSummary = Object.entries(failures)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join('; ');
           return {
             success: false,
-            errorCode: INGESTION_ERROR_CODES.INVALID_PROOF,
-            reason: `ZK range proof failed for "${metricName}" (${String(metricValue)}): ${proofResult.reason ?? 'unknown verification error'}`,
+            errorCode: INGESTION_ERROR_CODES.INVALID_PAYLOAD,
+            reason: `E2E decryption failed: ${failSummary}`,
             deviceId: request.payload.deviceId,
           };
         }
+
+        // Merge decrypted values into metrics, overwriting any placeholders.
+        for (const [key, value] of Object.entries(decrypted)) {
+          const parsed = Number(value);
+          if (!Number.isNaN(parsed)) {
+            metrics[key] = parsed;
+          }
+        }
       }
 
-      // ── Step 6: Enforce metric bounds (privacy violation gate) ──────────
+      // ── Step 6: Verify ZK range proof ───────────────────────────────────
+      // We verify against the metric_ranges bounds.  Each metric value in the
+      // payload is checked on a per-key basis against the relevant range.
+      if (this.options.skipProofVerification !== true) {
+        for (const [metricName, metricValue] of Object.entries(metrics)) {
+          const boundary = this.boundsEnforcer.getBoundary(metricName);
+          if (boundary === undefined) continue; // skip unknown metrics
+
+          const lowerBound = boundary.lowerBound;
+          const upperBound = boundary.upperBound;
+          const bigValue = BigInt(Math.round(metricValue));
+
+          const proofResult = this.verifier.verifyRangeProofStrict(
+            proofBuffer,
+            request.payload.deviceId,
+            lowerBound,
+            upperBound,
+            bigValue,
+          );
+
+          if (!proofResult.valid) {
+            return {
+              success: false,
+              errorCode: INGESTION_ERROR_CODES.INVALID_PROOF,
+              reason: `ZK range proof failed for "${metricName}" (${String(metricValue)}): ${proofResult.reason ?? 'unknown verification error'}`,
+              deviceId: request.payload.deviceId,
+            };
+          }
+        }
+      }
+
+      // ── Step 7: Enforce metric bounds (privacy violation gate) ──────────
       const boundsResult = this.boundsEnforcer.enforceBatch(metrics);
       if (!boundsResult.allowed) {
         return {
@@ -245,7 +298,7 @@ export class IngestionService {
         };
       }
 
-      // ── Step 7: Persist telemetry via Prisma transaction ────────────────
+      // ── Step 8: Persist telemetry via Prisma transaction ────────────────
       const recordsWritten = await this.persistTelemetry(request.payload.deviceId, metrics);
 
       return {
