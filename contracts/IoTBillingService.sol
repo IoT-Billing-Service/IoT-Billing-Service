@@ -30,9 +30,14 @@ contract IoTBillingService is
     bytes32 public constant DEVICE_MANAGER_ROLE = keccak256("DEVICE_MANAGER_ROLE");
     bytes32 public constant AUDITOR_ROLE = keccak256("AUDITOR_ROLE");
     bytes32 public constant UPGRADE_ADMIN_ROLE = keccak256("UPGRADE_ADMIN_ROLE");
+    /// @dev A narrowly scoped hot role held by the incident-response signer/multisig.
+    bytes32 public constant EMERGENCY_PAUSER_ROLE = keccak256("EMERGENCY_PAUSER_ROLE");
+    /// @dev A cold governance role. In production this must be the timelock.
+    bytes32 public constant EMERGENCY_RECOVERY_ROLE = keccak256("EMERGENCY_RECOVERY_ROLE");
 
     // ============ Type Hashes (EIP-712) ============
-    bytes32 private constant BILLING_TYPEHASH = keccak256(
+    // Internal because V2 verifies the exact same signed billing payload.
+    bytes32 internal constant BILLING_TYPEHASH = keccak256(
         "BillingTransaction(address deviceId,uint256 usageUnits,uint256 ratePerUnit,uint256 timestamp,uint256 nonce)"
     );
     bytes32 private constant DEVICE_REGISTRATION_TYPEHASH = keccak256(
@@ -90,8 +95,8 @@ contract IoTBillingService is
     event BillingRecorded(bytes32 indexed txHash, address indexed deviceId, uint256 amount, uint256 timestamp);
     event PaymentProcessed(bytes32 indexed txHash, address indexed deviceId, uint256 amount, uint256 timestamp);
     event RateUpdated(uint256 oldRate, uint256 newRate, uint256 timestamp);
-    event EmergencyPaused(address indexed admin);
-    event EmergencyUnpaused(address indexed admin);
+    event EmergencyPaused(address indexed guardian, bytes32 indexed incidentId, uint256 timestamp);
+    event EmergencyUnpaused(address indexed recoveryAdmin, uint256 timestamp);
     event VersionUpgraded(uint256 oldVersion, uint256 newVersion);
 
     // ============ Errors ============
@@ -190,6 +195,7 @@ contract IoTBillingService is
         external 
         onlyRole(DEVICE_MANAGER_ROLE) 
         onlyRegisteredDevice(_deviceId) 
+        whenNotPaused
     {
         devices[_deviceId].isActive = false;
         emit DeviceDeactivated(_deviceId, block.timestamp);
@@ -216,6 +222,7 @@ contract IoTBillingService is
         bytes calldata _signature
     ) 
         external 
+        virtual
         onlyRole(BILLING_ADMIN_ROLE) 
         onlyRegisteredDevice(_deviceId) 
         whenNotPaused 
@@ -277,6 +284,7 @@ contract IoTBillingService is
         external 
         payable 
         onlyRegisteredDevice(billingRecords[_txHash].deviceId) 
+        whenNotPaused
         nonReentrant 
     {
         BillingRecord storage record = billingRecords[_txHash];
@@ -307,14 +315,36 @@ contract IoTBillingService is
         emit RateUpdated(oldRate, _newRate, block.timestamp);
     }
 
-    function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _pause();
-        emit EmergencyPaused(msg.sender);
+    /**
+     * @notice Immediately stop all billing state transitions.
+     * @dev This deliberately bypasses the timelock. Assign EMERGENCY_PAUSER_ROLE
+     *      only to a monitored incident-response multisig or hardware-backed key.
+     */
+    function pause() external onlyRole(EMERGENCY_PAUSER_ROLE) {
+        _emergencyPause(bytes32(0));
     }
 
-    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    /**
+     * @notice Pause with an incident identifier (for example a ticket hash).
+     * @dev The identifier is emitted for immutable SOC2 incident correlation;
+     *      do not put customer, cardholder, or device data in it.
+     */
+    function emergencyPause(bytes32 _incidentId) external onlyRole(EMERGENCY_PAUSER_ROLE) {
+        _emergencyPause(_incidentId);
+    }
+
+    /**
+     * @notice Resume operations after governance has approved remediation.
+     * @dev Production deployment grants this role exclusively to the timelock.
+     */
+    function unpause() external onlyRole(EMERGENCY_RECOVERY_ROLE) {
         _unpause();
-        emit EmergencyUnpaused(msg.sender);
+        emit EmergencyUnpaused(msg.sender, block.timestamp);
+    }
+
+    function _emergencyPause(bytes32 _incidentId) internal {
+        _pause();
+        emit EmergencyPaused(msg.sender, _incidentId, block.timestamp);
     }
 
     // ============ View Functions ============
