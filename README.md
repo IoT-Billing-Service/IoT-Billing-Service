@@ -21,6 +21,7 @@
   - [Frontend](#frontend)
   - [Smart Contracts](#smart-contracts)
 - [Environment Variables](#environment-variables)
+- [Configuration Management](#configuration-management)
 - [Deployment](#deployment)
 - [CI / Testing](#ci--testing)
 - [Contributing](#contributing)
@@ -199,6 +200,50 @@ docker compose up --build
 ```
 
 This starts the backend, frontend, PostgreSQL, Redis, and TimescaleDB services as defined in [`docker-compose.yml`](../docker-compose.yml).
+
+---
+
+## Configuration Management
+
+### Environment Schema Validation
+
+All environment variables are validated at startup against a strict [Zod](https://zod.dev) schema defined in `backend/src/config/env.ts`.
+
+- Required fields (`DATABASE_URL`, `JWT_SECRET`, etc.) must be present and well-formed — the server will not start if any are missing or invalid.
+- Optional fields have typed defaults (`PORT=3000`, `NODE_ENV=development`, etc.).
+- Every validation failure is reported with the field path, error code, and human-readable message. No failing field is silently collapsed.
+
+Use `loadEnv()` to validate and cache the environment once, `getEnv()` to read the cached result, and `clearEnvCache()` (test helper) to force re-validation.
+
+### Billing-Tier Config: Schema Validation + Hot-Reload
+
+Billing tier configuration (`MetricRangesConfig`) is validated and hot-reloaded at runtime from Redis, defined in `backend/src/config/index.ts`.
+
+**Schema rules** (enforced by `metricRangesConfigSchema`):
+
+| Field | Rule |
+|---|---|
+| `version_id` | Non-empty string |
+| `tiers` | At least one entry |
+| `tiers[*].min` | `>= 0`, finite |
+| `tiers[*].max` | `> 0`, not `-Infinity` (use `Infinity` for unbounded) |
+| `tiers[*].min < max` | Strict per tier |
+
+**Hot-reload behaviour:**
+
+1. On startup, `initializeConfigWatcher(redis)` reads `config:active` from Redis. If absent, it writes the built-in fallback tiers.
+2. A polling interval (default 50 ms, configurable) checks `config:active` for a changed `version_id`.
+3. On version change the candidate is schema-validated. Valid configs are applied atomically via `setConfig()`; invalid ones are **rejected and the previous config is retained** (automatic rollback — no downtime).
+4. Call `stopConfigWatcher()` on shutdown to cancel the interval.
+
+**Monitoring** — two Prometheus counters track config lifecycle:
+
+| Metric | Description |
+|---|---|
+| `config_reload_total` | Incremented on every successful hot-reload |
+| `config_validation_failures_total` | Incremented on each rejected candidate (previous config retained) |
+
+The current reload status, version ID, and last validation error are always accessible via `getConfigStatus()`.
 
 ---
 
