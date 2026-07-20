@@ -95,8 +95,7 @@ export async function finalizeBillingCycle(
     return result(cycleId, 'not_found', null, null, null, startTime);
   }
   if (cycle.state !== BillingCycleState.OPEN) {
-    // Already being / been finalized by another path.
-    return result(cycleId, 'not_open', cycle.state, null, null, startTime);
+    return result(cycleId, 'not_open', cycle.state, null, startTime);
   }
 
   // Validate the DAG up front so an illegal target is a programming error, not
@@ -112,21 +111,14 @@ export async function finalizeBillingCycle(
   );
   if (!won) {
     const latest = await store.getCycle(cycleId);
-    return result(cycleId, 'lost_race', latest?.state ?? null, null, null, startTime);
+    return result(cycleId, 'lost_race', latest?.state ?? null, null, startTime);
   }
 
   // Idempotency gate for replays of this same logical attempt.
   const idempotencyKey = options.idempotencyKey ?? uuidv7();
   const fresh = await store.recordFinalization(cycleId, idempotencyKey);
   if (!fresh) {
-    return result(
-      cycleId,
-      'duplicate_replay',
-      BillingCycleState.FINALIZING,
-      idempotencyKey,
-      null,
-      startTime,
-    );
+    return result(cycleId, 'duplicate_replay', BillingCycleState.FINALIZING, idempotencyKey, startTime);
   }
 
   // Resolve geographic pricing tier (issue #54). This is a pure in-memory
@@ -153,7 +145,7 @@ export async function finalizeBillingCycle(
     cycle.lockVersion + 1,
   );
 
-  return result(cycleId, 'finalized', BillingCycleState.FINALIZED, idempotencyKey, geo, startTime);
+  return result(cycleId, 'finalized', BillingCycleState.FINALIZED, idempotencyKey, geo);
 }
 
 function result(
@@ -161,12 +153,12 @@ function result(
   outcome: FinalizationOutcome,
   state: BillingCycleState | null,
   idempotencyKey: string | null,
-  geo: FinalizationResult['geo'],
-  startTime?: number,
+  geoOrStartTime: FinalizationResult['geo'] | number | undefined,
 ): FinalizationResult {
-  if (startTime !== undefined) {
-    recordBillingOperationDuration(outcome, performance.now() - startTime);
+  if (typeof geoOrStartTime === 'number') {
+    recordBillingOperationDuration(outcome, performance.now() - geoOrStartTime);
   }
+  const geo = geoOrStartTime != null && typeof geoOrStartTime === 'object' ? geoOrStartTime : null;
   return { cycleId, outcome, finalized: outcome === 'finalized', state, idempotencyKey, geo };
 }
 

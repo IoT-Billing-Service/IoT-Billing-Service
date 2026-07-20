@@ -8,12 +8,25 @@ import { refreshAggregatesAdaptively } from '../../database/pool_manager.js';
 import { getConfig } from '../../config/index.js';
 import { incrementConfigTransitionEvents } from '../../api/metrics/prometheus.js';
 
+import type { EncryptedField } from '../crypto/e2e_encryption.js';
+
 export interface SignedPayload {
   deviceId: string;
   timestamp: number;
   nonce: string;
   metrics: Record<string, number | string>;
   signature: string;
+  /**
+   * Optional end-to-end encrypted fields (issue #89).
+   * Devices that support E2E encryption can put sensitive metric values
+   * here instead of in plaintext in `metrics`. The server decrypts these
+   * fields after verifying the signature.
+   *
+   * When present, the device MUST still include the metric names (with null
+   * or placeholder values) in `metrics` so the signature covers the field
+   * names for integrity. The actual encrypted values are in this map.
+   */
+  encrypted?: Record<string, EncryptedField> | undefined;
 }
 
 export interface ValidationResult {
