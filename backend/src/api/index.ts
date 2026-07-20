@@ -4,6 +4,13 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { PrismaClient } from '@prisma/client';
 import { getEnv } from '../config/env.js';
+import {
+  configureRuntimeConfigurationAudit,
+  getRuntimeConfigurationAuditStatus,
+  initializeConfigWatcher,
+  stopConfigWatcher,
+} from '../config/index.js';
+import { getRedis } from '../database/redis.js';
 import { initTelemetry, shutdownTelemetry } from '../core/diagnostics/otel.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
@@ -83,6 +90,20 @@ async function start(): Promise<void> {
   await runMigrationWithDistributedLock();
 
   const env = getEnv();
+  const authorizedKeys = parseRuntimeConfigurationKeys(env.RUNTIME_CONFIG_AUTHORIZED_KEYS);
+  if (env.NODE_ENV === 'production' && authorizedKeys.size === 0) {
+    throw new Error(
+      'RUNTIME_CONFIG_AUTHORIZED_KEYS must contain an authorized Ed25519 key in production',
+    );
+  }
+  const runtimeConfigAuditor = configureRuntimeConfigurationAudit(authorizedKeys);
+  runtimeConfigAuditor.start(env.RUNTIME_CONFIG_AUDIT_SCAN_INTERVAL_MS);
+  await initializeConfigWatcher(getRedis(), 1_000);
+  if (env.NODE_ENV === 'production' && getRuntimeConfigurationAuditStatus().status !== 'healthy') {
+    throw new Error(
+      'Production startup requires a valid signed runtime configuration in Redis config:active',
+    );
+  }
   const app = await buildApp();
 
   const prisma = new PrismaClient();
@@ -158,6 +179,8 @@ async function start(): Promise<void> {
     gcMonitor.stop();
     poolCollector.stop();
     replicationMonitor.stop();
+    runtimeConfigAuditor.stop();
+    stopConfigWatcher();
     incidentResponse.stop();
     await listener.stop();
     await closeTimescalePool();
@@ -192,6 +215,30 @@ async function start(): Promise<void> {
     await shutdownTelemetry();
     process.exit(1);
   }
+}
+
+function parseRuntimeConfigurationKeys(raw: string): Map<string, string> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      'RUNTIME_CONFIG_AUTHORIZED_KEYS must be a JSON object of key ids to PEM public keys',
+    );
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(
+      'RUNTIME_CONFIG_AUTHORIZED_KEYS must be a JSON object of key ids to PEM public keys',
+    );
+  }
+  const keys = new Map<string, string>();
+  for (const [keyId, publicKey] of Object.entries(parsed)) {
+    if (typeof publicKey !== 'string' || publicKey.length === 0) {
+      throw new Error(`Invalid runtime configuration public key for ${keyId}`);
+    }
+    keys.set(keyId, publicKey);
+  }
+  return keys;
 }
 
 /**

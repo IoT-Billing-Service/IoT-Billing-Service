@@ -7,6 +7,7 @@ import type { BillingCycleStore } from './billing_cycle_repository.js';
 import { uuidv7 } from './uuidv7.js';
 import { recordBillingOperationDuration } from '../api/metrics/prometheus.js';
 import { applyGeoMultiplier, pricingTableDigest } from './geo_pricing.js';
+import { assertBillingConfigurationTrusted } from '../config/index.js';
 
 /**
  * Concurrency-safe billing-cycle finalization (issue #42).
@@ -86,18 +87,16 @@ export async function finalizeBillingCycle(
   options: FinalizeOptions = {},
 ): Promise<FinalizationResult> {
   const startTime = performance.now();
+  // Fail closed before any state transition or payment computation. This is an
+  // in-memory hash comparison; no telemetry/audit I/O is added to the hot path.
+  assertBillingConfigurationTrusted();
   const cycle = await store.getCycle(cycleId);
   if (cycle === null) {
-    return result(cycleId, 'not_found', null, null, startTime);
+    return result(cycleId, 'not_found', null, null, null, startTime);
   }
   if (cycle.state !== BillingCycleState.OPEN) {
     // Already being / been finalized by another path.
-    return result(cycleId, 'not_open', cycle.state, null, startTime);
-    return result(cycleId, 'not_found', null, null, null);
-  }
-  if (cycle.state !== BillingCycleState.OPEN) {
-    // Already being / been finalized by another path.
-    return result(cycleId, 'not_open', cycle.state, null, null);
+    return result(cycleId, 'not_open', cycle.state, null, null, startTime);
   }
 
   // Validate the DAG up front so an illegal target is a programming error, not
@@ -113,16 +112,21 @@ export async function finalizeBillingCycle(
   );
   if (!won) {
     const latest = await store.getCycle(cycleId);
-    return result(cycleId, 'lost_race', latest?.state ?? null, null, startTime);
-    return result(cycleId, 'lost_race', latest?.state ?? null, null, null);
+    return result(cycleId, 'lost_race', latest?.state ?? null, null, null, startTime);
   }
 
   // Idempotency gate for replays of this same logical attempt.
   const idempotencyKey = options.idempotencyKey ?? uuidv7();
   const fresh = await store.recordFinalization(cycleId, idempotencyKey);
   if (!fresh) {
-    return result(cycleId, 'duplicate_replay', BillingCycleState.FINALIZING, idempotencyKey, startTime);
-    return result(cycleId, 'duplicate_replay', BillingCycleState.FINALIZING, idempotencyKey, null);
+    return result(
+      cycleId,
+      'duplicate_replay',
+      BillingCycleState.FINALIZING,
+      idempotencyKey,
+      null,
+      startTime,
+    );
   }
 
   // Resolve geographic pricing tier (issue #54). This is a pure in-memory
@@ -149,8 +153,7 @@ export async function finalizeBillingCycle(
     cycle.lockVersion + 1,
   );
 
-  return result(cycleId, 'finalized', BillingCycleState.FINALIZED, idempotencyKey, startTime);
-  return result(cycleId, 'finalized', BillingCycleState.FINALIZED, idempotencyKey, geo);
+  return result(cycleId, 'finalized', BillingCycleState.FINALIZED, idempotencyKey, geo, startTime);
 }
 
 function result(
@@ -158,14 +161,12 @@ function result(
   outcome: FinalizationOutcome,
   state: BillingCycleState | null,
   idempotencyKey: string | null,
+  geo: FinalizationResult['geo'],
   startTime?: number,
 ): FinalizationResult {
   if (startTime !== undefined) {
     recordBillingOperationDuration(outcome, performance.now() - startTime);
   }
-  return { cycleId, outcome, finalized: outcome === 'finalized', state, idempotencyKey };
-  geo: FinalizationResult['geo'],
-): FinalizationResult {
   return { cycleId, outcome, finalized: outcome === 'finalized', state, idempotencyKey, geo };
 }
 

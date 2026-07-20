@@ -84,6 +84,10 @@ const envSchema = z.object({
   REPLICA_DATABASE_URL: z.string().url().optional(),
   // Optional secondary Redis URL for cross-region state replication checks.
   REPLICA_REDIS_URL: z.string().url().optional(),
+  // JSON object of non-secret key ids to PEM-encoded Ed25519 public keys. A
+  // signed configuration baseline is mandatory for production billing.
+  RUNTIME_CONFIG_AUTHORIZED_KEYS: z.string().default('{}'),
+  RUNTIME_CONFIG_AUDIT_SCAN_INTERVAL_MS: z.coerce.number().int().positive().default(1000),
 });
 
 export type Env = z.infer<typeof envSchema>;

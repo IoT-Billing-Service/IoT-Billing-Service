@@ -2,13 +2,31 @@ groups:
   - name: iot_billing_alerts
     rules:
       - alert: HighBillingLatency
-        expr: billing_operation_duration_seconds{quantile="0.99"} > 0.2
+        expr: histogram_quantile(0.99, sum(rate(billing_operation_duration_ms_bucket[5m])) by (le)) > 200
         for: 1m
         labels:
           severity: critical
         annotations:
           summary: "Billing P99 latency exceeds 200ms"
-          description: "P99 billing latency is {{ $value }}s, exceeding 200ms target"
+          description: "P99 billing latency is {{ $value }}ms, exceeding 200ms target"
+
+      - alert: RuntimeConfigurationDrift
+        expr: runtime_config_integrity_state < 1 or increase(runtime_config_drift_events_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Runtime billing configuration integrity failure"
+          description: "Billing is fail-closed until a valid signed baseline is restored."
+
+      - alert: RuntimeConfigurationSignatureFailures
+        expr: increase(runtime_config_signature_failures_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unauthorized runtime configuration update rejected"
+          description: "Inspect structured runtime_configuration_audit logs and rotate the release key if unexpected."
 
       - alert: FailedSignatureVerification
         expr: rate(billing_signature_failures_total[5m]) > 0.1
