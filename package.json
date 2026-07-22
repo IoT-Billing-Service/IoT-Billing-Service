@@ -12,7 +12,7 @@
     "@nomicfoundation/hardhat-toolbox": "^3.0.0",
     "@openzeppelin/contracts": "^4.9.6",
     "@openzeppelin/contracts-upgradeable": "^4.9.6",
-    "@openzeppelin/hardhat-upgrades": "^3.0.5",
+    "@openzeppelin/hardhat-upgrades": "^4.0.2",
     "hardhat": "^2.22.16",
     "hardhat-gas-reporter": "^1.0.10",
     "solidity-coverage": "^0.8.13"
