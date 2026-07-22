@@ -84,6 +84,20 @@ const envSchema = z.object({
   REPLICA_DATABASE_URL: z.string().url().optional(),
   // Optional secondary Redis URL for cross-region state replication checks.
   REPLICA_REDIS_URL: z.string().url().optional(),
+  // --- Consumer Group Lag Monitoring (issue #66) ---------------------------
+  // How frequently (ms) the consumer-lag monitor polls Redis Streams consumer
+  // groups for pending-entry counts, consumer counts, and idle time.
+  CONSUMER_LAG_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(10000),
+  // Pending-entries threshold: warn (degrades the consumer group).
+  CONSUMER_LAG_WARN_ENTRIES: z.coerce.number().int().nonnegative().default(1000),
+  // Pending-entries threshold: critical (marks the consumer group unhealthy).
+  CONSUMER_LAG_CRITICAL_ENTRIES: z.coerce.number().int().nonnegative().default(10000),
+  // Consumer idle threshold: warn (ms). Consumer idle longer than this is
+  // considered potentially stale.
+  CONSUMER_LAG_WARN_IDLE_MS: z.coerce.number().int().nonnegative().default(60000),
+  // Consumer idle threshold: critical (ms). Consumer idle longer than this
+  // suggests a disconnected or stuck consumer.
+  CONSUMER_LAG_CRITICAL_IDLE_MS: z.coerce.number().int().nonnegative().default(300000),
   // --- End-to-End Encryption (issue #89) ------------------------------------
   // 64-character hex-encoded 32-byte key for NaCl secretbox field-level
   // encryption of sensitive payload fields. When set, the ingestion pipeline

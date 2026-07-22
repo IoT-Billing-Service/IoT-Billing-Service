@@ -12,6 +12,7 @@
  * - billing_anomaly_response: Responds to billing pipeline anomalies
  * - health_check_failure: Handles health check failures
  * - chaos_experiment_failure: Responds to chaos experiment failures
+ * - consumer_group_lag_response: Responds to consumer group lag incidents (issue #66)
  */
 
 import type {
@@ -514,6 +515,90 @@ export const chaosExperimentFailureResponse: RunbookDefinition = {
 };
 
 // ---------------------------------------------------------------------------
+// Consumer Group Lag Response (Issue #66)
+// ---------------------------------------------------------------------------
+
+/**
+ * Responds to Redis Streams consumer group lag incidents by:
+ * 1. Notifying the on-call Slack channel
+ * 2. Checking pending entries count from Prometheus metrics
+ * 3. Checking consumer group health
+ * 4. Triggering auto-scaling to add consumer replicas if critical
+ */
+export const consumerGroupLagResponse: RunbookDefinition = {
+  name: 'consumer_group_lag_response',
+  description: 'Automated response to Redis Streams consumer group lag incidents',
+  version: '1.0.0',
+  appliesTo: ['consumer_group_lag', 'prometheus_alert'],
+  severities: ['critical', 'error', 'warning'],
+  autoAcknowledge: true,
+  autoResolve: true,
+  timeoutMs: 300_000,
+  tags: ['consumer-lag', 'streams', 'auto-scaling'],
+  steps: [
+    slackNotification(
+      'notify_oncall',
+      '📊 Consumer group lag detected: {{title}}\nSeverity: {{severity}}\nDescription: {{description}}',
+      '#oncall-billing',
+    ),
+    {
+      name: 'check_pending_entries',
+      type: 'http_request',
+      description: 'Check consumer group pending entries from Prometheus',
+      method: 'GET',
+      url: 'http://localhost:3000/metrics',
+      timeoutMs: 10_000,
+      retries: 2,
+      expectedStatuses: [200],
+    },
+    {
+      name: 'check_consumer_health',
+      type: 'http_request',
+      description: 'Check consumer group health endpoint',
+      method: 'GET',
+      url: 'http://localhost:3000/health',
+      timeoutMs: 10_000,
+      retries: 2,
+      expectedStatuses: [200],
+    },
+    {
+      name: 'conditional_scaling',
+      type: 'conditional',
+      description: 'Trigger consumer auto-scaling if critical',
+      condition: 'severity == "critical"',
+      ifTrue: [
+        slackNotification(
+          'trigger_consumer_scaling',
+          '⚡ Triggering consumer auto-scaling due to critical lag.\nIncident: {{title}}\nPending entries may require additional consumer replicas.',
+          '#engineering-billing',
+        ),
+        {
+          name: 'scale_consumers',
+          type: 'http_request',
+          description: 'Trigger HPA scale-up for consumer replicas',
+          method: 'POST',
+          url: 'http://localhost:3000/api/admin/scale-consumers',
+          timeoutMs: 30_000,
+          retries: 1,
+          expectedStatuses: [200, 202],
+          body: JSON.stringify({
+            reason: 'Consumer group lag critical',
+            incident_id: '{{id}}',
+          }),
+        },
+      ],
+      ifFalse: [
+        slackNotification(
+          'notify_team',
+          '⚠️ Consumer group lag elevated.\nIncident: {{title}}\nMonitor the group and consider scaling if lag persists.',
+          '#billing-team',
+        ),
+      ],
+    },
+  ],
+};
+
+// ---------------------------------------------------------------------------
 // Runbook Registry
 // ---------------------------------------------------------------------------
 
@@ -527,6 +612,7 @@ export const BUILTIN_RUNBOOKS: RunbookDefinition[] = [
   billingAnomalyResponse,
   healthCheckFailureResponse,
   chaosExperimentFailureResponse,
+  consumerGroupLagResponse,
 ];
 
 /**
