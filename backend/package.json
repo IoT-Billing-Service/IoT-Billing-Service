@@ -68,7 +68,7 @@
     "@types/node": "^22.15.3",
     "@types/pg": "^8.20.0",
     "esbuild": "^0.24.0",
-    "eslint": "^9.24.0",
+    "eslint": "^10.7.0",
     "eslint-config-prettier": "^10.1.2",
     "prettier": "^3.5.3",
     "prisma": "^6.6.0",
