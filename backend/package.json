@@ -54,7 +54,7 @@
     "async-mutex": "^0.5.0",
     "dotenv": "^16.4.7",
     "ed2curve": "^0.3.0",
-    "fastify": "^5.3.1",
+    "fastify": "^5.10.0",
     "ioredis": "^5.6.1",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.21.0",
