@@ -752,6 +752,85 @@ export function recordReplicatedTransaction(
   });
 }
 
+// --- Consumer Group Lag metrics (issue #66) ---------------------------------
+// Tracks Redis Streams consumer group lag and consumer health for auto-scaling
+// and alerting on stalled or overloaded consumers.
+
+/**
+ * Number of pending entries in a consumer group's PEL (Pending Entries List).
+ * High values indicate consumers are falling behind the stream production rate.
+ */
+export const consumerGroupPendingEntries: promClient.Gauge = new promClient.Gauge({
+  name: 'stream_consumer_group_pending_entries',
+  help: 'Pending entries in a Redis Streams consumer group',
+  labelNames: ['stream', 'group'],
+});
+
+/**
+ * Number of active consumers in a consumer group.
+ * Drops to 0 when all consumers have disconnected, which triggers alerting.
+ */
+export const consumerGroupConsumers: promClient.Gauge = new promClient.Gauge({
+  name: 'stream_consumer_group_consumers',
+  help: 'Active consumer count in a Redis Streams consumer group',
+  labelNames: ['stream', 'group'],
+});
+
+/**
+ * Maximum idle time across consumers in a group (ms).
+ * -1 means no consumers are present or the probe failed.
+ */
+export const consumerGroupIdleTimeMs: promClient.Gauge = new promClient.Gauge({
+  name: 'stream_consumer_group_idle_time_ms',
+  help: 'Maximum consumer idle time in ms for a Redis Streams consumer group (-1 if no consumers)',
+  labelNames: ['stream', 'group'],
+});
+
+/**
+ * Consumer group lag health: 1=healthy, 0=degraded, -1=unhealthy.
+ * Degraded: pending entries >= warn threshold. Unhealthy: >= critical or unreachable.
+ */
+export const consumerGroupLagHealth: promClient.Gauge = new promClient.Gauge({
+  name: 'stream_consumer_group_lag_health',
+  help: 'Consumer group lag health (1=healthy, 0=degraded, -1=unhealthy)',
+  labelNames: ['stream', 'group'],
+});
+
+// Setters --------------------------------------------------------------------
+
+export function setConsumerGroupPendingEntries(
+  stream: string,
+  group: string,
+  count: number,
+): void {
+  consumerGroupPendingEntries.set({ stream, group }, count);
+}
+
+export function setConsumerGroupConsumers(
+  stream: string,
+  group: string,
+  count: number,
+): void {
+  consumerGroupConsumers.set({ stream, group }, count);
+}
+
+export function setConsumerGroupIdleTimeMs(
+  stream: string,
+  group: string,
+  maxIdleMs: number,
+): void {
+  consumerGroupIdleTimeMs.set({ stream, group }, maxIdleMs);
+}
+
+export function setConsumerGroupLagHealth(
+  stream: string,
+  group: string,
+  health: 'healthy' | 'degraded' | 'unhealthy',
+): void {
+  const val = health === 'healthy' ? 1 : health === 'degraded' ? 0 : -1;
+  consumerGroupLagHealth.set({ stream, group }, val);
+}
+
 // Metrics endpoint -------------------------------------------------------------
 
 export function getMetricsRegistry(): promClient.Registry {

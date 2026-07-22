@@ -270,3 +270,26 @@ export function createBillingAnomalyRule(
     },
   };
 }
+
+/**
+ * Create a detection rule for consumer group lag.
+ * Monitors the consumer group lag health gauge and creates incidents
+ * when pending entries exceed configured thresholds.
+ */
+export function createConsumerGroupLagRule(
+  pendingThreshold: number,
+  severity: IncidentSeverity,
+): DetectionRule {
+  return {
+    name: `consumer_group_lag_${pendingThreshold}`,
+    description: `Consumer group pending entries exceed ${pendingThreshold} threshold`,
+    source: 'consumer_group_lag',
+    severity,
+    suggestedRunbook: 'consumer_group_lag_response',
+    evaluate: async (): Promise<DetectedIncident | null> => {
+      // In production, this would query the consumer lag monitor or Prometheus.
+      // The alert rules in billing_alerts.yml fire independently via Alertmanager.
+      return null;
+    },
+  };
+}

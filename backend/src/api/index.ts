@@ -48,6 +48,7 @@ import { GcPauseMonitor } from './metrics/gc_monitor.js';
 import { PoolMetricsCollector } from './metrics/pool_metrics_collector.js';
 import { getSseManager } from '../core/ingestion/sse_manager.js';
 import { getReplicationMonitor } from '../replication/replication_monitor.js';
+import { getConsumerLagMonitor } from '../stream/consumer_lag_monitor.js';
 import { createIncidentResponseModule } from '../incident_response/index.js';
 import { registerIncidentResponseRoutes } from '../incident_response/routes.js';
 import { initSecretManager, getSecretManager } from '../security/index.js';
@@ -158,6 +159,11 @@ async function start(): Promise<void> {
   const replicationMonitor = getReplicationMonitor();
   replicationMonitor.start();
 
+  // Issue #66: start the consumer group lag monitor for auto-scaling and
+  // alerting on Redis Streams consumer group backlog.
+  const consumerLagMonitor = getConsumerLagMonitor();
+  consumerLagMonitor.start();
+
   // Issue #85: Incident Response Runbook Automation with PagerDuty Integration.
   // Initialise the module and register admin API routes.
   const incidentResponseConfig = {
@@ -183,6 +189,7 @@ async function start(): Promise<void> {
     gcMonitor.stop();
     poolCollector.stop();
     replicationMonitor.stop();
+    consumerLagMonitor.stop();
     runtimeConfigAuditor.stop();
     stopConfigWatcher();
     incidentResponse.stop();
@@ -213,6 +220,7 @@ async function start(): Promise<void> {
     gcMonitor.stop();
     poolCollector.stop();
     replicationMonitor.stop();
+    consumerLagMonitor.stop();
     incidentResponse.stop();
     getSecretManager().stop();
     await listener.stop();
