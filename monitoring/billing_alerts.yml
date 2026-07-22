@@ -2,13 +2,31 @@ groups:
   - name: iot_billing_alerts
     rules:
       - alert: HighBillingLatency
-        expr: billing_operation_duration_seconds{quantile="0.99"} > 0.2
+        expr: histogram_quantile(0.99, sum(rate(billing_operation_duration_ms_bucket[5m])) by (le)) > 200
         for: 1m
         labels:
           severity: critical
         annotations:
           summary: "Billing P99 latency exceeds 200ms"
-          description: "P99 billing latency is {{ $value }}s, exceeding 200ms target"
+          description: "P99 billing latency is {{ $value }}ms, exceeding 200ms target"
+
+      - alert: RuntimeConfigurationDrift
+        expr: runtime_config_integrity_state < 1 or increase(runtime_config_drift_events_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Runtime billing configuration integrity failure"
+          description: "Billing is fail-closed until a valid signed baseline is restored."
+
+      - alert: RuntimeConfigurationSignatureFailures
+        expr: increase(runtime_config_signature_failures_total[5m]) > 0
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unauthorized runtime configuration update rejected"
+          description: "Inspect structured runtime_configuration_audit logs and rotate the release key if unexpected."
 
       - alert: FailedSignatureVerification
         expr: rate(billing_signature_failures_total[5m]) > 0.1
@@ -63,3 +81,50 @@ groups:
         annotations:
           summary: "Unexpected contract upgrade detected"
           description: "Contract upgraded to unexpected version {{ $value }}"
+
+  - name: iot_billing_consumer_lag
+    rules:
+      - alert: ConsumerGroupLagHigh
+        expr: stream_consumer_group_pending_entries > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer group {{ $labels.group }} has high pending entries"
+          description: "Stream {{ $labels.stream }} group {{ $labels.group }} has {{ $value }} pending entries, exceeding the 1000 warning threshold. Consumers may be falling behind."
+
+      - alert: ConsumerGroupLagCritical
+        expr: stream_consumer_group_pending_entries > 10000
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Consumer group {{ $labels.group }} has critical backlog"
+          description: "Stream {{ $labels.stream }} group {{ $labels.group }} has {{ $value }} pending entries, exceeding the 10000 critical threshold. Immediate consumer scaling or intervention required."
+
+      - alert: ConsumerGroupUnhealthy
+        expr: stream_consumer_group_lag_health <= 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer group {{ $labels.group }} is degraded or unhealthy"
+          description: "Stream {{ $labels.stream }} group {{ $labels.group }} health is {{ $value }} (1=healthy, 0=degraded, -1=unhealthy). Check consumer connectivity."
+
+      - alert: ConsumerGroupNoConsumers
+        expr: stream_consumer_group_consumers == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Consumer group {{ $labels.group }} has no active consumers"
+          description: "Stream {{ $labels.stream }} group {{ $labels.group }} has 0 active consumers. Events will accumulate but not be processed."
+
+      - alert: ConsumerGroupIdleHigh
+        expr: stream_consumer_group_idle_time_ms > 300000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer group {{ $labels.group }} has idle consumers"
+          description: "Stream {{ $labels.stream }} group {{ $labels.group }} max consumer idle time is {{ $value }}ms (5+ minutes). Consumers may be stuck or disconnected."

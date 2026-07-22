@@ -4,6 +4,13 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { PrismaClient } from '@prisma/client';
 import { getEnv } from '../config/env.js';
+import {
+  configureRuntimeConfigurationAudit,
+  getRuntimeConfigurationAuditStatus,
+  initializeConfigWatcher,
+  stopConfigWatcher,
+} from '../config/index.js';
+import { getRedis } from '../database/redis.js';
 import { initTelemetry, shutdownTelemetry } from '../core/diagnostics/otel.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
@@ -41,8 +48,10 @@ import { GcPauseMonitor } from './metrics/gc_monitor.js';
 import { PoolMetricsCollector } from './metrics/pool_metrics_collector.js';
 import { getSseManager } from '../core/ingestion/sse_manager.js';
 import { getReplicationMonitor } from '../replication/replication_monitor.js';
+import { getConsumerLagMonitor } from '../stream/consumer_lag_monitor.js';
 import { createIncidentResponseModule } from '../incident_response/index.js';
 import { registerIncidentResponseRoutes } from '../incident_response/routes.js';
+import { initSecretManager, getSecretManager } from '../security/index.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -87,6 +96,8 @@ export async function buildApp(
 
 async function start(): Promise<void> {
   initTelemetry();
+
+  await initSecretManager();
 
   await runMigrationWithDistributedLock();
 
@@ -158,6 +169,11 @@ async function start(): Promise<void> {
   const replicationMonitor = getReplicationMonitor();
   replicationMonitor.start();
 
+  // Issue #66: start the consumer group lag monitor for auto-scaling and
+  // alerting on Redis Streams consumer group backlog.
+  const consumerLagMonitor = getConsumerLagMonitor();
+  consumerLagMonitor.start();
+
   // Issue #85: Incident Response Runbook Automation with PagerDuty Integration.
   // Initialise the module and register admin API routes.
   const incidentResponseConfig = {
@@ -183,7 +199,11 @@ async function start(): Promise<void> {
     gcMonitor.stop();
     poolCollector.stop();
     replicationMonitor.stop();
+    consumerLagMonitor.stop();
+    runtimeConfigAuditor.stop();
+    stopConfigWatcher();
     incidentResponse.stop();
+    getSecretManager().stop();
     await listener.stop();
     await closeTimescalePool();
     await app.close();
@@ -210,13 +230,39 @@ async function start(): Promise<void> {
     gcMonitor.stop();
     poolCollector.stop();
     replicationMonitor.stop();
+    consumerLagMonitor.stop();
     incidentResponse.stop();
+    getSecretManager().stop();
     await listener.stop();
     await closeTimescalePool();
     await prisma.$disconnect();
     await shutdownTelemetry();
     process.exit(1);
   }
+}
+
+function parseRuntimeConfigurationKeys(raw: string): Map<string, string> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      'RUNTIME_CONFIG_AUTHORIZED_KEYS must be a JSON object of key ids to PEM public keys',
+    );
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(
+      'RUNTIME_CONFIG_AUTHORIZED_KEYS must be a JSON object of key ids to PEM public keys',
+    );
+  }
+  const keys = new Map<string, string>();
+  for (const [keyId, publicKey] of Object.entries(parsed)) {
+    if (typeof publicKey !== 'string' || publicKey.length === 0) {
+      throw new Error(`Invalid runtime configuration public key for ${keyId}`);
+    }
+    keys.set(keyId, publicKey);
+  }
+  return keys;
 }
 
 /**

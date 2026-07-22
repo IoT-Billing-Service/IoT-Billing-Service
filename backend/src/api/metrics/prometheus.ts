@@ -243,6 +243,34 @@ export function incrementConfigValidationFailures(): void {
   configValidationFailuresTotal.inc();
 }
 
+// Runtime configuration integrity is intentionally low-cardinality: hashes,
+// key ids, and tenant/device identifiers never become metric labels.
+export const runtimeConfigIntegrityState: promClient.Gauge = new promClient.Gauge({
+  name: 'runtime_config_integrity_state',
+  help: 'Runtime configuration integrity (1=healthy, 0=unverified, -1=drifted)',
+});
+
+export const runtimeConfigDriftEventsTotal: promClient.Counter = new promClient.Counter({
+  name: 'runtime_config_drift_events_total',
+  help: 'Detected runtime configuration drift events',
+});
+
+export const runtimeConfigSignatureFailuresTotal: promClient.Counter = new promClient.Counter({
+  name: 'runtime_config_signature_failures_total',
+  help: 'Rejected runtime configuration updates due to authorization or signature failure',
+});
+
+export function setRuntimeConfigIntegrityState(state: 'healthy' | 'unverified' | 'drifted'): void {
+  runtimeConfigIntegrityState.set(state === 'healthy' ? 1 : state === 'drifted' ? -1 : 0);
+}
+
+export function recordRuntimeConfigAuditEvent(
+  event: 'runtime_config_activated' | 'runtime_config_drift_detected' | 'runtime_config_rejected',
+): void {
+  if (event === 'runtime_config_drift_detected') runtimeConfigDriftEventsTotal.inc();
+  if (event === 'runtime_config_rejected') runtimeConfigSignatureFailuresTotal.inc();
+}
+
 // Rate-limiter observability (issue #50). Every decision is served from
 // centralized Redis state (the token bucket is a server-side Lua script), so
 // the limiter is pod-agnostic by construction. This counter makes that visible
@@ -648,6 +676,34 @@ export const replicatedBillingTransactionsTotal: promClient.Counter = new promCl
 
 // Setters --------------------------------------------------------------------
 
+export const secretRotationEventsTotal: promClient.Counter = new promClient.Counter({
+  name: 'secret_rotation_events_total',
+  help: 'Total secret rotation events',
+  labelNames: ['outcome'],
+});
+
+export const secretRotationDurationMs: promClient.Histogram = new promClient.Histogram({
+  name: 'secret_rotation_duration_ms',
+  help: 'Duration of secret rotation in ms',
+  buckets: [5, 10, 25, 50, 100, 250, 500, 1000],
+});
+
+export const secretManagerActiveSecrets: promClient.Gauge = new promClient.Gauge({
+  name: 'secret_manager_active_secrets',
+  help: 'Current number of active secret payloads loaded',
+});
+
+export function recordSecretRotationEvent(outcome: 'success' | 'failure', durationMs: number): void {
+  secretRotationEventsTotal.inc({ outcome });
+  if (Number.isFinite(durationMs) && durationMs > 0) {
+    secretRotationDurationMs.observe(durationMs);
+  }
+}
+
+export function setSecretManagerActiveSecrets(count: number): void {
+  secretManagerActiveSecrets.set(count);
+}
+
 export function setReplicationLagMs(
   sourceRegion: string,
   targetRegion: string,
@@ -696,136 +752,83 @@ export function recordReplicatedTransaction(
   });
 }
 
-// --- Ops Dashboard metrics (issue #ops-dashboard) ----------------------------
+// --- Consumer Group Lag metrics (issue #66) ---------------------------------
+// Tracks Redis Streams consumer group lag and consumer health for auto-scaling
+// and alerting on stalled or overloaded consumers.
 
-export const opsDashboardRequests: promClient.Counter = new promClient.Counter({
-  name: 'ops_dashboard_requests_total',
-  help: 'Total number of ops dashboard API requests',
-  labelNames: ['status'],
+/**
+ * Number of pending entries in a consumer group's PEL (Pending Entries List).
+ * High values indicate consumers are falling behind the stream production rate.
+ */
+export const consumerGroupPendingEntries: promClient.Gauge = new promClient.Gauge({
+  name: 'stream_consumer_group_pending_entries',
+  help: 'Pending entries in a Redis Streams consumer group',
+  labelNames: ['stream', 'group'],
 });
 
-export const opsDashboardLatency: promClient.Histogram = new promClient.Histogram({
-  name: 'ops_dashboard_latency_ms',
-  help: 'Latency of ops dashboard API requests in ms',
-  buckets: [10, 50, 100, 150, 200, 250, 500, 1000, 2500],
+/**
+ * Number of active consumers in a consumer group.
+ * Drops to 0 when all consumers have disconnected, which triggers alerting.
+ */
+export const consumerGroupConsumers: promClient.Gauge = new promClient.Gauge({
+  name: 'stream_consumer_group_consumers',
+  help: 'Active consumer count in a Redis Streams consumer group',
+  labelNames: ['stream', 'group'],
 });
 
-// --- Subscription auto-renewal metrics (issue #36) ---------------------------
-
-const subscriptionRenewalsSucceededCounter: promClient.Counter = new promClient.Counter({
-  name: 'subscription_renewals_succeeded_total',
-  help: 'Total successful subscription auto-renewals',
+/**
+ * Maximum idle time across consumers in a group (ms).
+ * -1 means no consumers are present or the probe failed.
+ */
+export const consumerGroupIdleTimeMs: promClient.Gauge = new promClient.Gauge({
+  name: 'stream_consumer_group_idle_time_ms',
+  help: 'Maximum consumer idle time in ms for a Redis Streams consumer group (-1 if no consumers)',
+  labelNames: ['stream', 'group'],
 });
 
-export function incrementSubscriptionRenewalsSucceeded(): void {
-  subscriptionRenewalsSucceededCounter.inc();
+/**
+ * Consumer group lag health: 1=healthy, 0=degraded, -1=unhealthy.
+ * Degraded: pending entries >= warn threshold. Unhealthy: >= critical or unreachable.
+ */
+export const consumerGroupLagHealth: promClient.Gauge = new promClient.Gauge({
+  name: 'stream_consumer_group_lag_health',
+  help: 'Consumer group lag health (1=healthy, 0=degraded, -1=unhealthy)',
+  labelNames: ['stream', 'group'],
+});
+
+// Setters --------------------------------------------------------------------
+
+export function setConsumerGroupPendingEntries(
+  stream: string,
+  group: string,
+  count: number,
+): void {
+  consumerGroupPendingEntries.set({ stream, group }, count);
 }
 
-const subscriptionRenewalsFailedCounter: promClient.Counter = new promClient.Counter({
-  name: 'subscription_renewals_failed_total',
-  help: 'Total failed subscription auto-renewals',
-});
-
-export function incrementSubscriptionRenewalsFailed(): void {
-  subscriptionRenewalsFailedCounter.inc();
+export function setConsumerGroupConsumers(
+  stream: string,
+  group: string,
+  count: number,
+): void {
+  consumerGroupConsumers.set({ stream, group }, count);
 }
 
-const subscriptionRenewalQueueDepthGauge: promClient.Gauge = new promClient.Gauge({
-  name: 'subscription_renewal_queue_depth',
-  help: 'Number of subscriptions currently queued for renewal processing',
-});
-
-export function setSubscriptionRenewalQueueDepth(depth: number): void {
-  subscriptionRenewalQueueDepthGauge.set(depth);
+export function setConsumerGroupIdleTimeMs(
+  stream: string,
+  group: string,
+  maxIdleMs: number,
+): void {
+  consumerGroupIdleTimeMs.set({ stream, group }, maxIdleMs);
 }
 
-const subscriptionRenewalRunningGauge: promClient.Gauge = new promClient.Gauge({
-  name: 'subscription_renewal_running',
-  help: '1 if a renewal tick is currently in progress, 0 otherwise',
-});
-
-export function setSubscriptionRenewalRunning(running: boolean): void {
-  subscriptionRenewalRunningGauge.set(running ? 1 : 0);
-}
-
-// --- Capacity planning metrics (issue #87) -----------------------------------
-
-export const capacityUtilizationRatio: promClient.Gauge = new promClient.Gauge({
-  name: 'capacity_utilization_ratio',
-  help: 'Projected capacity utilization ratio by dimension and period',
-  labelNames: ['dimension', 'period'],
-});
-
-export function setCapacityUtilizationRatio(dimension: string, period: string, ratio: number): void {
-  capacityUtilizationRatio.set({ dimension, period }, ratio);
-}
-
-export const capacityProjectedGrowthRate: promClient.Gauge = new promClient.Gauge({
-  name: 'capacity_projected_growth_rate',
-  help: 'Projected capacity growth rate (slope per day) by dimension and period',
-  labelNames: ['dimension', 'period'],
-});
-
-export function setCapacityProjectedGrowthRate(dimension: string, period: string, rate: number): void {
-  capacityProjectedGrowthRate.set({ dimension, period }, rate);
-}
-
-export const capacityTrendDataPoints: promClient.Gauge = new promClient.Gauge({
-  name: 'capacity_trend_data_points',
-  help: 'Number of data points used in capacity trend calculation',
-  labelNames: ['dimension', 'period'],
-});
-
-export function setCapacityTrendDataPoints(dimension: string, period: string, count: number): void {
-  capacityTrendDataPoints.set({ dimension, period }, count);
-}
-
-export const capacityTrendLastUpdated: promClient.Gauge = new promClient.Gauge({
-  name: 'capacity_trend_last_updated_seconds',
-  help: 'Unix timestamp of the last capacity trend update',
-  labelNames: ['dimension', 'period'],
-});
-
-export function setCapacityTrendLastUpdated(dimension: string, period: string, timestamp: number): void {
-  capacityTrendLastUpdated.set({ dimension, period }, timestamp);
-}
-
-// --- Backup verification metrics (issue #110) --------------------------------
-
-export const backupVerificationSuccessCounter: promClient.Counter = new promClient.Counter({
-  name: 'backup_verification_success_total',
-  help: 'Total successful database backup verifications',
-});
-
-export function recordBackupVerificationSuccess(): void {
-  backupVerificationSuccessCounter.inc();
-}
-
-export const backupVerificationFailureCounter: promClient.Counter = new promClient.Counter({
-  name: 'backup_verification_failure_total',
-  help: 'Total failed database backup verifications',
-});
-
-export function recordBackupVerificationFailure(): void {
-  backupVerificationFailureCounter.inc();
-}
-
-export const restoreTestSuccessCounter: promClient.Counter = new promClient.Counter({
-  name: 'restore_test_success_total',
-  help: 'Total successful database restore tests',
-});
-
-export function recordRestoreTestSuccess(): void {
-  restoreTestSuccessCounter.inc();
-}
-
-export const restoreTestFailureCounter: promClient.Counter = new promClient.Counter({
-  name: 'restore_test_failure_total',
-  help: 'Total failed database restore tests',
-});
-
-export function recordRestoreTestFailure(): void {
-  restoreTestFailureCounter.inc();
+export function setConsumerGroupLagHealth(
+  stream: string,
+  group: string,
+  health: 'healthy' | 'degraded' | 'unhealthy',
+): void {
+  const val = health === 'healthy' ? 1 : health === 'degraded' ? 0 : -1;
+  consumerGroupLagHealth.set({ stream, group }, val);
 }
 
 // Metrics endpoint -------------------------------------------------------------

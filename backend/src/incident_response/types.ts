@@ -86,6 +86,7 @@ export type DetectionSource =
   | 'circuit_breaker'
   | 'replication_lag'
   | 'billing_anomaly'
+  | 'consumer_group_lag'
   | 'chaos_experiment'
   | 'manual';
 

@@ -12,7 +12,7 @@ services:
       - key: HOST
         value: 0.0.0.0
       - key: SKIP_MIGRATION_ON_STARTUP
-        value: "true"
+        value: 'true'
       - key: OTEL_SERVICE_NAME
         value: iot-billing-backend
       - key: JWT_SECRET
@@ -31,3 +31,9 @@ services:
         sync: false
       - key: ADMIN_SECRET_KEY
         sync: false
+      # Required for fail-closed production billing. Set this to a JSON map of
+      # release key ids to PEM-encoded Ed25519 public keys in Render.
+      - key: RUNTIME_CONFIG_AUTHORIZED_KEYS
+        sync: false
+      - key: RUNTIME_CONFIG_AUDIT_SCAN_INTERVAL_MS
+        value: '1000'
