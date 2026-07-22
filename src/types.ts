@@ -180,3 +180,62 @@ export interface ComponentHealth {
   readonly latencyMs: number;
   readonly lastChecked: Date;
 }
+
+// ─── Contract Verification Types ──────────────────────────────────────────────
+
+/** Supported Stellar/Soroban network environments. */
+export type NetworkEnvironment = 'mainnet' | 'testnet' | 'futurenet' | 'standalone';
+
+/** Contract verification status. */
+export type ContractVerificationStatus = 'unverified' | 'pending' | 'partial' | 'verified' | 'failed';
+
+/** A deployed Soroban smart contract. */
+export interface DeployedContract {
+  readonly id: string;
+  readonly name: string;
+  readonly contractAddress: string;
+  readonly deployerAddress: string;
+  readonly wasmHash: string;
+  readonly sourceCodeHash: string | null;
+  readonly network: NetworkEnvironment;
+  readonly deployedAt: string;
+  readonly lastVerifiedAt?: string;
+  readonly verificationStatus: ContractVerificationStatus;
+  readonly version: string;
+  readonly rustcVersion: string;
+  readonly sorobanSdkVersion: string;
+  readonly wasmSizeBytes: number;
+  readonly securityScore: number;
+  readonly auditReportCount: number;
+  readonly functionCount: number;
+  readonly storageEntries: number;
+  readonly ledgerSequence: number;
+  readonly metadataUri?: string;
+}
+
+/** Individual verification check within a full verification run. */
+export interface VerificationCheck {
+  readonly name: string;
+  readonly description: string;
+  readonly status: 'pass' | 'fail' | 'running' | 'pending';
+  readonly detail?: string;
+  readonly durationMs: number;
+}
+
+/** Result of a full contract verification run. */
+export interface ContractVerificationResult {
+  readonly contractId: string;
+  readonly timestamp: string;
+  readonly overallStatus: 'verified' | 'failed' | 'partial';
+  readonly checks: readonly VerificationCheck[];
+  readonly totalDurationMs: number;
+  readonly verifierNode: string;
+}
+
+/** Contract verification query filter. */
+export interface ContractVerificationFilter {
+  readonly contractName?: string;
+  readonly contractAddress?: string;
+  readonly status?: ContractVerificationStatus;
+  readonly network?: NetworkEnvironment;
+}

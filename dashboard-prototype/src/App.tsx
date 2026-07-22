@@ -5,6 +5,7 @@ import ZkProofVerifier from './components/ZkProofVerifier';
 import EscrowList from './components/EscrowList';
 import NetworkRetryQueue from './components/NetworkRetryQueue';
 import TelemetryFeed from './components/TelemetryFeed';
+import ContractVerificationDashboard from './components/ContractVerificationDashboard';
 import { 
   Network, 
   Cpu, 
@@ -19,7 +20,8 @@ import {
   Github,
   Zap,
   HelpCircle,
-  Code2
+  Code2,
+  Layers
 } from 'lucide-react';
 
 export default function App() {
@@ -60,6 +62,7 @@ export default function App() {
   const [zkVerifySuccessCount, setZkVerifySuccessCount] = useState<number>(2);
   const [rentDecayAlert, setRentDecayAlert] = useState<boolean>(false);
   const [showExplanationModal, setShowExplanationModal] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'playground' | 'contracts'>('playground');
 
   // Stats Counters
   const [totalXlmBilled, setTotalXlmBilled] = useState<number>(0.1885);
@@ -378,8 +381,40 @@ export default function App() {
         </div>
       </header>
 
+      {/* Tab Navigation */}
+      <div className="bg-neutral-950 border-b border-neutral-900 sticky top-[73px] z-40 px-6">
+        <div className="max-w-7xl mx-auto flex items-center gap-1">
+          <button
+            onClick={() => setActiveTab('playground')}
+            className={`px-4 py-2.5 text-xs font-mono font-medium transition-all border-b-2 ${
+              activeTab === 'playground'
+                ? 'border-cyan-400 text-cyan-400'
+                : 'border-transparent text-neutral-400 hover:text-neutral-300'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5 inline mr-1.5" />
+            DePIN Playground
+          </button>
+          <button
+            onClick={() => setActiveTab('contracts')}
+            className={`px-4 py-2.5 text-xs font-mono font-medium transition-all border-b-2 ${
+              activeTab === 'contracts'
+                ? 'border-purple-400 text-purple-400'
+                : 'border-transparent text-neutral-400 hover:text-neutral-300'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 inline mr-1.5" />
+            Contract Verification
+          </button>
+        </div>
+      </div>
+
       {/* Main Interactive Work Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+        {activeTab === 'contracts' ? (
+          <ContractVerificationDashboard />
+        ) : (
+          <>
         
         {/* Real-time rent storage alert overlay */}
         {rentDecayAlert && (
@@ -514,6 +549,8 @@ export default function App() {
             />
           </div>
         </div>
+          </>
+        )}
       </main>
 
       {/* Explanation Modal */}
