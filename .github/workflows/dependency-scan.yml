@@ -133,7 +133,7 @@ jobs:
           category: npm-audit-${{ matrix.workspace.path }}
 
       - name: Upload npm audit report artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: npm-audit-${{ matrix.workspace.path }}
@@ -184,7 +184,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload cargo audit report
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: cargo-audit-${{ matrix.workspace.label }}
@@ -243,7 +243,7 @@ jobs:
           category: trivy-${{ matrix.dockerfile.label }}
 
       - name: Upload Trivy report artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: trivy-results-${{ matrix.dockerfile.label }}
