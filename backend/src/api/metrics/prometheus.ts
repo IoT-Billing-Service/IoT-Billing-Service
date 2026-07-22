@@ -243,6 +243,34 @@ export function incrementConfigValidationFailures(): void {
   configValidationFailuresTotal.inc();
 }
 
+// Runtime configuration integrity is intentionally low-cardinality: hashes,
+// key ids, and tenant/device identifiers never become metric labels.
+export const runtimeConfigIntegrityState: promClient.Gauge = new promClient.Gauge({
+  name: 'runtime_config_integrity_state',
+  help: 'Runtime configuration integrity (1=healthy, 0=unverified, -1=drifted)',
+});
+
+export const runtimeConfigDriftEventsTotal: promClient.Counter = new promClient.Counter({
+  name: 'runtime_config_drift_events_total',
+  help: 'Detected runtime configuration drift events',
+});
+
+export const runtimeConfigSignatureFailuresTotal: promClient.Counter = new promClient.Counter({
+  name: 'runtime_config_signature_failures_total',
+  help: 'Rejected runtime configuration updates due to authorization or signature failure',
+});
+
+export function setRuntimeConfigIntegrityState(state: 'healthy' | 'unverified' | 'drifted'): void {
+  runtimeConfigIntegrityState.set(state === 'healthy' ? 1 : state === 'drifted' ? -1 : 0);
+}
+
+export function recordRuntimeConfigAuditEvent(
+  event: 'runtime_config_activated' | 'runtime_config_drift_detected' | 'runtime_config_rejected',
+): void {
+  if (event === 'runtime_config_drift_detected') runtimeConfigDriftEventsTotal.inc();
+  if (event === 'runtime_config_rejected') runtimeConfigSignatureFailuresTotal.inc();
+}
+
 // Rate-limiter observability (issue #50). Every decision is served from
 // centralized Redis state (the token bucket is a server-side Lua script), so
 // the limiter is pod-agnostic by construction. This counter makes that visible

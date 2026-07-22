@@ -67,7 +67,14 @@ import type { Redis } from 'ioredis';
 import {
   incrementConfigReloadTotal,
   incrementConfigValidationFailures,
+  recordRuntimeConfigAuditEvent,
+  setRuntimeConfigIntegrityState,
 } from '../api/metrics/prometheus.js';
+import {
+  RuntimeConfigurationAuditor,
+  RuntimeConfigurationIntegrityError,
+  type SignedRuntimeConfiguration,
+} from './runtime_audit.js';
 
 let lastTimestamp = 0;
 let sequence = 0;
@@ -221,6 +228,91 @@ interface SerializedConfig {
   tiers: Record<string, SerializedBillingTier>;
 }
 
+function serializeForAudit(config: MetricRangesConfig): SerializedConfig {
+  return {
+    version_id: config.version_id,
+    tiers: Object.fromEntries(
+      Object.entries(config.tiers).map(
+        ([name, tier]: [string, BillingTier]): [string, SerializedBillingTier] => [
+          name,
+          { min: tier.min, max: Number.isFinite(tier.max) ? tier.max : null },
+        ],
+      ),
+    ),
+  };
+}
+
+let runtimeConfigurationAuditor: RuntimeConfigurationAuditor<SerializedConfig> | null = null;
+
+/**
+ * Configure the integrity gate once during bootstrap. A caller must activate a
+ * signed configuration before billing is allowed. Keeping this dependency
+ * explicit prevents a development fallback from silently becoming production
+ * trust.
+ */
+export function configureRuntimeConfigurationAudit(
+  authorizedKeys: ReadonlyMap<string, string | Buffer | crypto.KeyObject>,
+): RuntimeConfigurationAuditor<SerializedConfig> {
+  runtimeConfigurationAuditor = new RuntimeConfigurationAuditor({
+    readActiveConfiguration: (): SerializedConfig => serializeForAudit(getConfig()),
+    authorizedKeys,
+    auditSink: (event): void => {
+      recordRuntimeConfigAuditEvent(event.event);
+      console.info(JSON.stringify({ ...event, component: 'runtime_configuration_audit' }));
+    },
+  });
+  setRuntimeConfigIntegrityState('unverified');
+  return runtimeConfigurationAuditor;
+}
+
+export function activateSignedRuntimeConfiguration(
+  envelope: SignedRuntimeConfiguration<SerializedConfig>,
+): void {
+  const validation = parseAndValidateSerializedConfig(envelope.payload);
+  if (validation === null) {
+    throw new RuntimeConfigurationIntegrityError('Configuration rejected: invalid payload');
+  }
+  if (validation.version_id !== envelope.versionId) {
+    throw new RuntimeConfigurationIntegrityError(
+      'Configuration rejected: version id does not match payload',
+    );
+  }
+  if (runtimeConfigurationAuditor === null) {
+    throw new RuntimeConfigurationIntegrityError('Configuration audit has not been configured');
+  }
+  // Verify before changing the active object. A rejected update cannot affect
+  // billing, even briefly.
+  runtimeConfigurationAuditor.activate(envelope);
+  setConfig(validation);
+}
+
+/** Synchronous fail-closed gate used by billing operations. */
+export function assertBillingConfigurationTrusted(): void {
+  if (runtimeConfigurationAuditor === null) {
+    throw new RuntimeConfigurationIntegrityError(
+      'Billing blocked: configuration audit is not configured',
+    );
+  }
+  try {
+    runtimeConfigurationAuditor.assertTrusted();
+    setRuntimeConfigIntegrityState('healthy');
+  } catch (error) {
+    setRuntimeConfigIntegrityState(runtimeConfigurationAuditor.getStatus().status);
+    throw error;
+  }
+}
+
+export function getRuntimeConfigurationAuditStatus(): ReturnType<
+  RuntimeConfigurationAuditor<SerializedConfig>['getStatus']
+> {
+  const status = runtimeConfigurationAuditor?.getStatus() ?? {
+    status: 'unverified' as const,
+    versionId: null,
+  };
+  setRuntimeConfigIntegrityState(status.status);
+  return status;
+}
+
 export function getConfig(versionId?: string): MetricRangesConfig {
   if (versionId !== undefined) {
     const cached = configRegistry.get(versionId);
@@ -306,6 +398,15 @@ function parseAndValidateRedisConfig(raw: string): MetricRangesConfig | null {
   return validation.data;
 }
 
+function parseAndValidateSerializedConfig(raw: SerializedConfig): MetricRangesConfig | null {
+  const hydrated: MetricRangesConfig = { version_id: raw.version_id, tiers: {} };
+  for (const [key, tier] of Object.entries(raw.tiers)) {
+    hydrated.tiers[key] = { min: tier.min, max: tier.max ?? Infinity };
+  }
+  const validation = validateMetricRangesConfig(hydrated);
+  return validation.success ? validation.data : null;
+}
+
 let activeWatcherInterval: ReturnType<typeof setInterval> | null = null;
 
 export async function initializeConfigWatcher(redis: Redis, intervalMs = 50): Promise<void> {
@@ -325,10 +426,7 @@ export async function initializeConfigWatcher(redis: Redis, intervalMs = 50): Pr
   } else {
     const activeVal = await redis.get('config:active');
     if (activeVal !== null) {
-      const config = parseAndValidateRedisConfig(activeVal);
-      if (config !== null) {
-        setConfig(config);
-      }
+      applyRedisConfiguration(activeVal);
       // If validation fails at startup we keep the in-memory fallback but do
       // NOT throw — the watcher will retry on the next poll cycle.
     }
@@ -348,8 +446,16 @@ export async function initializeConfigWatcher(redis: Redis, intervalMs = 50): Pr
           // Quick version-id check before full parse to avoid redundant work
           let candidateVersionId: string | undefined;
           try {
-            const quick = JSON.parse(activeVal) as { version_id?: unknown };
-            candidateVersionId = typeof quick.version_id === 'string' ? quick.version_id : undefined;
+            const quick = JSON.parse(activeVal) as {
+              version_id?: unknown;
+              payload?: { version_id?: unknown };
+            };
+            candidateVersionId =
+              typeof quick.version_id === 'string'
+                ? quick.version_id
+                : typeof quick.payload?.version_id === 'string'
+                  ? quick.payload.version_id
+                  : undefined;
           } catch {
             // Will be caught by parseAndValidateRedisConfig below
           }
@@ -359,10 +465,7 @@ export async function initializeConfigWatcher(redis: Redis, intervalMs = 50): Pr
             return;
           }
 
-          const config = parseAndValidateRedisConfig(activeVal);
-          if (config !== null && config.version_id !== currentConfigVersionId) {
-            setConfig(config);
-          }
+          applyRedisConfiguration(activeVal);
           // If config is null, validation failed; previous config retained (rollback).
         }
       } catch (err) {
@@ -372,6 +475,35 @@ export async function initializeConfigWatcher(redis: Redis, intervalMs = 50): Pr
   }, intervalMs);
 
   activeWatcherInterval.unref();
+}
+
+/**
+ * Accept either the legacy unsigned representation (development migration
+ * only) or the signed envelope required by the configured audit gate. An
+ * invalid signature is never applied to the in-memory billing configuration.
+ */
+function applyRedisConfiguration(raw: string): void {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parseAndValidateRedisConfig(raw);
+    return;
+  }
+
+  if (
+    typeof parsed === 'object' &&
+    parsed !== null &&
+    'signature' in parsed &&
+    'payload' in parsed &&
+    'keyId' in parsed
+  ) {
+    activateSignedRuntimeConfiguration(parsed as SignedRuntimeConfiguration<SerializedConfig>);
+    return;
+  }
+
+  const config = parseAndValidateRedisConfig(raw);
+  if (config !== null) setConfig(config);
 }
 
 export function stopConfigWatcher(): void {

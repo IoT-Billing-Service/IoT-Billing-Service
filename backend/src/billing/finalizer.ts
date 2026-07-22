@@ -7,6 +7,7 @@ import type { BillingCycleStore } from './billing_cycle_repository.js';
 import { uuidv7 } from './uuidv7.js';
 import { recordBillingOperationDuration } from '../api/metrics/prometheus.js';
 import { applyGeoMultiplier, pricingTableDigest } from './geo_pricing.js';
+import { assertBillingConfigurationTrusted } from '../config/index.js';
 
 /**
  * Concurrency-safe billing-cycle finalization (issue #42).
@@ -86,9 +87,12 @@ export async function finalizeBillingCycle(
   options: FinalizeOptions = {},
 ): Promise<FinalizationResult> {
   const startTime = performance.now();
+  // Fail closed before any state transition or payment computation. This is an
+  // in-memory hash comparison; no telemetry/audit I/O is added to the hot path.
+  assertBillingConfigurationTrusted();
   const cycle = await store.getCycle(cycleId);
   if (cycle === null) {
-    return result(cycleId, 'not_found', null, null, startTime);
+    return result(cycleId, 'not_found', null, null, null, startTime);
   }
   if (cycle.state !== BillingCycleState.OPEN) {
     return result(cycleId, 'not_open', cycle.state, null, startTime);
