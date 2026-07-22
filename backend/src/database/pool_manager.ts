@@ -9,6 +9,7 @@ import {
   setTenantPoolActiveConnections,
   setTenantPoolQueueDepth,
 } from '../api/metrics/prometheus.js';
+import { getSecretManager } from '../security/index.js';
 
 export const TENANT_MIN_CONNECTIONS = 2;
 export const TENANT_MAX_CONNECTIONS = 10;
@@ -68,6 +69,15 @@ export class ElasticPoolManager {
 
     this.pools.set(name, pool);
     return pool;
+  }
+
+  replacePool(name: string, config: pg.PoolConfig): pg.Pool {
+    const oldPool = this.pools.get(name);
+    const newPool = this.createPool(name, config);
+    if (oldPool) {
+      oldPool.end().catch(err => console.error(`Error draining old pool "${name}":`, err));
+    }
+    return newPool;
   }
 
   getPool(name: string): pg.Pool | undefined {
@@ -358,8 +368,27 @@ function getPoolManager(): ElasticPoolManager {
   }
   cachedManager = new ElasticPoolManager();
   const env = getEnv();
+  let dbUrl = env.TIMESCALEDB_URL;
+  try {
+    const sm = getSecretManager();
+    dbUrl = sm.getSecrets().TIMESCALEDB_URL || env.TIMESCALEDB_URL;
+    
+    // Subscribe to rotation events to gracefully roll the connection pool
+    sm.on('rotated', () => {
+      console.log('Database credentials rotated. Rebuilding connection pool...');
+      const newUrl = sm.getSecrets().TIMESCALEDB_URL;
+      if (newUrl && cachedManager) {
+        cachedTimescalePool = cachedManager.replacePool(TIMESCALE_POOL_NAME, {
+          connectionString: newUrl,
+        });
+      }
+    });
+  } catch (err) {
+    // SecretManager might not be initialized during certain CLI tasks
+  }
+
   cachedTimescalePool = cachedManager.createPool(TIMESCALE_POOL_NAME, {
-    connectionString: env.TIMESCALEDB_URL,
+    connectionString: dbUrl,
   });
   return cachedManager;
 }
