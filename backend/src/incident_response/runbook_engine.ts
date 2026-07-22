@@ -667,7 +667,8 @@ export class RunbookEngine {
     // Check for equality comparison.
     const eqMatch = trimmed.match(/^(\w+(?:\.\w+)*)\s*==\s*"([^"]*)"$/);
     if (eqMatch !== null) {
-      const [, key, expectedValue] = eqMatch;
+      const key: string = eqMatch[1] ?? '';
+      const expectedValue: string = eqMatch[2] ?? '';
       const actualValue = this.resolveValue(key, incident);
       return actualValue === expectedValue;
     }
@@ -675,7 +676,8 @@ export class RunbookEngine {
     // Check for inequality comparison.
     const neqMatch = trimmed.match(/^(\w+(?:\.\w+)*)\s*!=\s*"([^"]*)"$/);
     if (neqMatch !== null) {
-      const [, key, expectedValue] = neqMatch;
+      const key: string = neqMatch[1] ?? '';
+      const expectedValue: string = neqMatch[2] ?? '';
       const actualValue = this.resolveValue(key, incident);
       return actualValue !== expectedValue;
     }
@@ -683,7 +685,9 @@ export class RunbookEngine {
     // Check for numeric comparison.
     const numMatch = trimmed.match(/^(\w+(?:\.\w+)*)\s*(>=|<=|>|<)\s*(\d+)$/);
     if (numMatch !== null) {
-      const [, key, operator, strValue] = numMatch;
+      const key: string = numMatch[1] ?? '';
+      const operator: string = numMatch[2] ?? '';
+      const strValue: string = numMatch[3] ?? '';
       const actualValue = Number(this.resolveValue(key, incident));
       const expectedValue = Number(strValue);
 
@@ -704,15 +708,17 @@ export class RunbookEngine {
    * Resolve a dotted key path against incident data.
    */
   private resolveValue(key: string, incident: DetectedIncident): string {
-    const parts = key.split('.');
+    const parts: string[] = key.split('.');
+    const firstPart: string = parts[0] ?? '';
 
-    if (parts[0] === 'context' && parts[1] !== undefined) {
-      const contextValue = incident.context[parts[1]];
-      return contextValue !== undefined ? String(contextValue) : '';
+    if (firstPart === 'context' && parts[1] !== undefined) {
+      const secondPart: string = parts[1];
+      const contextValue: unknown = (incident.context as Record<string, unknown>)[secondPart];
+      return contextValue !== undefined && contextValue !== null ? String(contextValue) : '';
     }
 
-    const incidentValue = (incident as Record<string, unknown>)[parts[0] ?? ''];
-    return incidentValue !== undefined ? String(incidentValue) : '';
+    const incidentValue: unknown = (incident as unknown as Record<string, unknown>)[firstPart];
+    return incidentValue !== undefined && incidentValue !== null ? String(incidentValue) : '';
   }
 
   /**

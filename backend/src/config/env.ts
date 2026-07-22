@@ -21,6 +21,10 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  // --- OAuth2 token lifetimes (issue #57) -----------------------------------
+  OAUTH2_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  OAUTH2_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  OAUTH2_REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(2592000),
   // --- Session lifecycle / WebSocket keepalive alignment (issue #59) ---------
   // The WebSocket keepalive interval. The access-token lifetime must comfortably
   // exceed this so a token can never expire silently between two keepalive

@@ -60,7 +60,7 @@ describe('validateMetricRangesConfig', () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.version_id).toBe('test-version-1');
-        expect(result.data.tiers.TIER_1).toEqual({ min: 0, max: 1000 });
+        expect(result.data.tiers['TIER_1']).toEqual({ min: 0, max: 1000 });
       }
     });
 
