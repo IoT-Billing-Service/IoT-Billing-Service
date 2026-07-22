@@ -22,6 +22,10 @@ import {
   BillingTransaction,
   BlockchainEnvelope,
   TransactionStatus,
+  DeployedContract,
+  ContractVerificationStatus,
+  ContractVerificationResult,
+  NetworkEnvironment,
 } from './types.js';
 import { TransactionExplorer } from './explorer.js';
 
@@ -270,8 +274,89 @@ billing_pending_transactions ${metrics.pendingTransactions}
     return { valid: explorer.verifyAuditLog() };
   });
 
+  // ─── Contract Verification Routes ──────────────────────────────────────────
+
+  // List deployed contracts
+  app.get('/contracts', async (request) => {
+    const q = request.query as Record<string, string | undefined>;
+    const contracts = explorer.listContracts({
+      contractName: q.name,
+      contractAddress: q.address,
+      status: q.status as ContractVerificationStatus | undefined,
+      network: q.network as NetworkEnvironment | undefined,
+    });
+    return { contracts, total: contracts.length };
+  });
+
+  // Get single contract
+  app.get('/contracts/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const contract = explorer.getContract(id);
+    if (!contract) {
+      reply.status(404);
+      return { error: 'Contract not found' };
+    }
+    return contract;
+  });
+
+  // Verify a contract
+  app.post('/contracts/:id/verify', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const result = explorer.verifyContract(id);
+      return result;
+    } catch (err) {
+      reply.status(404);
+      return { error: (err as Error).message };
+    }
+  });
+
+  // Get contract verification history
+  app.get('/contracts/:id/verifications', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const history = explorer.getVerificationHistory(id);
+      return { contractId: id, verifications: history };
+    } catch (err) {
+      reply.status(404);
+      return { error: (err as Error).message };
+    }
+  });
+
+  // Register a deployed contract
+  app.post('/contracts', async (request, reply) => {
+    const body = request.body as any;
+    if (!body.name || !body.contractAddress || !body.wasmHash) {
+      reply.status(400);
+      return { error: 'Missing required fields: name, contractAddress, wasmHash' };
+    }
+    const contract: DeployedContract = {
+        id: crypto.randomUUID(),
+        name: body.name,
+        contractAddress: body.contractAddress,
+        deployerAddress: body.deployerAddress,
+        wasmHash: body.wasmHash,
+        sourceCodeHash: body.sourceCodeHash,
+        network: body.network || 'testnet',
+        deployedAt: body.deployedAt || new Date().toISOString(),
+        verificationStatus: 'pending',
+        version: body.version,
+        rustcVersion: body.rustcVersion,
+        sorobanSdkVersion: body.sorobanSdkVersion,
+        wasmSizeBytes: body.wasmSizeBytes,
+        securityScore: 0,
+        auditReportCount: 0,
+        functionCount: body.functionCount || 0,
+        storageEntries: body.storageEntries || 0,
+        ledgerSequence: body.ledgerSequence || 0,
+        metadataUri: body.metadataUri,
+      };
+      const registered = explorer.registerContract(contract);
+      reply.status(201);
+      return registered;
+  });
+
   return app;
-}
 
 // ─── Server Starter ─────────────────────────────────────────────────────────
 
