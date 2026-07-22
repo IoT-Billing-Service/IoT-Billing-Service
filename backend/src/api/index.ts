@@ -43,6 +43,7 @@ import { getSseManager } from '../core/ingestion/sse_manager.js';
 import { getReplicationMonitor } from '../replication/replication_monitor.js';
 import { createIncidentResponseModule } from '../incident_response/index.js';
 import { registerIncidentResponseRoutes } from '../incident_response/routes.js';
+import { initSecretManager, getSecretManager } from '../security/index.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -87,6 +88,8 @@ export async function buildApp(
 
 async function start(): Promise<void> {
   initTelemetry();
+
+  await initSecretManager();
 
   await runMigrationWithDistributedLock();
 
@@ -174,6 +177,7 @@ async function start(): Promise<void> {
     poolCollector.stop();
     replicationMonitor.stop();
     incidentResponse.stop();
+    getSecretManager().stop();
     await listener.stop();
     await closeTimescalePool();
     await app.close();
@@ -201,6 +205,7 @@ async function start(): Promise<void> {
     poolCollector.stop();
     replicationMonitor.stop();
     incidentResponse.stop();
+    getSecretManager().stop();
     await listener.stop();
     await closeTimescalePool();
     await prisma.$disconnect();

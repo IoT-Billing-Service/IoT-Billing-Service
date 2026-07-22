@@ -648,6 +648,34 @@ export const replicatedBillingTransactionsTotal: promClient.Counter = new promCl
 
 // Setters --------------------------------------------------------------------
 
+export const secretRotationEventsTotal: promClient.Counter = new promClient.Counter({
+  name: 'secret_rotation_events_total',
+  help: 'Total secret rotation events',
+  labelNames: ['outcome'],
+});
+
+export const secretRotationDurationMs: promClient.Histogram = new promClient.Histogram({
+  name: 'secret_rotation_duration_ms',
+  help: 'Duration of secret rotation in ms',
+  buckets: [5, 10, 25, 50, 100, 250, 500, 1000],
+});
+
+export const secretManagerActiveSecrets: promClient.Gauge = new promClient.Gauge({
+  name: 'secret_manager_active_secrets',
+  help: 'Current number of active secret payloads loaded',
+});
+
+export function recordSecretRotationEvent(outcome: 'success' | 'failure', durationMs: number): void {
+  secretRotationEventsTotal.inc({ outcome });
+  if (Number.isFinite(durationMs) && durationMs > 0) {
+    secretRotationDurationMs.observe(durationMs);
+  }
+}
+
+export function setSecretManagerActiveSecrets(count: number): void {
+  secretManagerActiveSecrets.set(count);
+}
+
 export function setReplicationLagMs(
   sourceRegion: string,
   targetRegion: string,
