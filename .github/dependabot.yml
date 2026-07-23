@@ -1,0 +1,140 @@
+version: 2
+updates:
+  # ── Root Hardhat/Solidity contracts (npm) ──────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "security"
+      - "solidity-contracts"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+      include: "scope"
+    open-pull-requests-limit: 10
+    versioning-strategy: "increase"
+    reviewers:
+      - "JerryIdoko"
+
+  # ── Backend (npm) ──────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "security"
+      - "backend"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+      include: "scope"
+    open-pull-requests-limit: 10
+    versioning-strategy: "increase"
+    reviewers:
+      - "JerryIdoko"
+
+  # ── Frontend (npm) ─────────────────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "security"
+      - "frontend"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+      include: "scope"
+    open-pull-requests-limit: 10
+    versioning-strategy: "increase"
+    reviewers:
+      - "JerryIdoko"
+
+  # ── Dashboard Prototype (npm) ──────────────────────────────────────
+  - package-ecosystem: "npm"
+    directory: "/dashboard-prototype"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "security"
+      - "dashboard"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+      include: "scope"
+    open-pull-requests-limit: 10
+    versioning-strategy: "increase"
+    reviewers:
+      - "JerryIdoko"
+
+  # ── Contracts (Cargo / Rust) ───────────────────────────────────────
+  - package-ecosystem: "cargo"
+    directory: "/contracts"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "security"
+      - "rust"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+      include: "scope"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "JerryIdoko"
+
+  # ── Rust Contracts workspace (Cargo) ───────────────────────────────
+  - package-ecosystem: "cargo"
+    directory: "/contracts/contracts"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "security"
+      - "rust-contracts"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+      include: "scope"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "JerryIdoko"
+
+  # ── GitHub Actions (keep CI tooling up to date) ────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    labels:
+      - "dependencies"
+      - "ci-cd"
+    commit-message:
+      prefix: "chore(ci)"
+      include: "scope"

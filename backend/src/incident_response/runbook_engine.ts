@@ -704,15 +704,17 @@ export class RunbookEngine {
    * Resolve a dotted key path against incident data.
    */
   private resolveValue(key: string, incident: DetectedIncident): string {
-    const parts = key.split('.');
+    const parts: string[] = key.split('.');
+    const firstPart: string = parts[0] ?? '';
 
-    if (parts[0] === 'context' && parts[1] !== undefined) {
-      const contextValue = incident.context[parts[1]];
-      return contextValue !== undefined ? String(contextValue) : '';
+    if (firstPart === 'context' && parts[1] !== undefined) {
+      const secondPart: string = parts[1];
+      const contextValue: unknown = (incident.context as Record<string, unknown>)[secondPart];
+      return contextValue !== undefined && contextValue !== null ? String(contextValue) : '';
     }
 
-    const incidentValue = (incident as Record<string, unknown>)[parts[0] ?? ''];
-    return incidentValue !== undefined ? String(incidentValue) : '';
+    const incidentValue: unknown = (incident as unknown as Record<string, unknown>)[firstPart];
+    return incidentValue !== undefined && incidentValue !== null ? String(incidentValue) : '';
   }
 
   /**

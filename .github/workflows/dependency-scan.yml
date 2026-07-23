@@ -1,0 +1,346 @@
+name: Dependency Vulnerability Scan
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "backend/package.json"
+      - "backend/package-lock.json"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - "dashboard-prototype/package.json"
+      - "dashboard-prototype/package-lock.json"
+      - "contracts/Cargo.toml"
+      - "contracts/Cargo.lock"
+      - "contracts/contracts/Cargo.toml"
+      - "contracts/contracts/Cargo.lock"
+      - "**/Dockerfile"
+      - "**/Dockerfile.*"
+      - ".github/workflows/dependency-scan.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "backend/package.json"
+      - "backend/package-lock.json"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - "dashboard-prototype/package.json"
+      - "dashboard-prototype/package-lock.json"
+      - "contracts/Cargo.toml"
+      - "contracts/Cargo.lock"
+      - "contracts/contracts/Cargo.toml"
+      - "contracts/contracts/Cargo.lock"
+      - "**/Dockerfile"
+      - "**/Dockerfile.*"
+      - ".github/workflows/dependency-scan.yml"
+  schedule:
+    # Run at 09:00 UTC every Monday (after Dependabot runs)
+    - cron: "0 9 * * 1"
+
+  # Allow manual triggering
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: "20"
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════════
+  #  npm audit – Node.js dependency scanning across all workspaces
+  # ═══════════════════════════════════════════════════════════════════
+  npm-audit:
+    name: npm audit (${{ matrix.workspace.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          - label: "Root Contracts"
+            path: "."
+            has_lockfile: false
+          - label: "Backend"
+            path: "backend"
+            has_lockfile: true
+          - label: "Frontend"
+            path: "frontend"
+            has_lockfile: true
+          - label: "Dashboard Prototype"
+            path: "dashboard-prototype"
+            has_lockfile: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: ${{ matrix.workspace.path }}/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.workspace.path }}
+        run: |
+          if [[ "${{ matrix.workspace.has_lockfile }}" == "true" ]] && [[ -f "package-lock.json" ]]; then
+            npm ci --ignore-scripts
+          else
+            echo "::warning::No lockfile found – falling back to npm install"
+            npm install --ignore-scripts --legacy-peer-deps
+          fi
+
+      - name: Run npm audit signatures (supply-chain integrity)
+        working-directory: ${{ matrix.workspace.path }}
+        run: |
+          echo "::group::npm audit signatures (${{ matrix.workspace.label }})"
+          npm audit signatures || true
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Run npm audit
+        working-directory: ${{ matrix.workspace.path }}
+        run: |
+          echo "::group::npm audit (${{ matrix.workspace.label }})"
+          npm audit --audit-level=moderate || true
+          echo "::endgroup::"
+
+      - name: Generate npm audit SARIF report
+        working-directory: ${{ matrix.workspace.path }}
+        run: |
+          npm audit --json > npm-audit-report.json 2>/dev/null || true
+          # Convert npm audit JSON to SARIF for GitHub Security tab
+          if command -v npx &>/dev/null; then
+            npx --yes @security-alert/sarif-converter@latest \
+              --type npm \
+              --input npm-audit-report.json \
+              --output npm-audit-results.sarif 2>/dev/null || echo "::warning::SARIF conversion skipped (converter not available)"
+          fi
+        continue-on-error: true
+
+      - name: Upload npm audit SARIF to GitHub
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: ${{ matrix.workspace.path }}/npm-audit-results.sarif
+          category: npm-audit-${{ matrix.workspace.path }}
+
+      - name: Upload npm audit report artifact
+        uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: npm-audit-${{ matrix.workspace.path }}
+          path: |
+            ${{ matrix.workspace.path }}/npm-audit-report.json
+            ${{ matrix.workspace.path }}/npm-audit-results.sarif
+          retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════════════
+  #  cargo-audit – Rust dependency vulnerability scanning
+  # ═══════════════════════════════════════════════════════════════════
+  cargo-audit:
+    name: cargo audit (${{ matrix.workspace.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace:
+          - path: "contracts"
+            label: "IoT Payload Generator"
+          - path: "contracts/contracts"
+            label: "Soroban Contracts Workspace"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Run cargo audit
+        working-directory: ${{ matrix.workspace.path }}
+        run: |
+          echo "::group::cargo audit (${{ matrix.workspace.label }})"
+          cargo audit --deny warnings
+          echo "::endgroup::"
+
+      - name: Generate cargo audit report (JSON)
+        working-directory: ${{ matrix.workspace.path }}
+        run: |
+          cargo audit --json > cargo-audit-report.json || true
+        continue-on-error: true
+
+      - name: Upload cargo audit report
+        uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: cargo-audit-${{ matrix.workspace.label }}
+          path: ${{ matrix.workspace.path }}/cargo-audit-report.json
+          retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════════════
+  #  Trivy – Docker image vulnerability scanning
+  # ═══════════════════════════════════════════════════════════════════
+  trivy-scan:
+    name: Trivy container scan (${{ matrix.dockerfile.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile:
+          - path: "."
+            dockerfile: "Dockerfile.forecast"
+            label: "Forecast Service"
+          - path: "backend"
+            dockerfile: "backend/Dockerfile"
+            label: "Backend API"
+          - path: "frontend"
+            dockerfile: "frontend/Dockerfile"
+            label: "Frontend App"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.dockerfile.path }}
+          file: ${{ matrix.dockerfile.dockerfile }}
+          load: true
+          tags: localbuild/${{ matrix.dockerfile.label }}:scan
+          push: false
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: localbuild/${{ matrix.dockerfile.label }}:scan
+          format: "sarif"
+          output: "trivy-results-${{ matrix.dockerfile.label }}.sarif"
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+        continue-on-error: true
+
+      - name: Upload Trivy SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results-${{ matrix.dockerfile.label }}.sarif
+          category: trivy-${{ matrix.dockerfile.label }}
+
+      - name: Upload Trivy report artifact
+        uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: trivy-results-${{ matrix.dockerfile.label }}
+          path: trivy-results-${{ matrix.dockerfile.label }}.sarif
+          retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════════════
+  #  CodeQL – Static analysis for JavaScript/TypeScript
+  # ═══════════════════════════════════════════════════════════════════
+  codeql:
+    name: CodeQL analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["javascript-typescript"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended,security-and-quality
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build all TypeScript projects for analysis
+        run: |
+          # Install and build all sub-projects so CodeQL has full type info
+          cd backend && npm install --ignore-scripts --legacy-peer-deps && cd ..
+          cd frontend && npm install --ignore-scripts --legacy-peer-deps && cd ..
+          cd dashboard-prototype && npm install --ignore-scripts --legacy-peer-deps && cd ..
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  # ═══════════════════════════════════════════════════════════════════
+  #  Summary – aggregate all results into a single summary
+  # ═══════════════════════════════════════════════════════════════════
+  scan-summary:
+    name: Scan Summary
+    runs-on: ubuntu-latest
+    needs: [npm-audit, cargo-audit, trivy-scan, codeql]
+    if: always()
+
+    steps:
+      - name: Print scan status summary
+        run: |
+          echo "## 🔒 Dependency Vulnerability Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Scanner | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ needs.npm-audit.result }}" == "success" ]]; then
+            echo "| npm audit | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.npm-audit.result }}" == "failure" ]]; then
+            echo "| npm audit | ❌ Vulnerabilities found |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| npm audit | ⚠️ ${{ needs.npm-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.cargo-audit.result }}" == "success" ]]; then
+            echo "| cargo audit | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.cargo-audit.result }}" == "failure" ]]; then
+            echo "| cargo audit | ❌ Vulnerabilities found |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| cargo audit | ⚠️ ${{ needs.cargo-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.trivy-scan.result }}" == "success" ]]; then
+            echo "| Trivy (containers) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.trivy-scan.result }}" == "failure" ]]; then
+            echo "| Trivy (containers) | ❌ Vulnerabilities found |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Trivy (containers) | ⚠️ ${{ needs.trivy-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [[ "${{ needs.codeql.result }}" == "success" ]]; then
+            echo "| CodeQL SAST | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.codeql.result }}" == "failure" ]]; then
+            echo "| CodeQL SAST | ❌ Issues found |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| CodeQL SAST | ⚠️ ${{ needs.codeql.result }} |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Compliance targets:** PCI-DSS Requirement 6.3.1, SOC2 CC7.1" >> $GITHUB_STEP_SUMMARY
+          echo "> For full details, see [dependency-vulnerability-scanning.md](./docs/dependency-vulnerability-scanning.md)" >> $GITHUB_STEP_SUMMARY

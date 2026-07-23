@@ -655,6 +655,15 @@ export function recordRedisPubsubMessagesLost(stream: string, count: number): vo
   }
 }
 
+export function recordE2eEncryptionOperation(
+  operation: 'encrypt' | 'decrypt' | 'batch_encrypt' | 'batch_decrypt',
+  result: 'success' | 'failure',
+  durationUs: number,
+): void {
+  e2eEncryptionOperations.inc({ operation, result });
+  e2eEncryptionDuration.observe({ operation }, durationUs);
+}
+
 // --- Geographic Pricing Tier metrics (issue #54) ---------------------------------
 // Tracks billing charge adjustments applied per geographic region so operators
 // can verify correct multiplier application and detect anomalies.
@@ -801,6 +810,34 @@ export const replicatedBillingTransactionsTotal: promClient.Counter = new promCl
 
 // Setters --------------------------------------------------------------------
 
+export const secretRotationEventsTotal: promClient.Counter = new promClient.Counter({
+  name: 'secret_rotation_events_total',
+  help: 'Total secret rotation events',
+  labelNames: ['outcome'],
+});
+
+export const secretRotationDurationMs: promClient.Histogram = new promClient.Histogram({
+  name: 'secret_rotation_duration_ms',
+  help: 'Duration of secret rotation in ms',
+  buckets: [5, 10, 25, 50, 100, 250, 500, 1000],
+});
+
+export const secretManagerActiveSecrets: promClient.Gauge = new promClient.Gauge({
+  name: 'secret_manager_active_secrets',
+  help: 'Current number of active secret payloads loaded',
+});
+
+export function recordSecretRotationEvent(outcome: 'success' | 'failure', durationMs: number): void {
+  secretRotationEventsTotal.inc({ outcome });
+  if (Number.isFinite(durationMs) && durationMs > 0) {
+    secretRotationDurationMs.observe(durationMs);
+  }
+}
+
+export function setSecretManagerActiveSecrets(count: number): void {
+  secretManagerActiveSecrets.set(count);
+}
+
 export function setReplicationLagMs(
   sourceRegion: string,
   targetRegion: string,
@@ -847,6 +884,85 @@ export function recordReplicatedTransaction(
     target_region: targetRegion,
     status,
   });
+}
+
+// --- Consumer Group Lag metrics (issue #66) ---------------------------------
+// Tracks Redis Streams consumer group lag and consumer health for auto-scaling
+// and alerting on stalled or overloaded consumers.
+
+/**
+ * Number of pending entries in a consumer group's PEL (Pending Entries List).
+ * High values indicate consumers are falling behind the stream production rate.
+ */
+export const consumerGroupPendingEntries: promClient.Gauge = new promClient.Gauge({
+  name: 'stream_consumer_group_pending_entries',
+  help: 'Pending entries in a Redis Streams consumer group',
+  labelNames: ['stream', 'group'],
+});
+
+/**
+ * Number of active consumers in a consumer group.
+ * Drops to 0 when all consumers have disconnected, which triggers alerting.
+ */
+export const consumerGroupConsumers: promClient.Gauge = new promClient.Gauge({
+  name: 'stream_consumer_group_consumers',
+  help: 'Active consumer count in a Redis Streams consumer group',
+  labelNames: ['stream', 'group'],
+});
+
+/**
+ * Maximum idle time across consumers in a group (ms).
+ * -1 means no consumers are present or the probe failed.
+ */
+export const consumerGroupIdleTimeMs: promClient.Gauge = new promClient.Gauge({
+  name: 'stream_consumer_group_idle_time_ms',
+  help: 'Maximum consumer idle time in ms for a Redis Streams consumer group (-1 if no consumers)',
+  labelNames: ['stream', 'group'],
+});
+
+/**
+ * Consumer group lag health: 1=healthy, 0=degraded, -1=unhealthy.
+ * Degraded: pending entries >= warn threshold. Unhealthy: >= critical or unreachable.
+ */
+export const consumerGroupLagHealth: promClient.Gauge = new promClient.Gauge({
+  name: 'stream_consumer_group_lag_health',
+  help: 'Consumer group lag health (1=healthy, 0=degraded, -1=unhealthy)',
+  labelNames: ['stream', 'group'],
+});
+
+// Setters --------------------------------------------------------------------
+
+export function setConsumerGroupPendingEntries(
+  stream: string,
+  group: string,
+  count: number,
+): void {
+  consumerGroupPendingEntries.set({ stream, group }, count);
+}
+
+export function setConsumerGroupConsumers(
+  stream: string,
+  group: string,
+  count: number,
+): void {
+  consumerGroupConsumers.set({ stream, group }, count);
+}
+
+export function setConsumerGroupIdleTimeMs(
+  stream: string,
+  group: string,
+  maxIdleMs: number,
+): void {
+  consumerGroupIdleTimeMs.set({ stream, group }, maxIdleMs);
+}
+
+export function setConsumerGroupLagHealth(
+  stream: string,
+  group: string,
+  health: 'healthy' | 'degraded' | 'unhealthy',
+): void {
+  const val = health === 'healthy' ? 1 : health === 'degraded' ? 0 : -1;
+  consumerGroupLagHealth.set({ stream, group }, val);
 }
 
 // Metrics endpoint -------------------------------------------------------------

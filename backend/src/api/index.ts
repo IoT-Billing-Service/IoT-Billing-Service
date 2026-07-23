@@ -44,13 +44,16 @@ import { GcPauseMonitor } from './metrics/gc_monitor.js';
 import { PoolMetricsCollector } from './metrics/pool_metrics_collector.js';
 import { getSseManager } from '../core/ingestion/sse_manager.js';
 import { getReplicationMonitor } from '../replication/replication_monitor.js';
+import { getConsumerLagMonitor } from '../stream/consumer_lag_monitor.js';
 import { createIncidentResponseModule } from '../incident_response/index.js';
 import { registerIncidentResponseRoutes } from '../incident_response/routes.js';
 import { RenewalCron } from '../billing/renewal_cron.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
-export async function buildApp(): Promise<FastifyInstance> {
+export async function buildApp(
+  tenantRateLimitMiddleware?: (request: any, reply: any) => Promise<void>
+): Promise<FastifyInstance> {
   const env = getEnv();
 
   const app = Fastify({
@@ -76,6 +79,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerAuthRoutes(app);
   registerAnalyticsRoutes(app);
   registerOpsRoutes(app);
+  registerIngestionRoutes(app, tenantRateLimitMiddleware);
   registerCircuitHealth(app);
   registerGeoPricingRoutes(app);
 
@@ -89,25 +93,11 @@ export async function buildApp(): Promise<FastifyInstance> {
 async function start(): Promise<void> {
   initTelemetry();
 
+  await initSecretManager();
+
   await runMigrationWithDistributedLock();
 
   const env = getEnv();
-  const authorizedKeys = parseRuntimeConfigurationKeys(env.RUNTIME_CONFIG_AUTHORIZED_KEYS);
-  if (env.NODE_ENV === 'production' && authorizedKeys.size === 0) {
-    throw new Error(
-      'RUNTIME_CONFIG_AUTHORIZED_KEYS must contain an authorized Ed25519 key in production',
-    );
-  }
-  const runtimeConfigAuditor = configureRuntimeConfigurationAudit(authorizedKeys);
-  runtimeConfigAuditor.start(env.RUNTIME_CONFIG_AUDIT_SCAN_INTERVAL_MS);
-  await initializeConfigWatcher(getRedis(), 1_000);
-  if (env.NODE_ENV === 'production' && getRuntimeConfigurationAuditStatus().status !== 'healthy') {
-    throw new Error(
-      'Production startup requires a valid signed runtime configuration in Redis config:active',
-    );
-  }
-  const app = await buildApp();
-
   const prisma = new PrismaClient();
   const renewalCron = new RenewalCron(buildPrismaSubscriptionStore(prisma));
   renewalCron.start();
@@ -158,6 +148,11 @@ async function start(): Promise<void> {
   const replicationMonitor = getReplicationMonitor();
   replicationMonitor.start();
 
+  // Issue #66: start the consumer group lag monitor for auto-scaling and
+  // alerting on Redis Streams consumer group backlog.
+  const consumerLagMonitor = getConsumerLagMonitor();
+  consumerLagMonitor.start();
+
   // Issue #85: Incident Response Runbook Automation with PagerDuty Integration.
   // Initialise the module and register admin API routes.
   const incidentResponseConfig = {
@@ -183,9 +178,11 @@ async function start(): Promise<void> {
     gcMonitor.stop();
     poolCollector.stop();
     replicationMonitor.stop();
+    consumerLagMonitor.stop();
     runtimeConfigAuditor.stop();
     stopConfigWatcher();
     incidentResponse.stop();
+    getSecretManager().stop();
     await listener.stop();
     await closeTimescalePool();
     await app.close();
@@ -212,7 +209,9 @@ async function start(): Promise<void> {
     gcMonitor.stop();
     poolCollector.stop();
     replicationMonitor.stop();
+    consumerLagMonitor.stop();
     incidentResponse.stop();
+    getSecretManager().stop();
     await listener.stop();
     await closeTimescalePool();
     await prisma.$disconnect();

@@ -81,3 +81,50 @@ groups:
         annotations:
           summary: "Unexpected contract upgrade detected"
           description: "Contract upgraded to unexpected version {{ $value }}"
+
+  - name: iot_billing_consumer_lag
+    rules:
+      - alert: ConsumerGroupLagHigh
+        expr: stream_consumer_group_pending_entries > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer group {{ $labels.group }} has high pending entries"
+          description: "Stream {{ $labels.stream }} group {{ $labels.group }} has {{ $value }} pending entries, exceeding the 1000 warning threshold. Consumers may be falling behind."
+
+      - alert: ConsumerGroupLagCritical
+        expr: stream_consumer_group_pending_entries > 10000
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Consumer group {{ $labels.group }} has critical backlog"
+          description: "Stream {{ $labels.stream }} group {{ $labels.group }} has {{ $value }} pending entries, exceeding the 10000 critical threshold. Immediate consumer scaling or intervention required."
+
+      - alert: ConsumerGroupUnhealthy
+        expr: stream_consumer_group_lag_health <= 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer group {{ $labels.group }} is degraded or unhealthy"
+          description: "Stream {{ $labels.stream }} group {{ $labels.group }} health is {{ $value }} (1=healthy, 0=degraded, -1=unhealthy). Check consumer connectivity."
+
+      - alert: ConsumerGroupNoConsumers
+        expr: stream_consumer_group_consumers == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Consumer group {{ $labels.group }} has no active consumers"
+          description: "Stream {{ $labels.stream }} group {{ $labels.group }} has 0 active consumers. Events will accumulate but not be processed."
+
+      - alert: ConsumerGroupIdleHigh
+        expr: stream_consumer_group_idle_time_ms > 300000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Consumer group {{ $labels.group }} has idle consumers"
+          description: "Stream {{ $labels.stream }} group {{ $labels.group }} max consumer idle time is {{ $value }}ms (5+ minutes). Consumers may be stuck or disconnected."

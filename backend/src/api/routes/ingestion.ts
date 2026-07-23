@@ -33,6 +33,8 @@ import { PrismaClient } from '@prisma/client';
 import { IngestionService, INGESTION_ERROR_CODES } from '../../core/ingestion/ingestion_service.js';
 import { InMemoryNonceCache, type SignedPayload } from '../../core/ingestion/validator.js';
 import type { PowSolution } from '../../core/crypto/pow_verifier.js';
+import { encryptionKeyFromHex } from '../../core/crypto/e2e_encryption.js';
+import { getEnv } from '../../config/env.js';
 
 // ── Schema ─────────────────────────────────────────────────────────────────────
 
@@ -87,7 +89,15 @@ export function initIngestionService(
   nonceCache?: InMemoryNonceCache,
 ): IngestionService {
   const cache = nonceCache ?? new InMemoryNonceCache();
-  ingestionService = new IngestionService(prisma, cache);
+  const env = getEnv();
+  const encryptionKey =
+    env.E2E_ENCRYPTION_KEY != null && env.E2E_ENCRYPTION_KEY !== ''
+      ? encryptionKeyFromHex(env.E2E_ENCRYPTION_KEY)
+      : undefined;
+
+  ingestionService = new IngestionService(prisma, cache, {
+    encryptionKey,
+  });
   return ingestionService;
 }
 
@@ -98,7 +108,10 @@ export function resetIngestionService(): void {
   ingestionService = null;
 }
 
-export function registerIngestionRoutes(app: FastifyInstance): void {
+export function registerIngestionRoutes(
+  app: FastifyInstance,
+  tenantRateLimitMiddleware?: (request: FastifyRequest, reply: FastifyReply) => Promise<void>,
+): void {
   /**
    * POST /ingest
    *
@@ -107,6 +120,7 @@ export function registerIngestionRoutes(app: FastifyInstance): void {
   app.post<{ Body: IngestBody }>(
     '/ingest',
     {
+      preHandler: tenantRateLimitMiddleware ? [tenantRateLimitMiddleware] : [],
       schema: {
         body: {
           type: 'object',

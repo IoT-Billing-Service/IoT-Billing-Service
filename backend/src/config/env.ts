@@ -21,6 +21,10 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   CHALLENGE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  // --- OAuth2 token lifetimes (issue #57) -----------------------------------
+  OAUTH2_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  OAUTH2_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+  OAUTH2_REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(2592000),
   // --- Session lifecycle / WebSocket keepalive alignment (issue #59) ---------
   // The WebSocket keepalive interval. The access-token lifetime must comfortably
   // exceed this so a token can never expire silently between two keepalive
@@ -89,10 +93,26 @@ const envSchema = z.object({
   REPLICA_DATABASE_URL: z.string().url().optional(),
   // Optional secondary Redis URL for cross-region state replication checks.
   REPLICA_REDIS_URL: z.string().url().optional(),
-  // JSON object of non-secret key ids to PEM-encoded Ed25519 public keys. A
-  // signed configuration baseline is mandatory for production billing.
-  RUNTIME_CONFIG_AUTHORIZED_KEYS: z.string().default('{}'),
-  RUNTIME_CONFIG_AUDIT_SCAN_INTERVAL_MS: z.coerce.number().int().positive().default(1000),
+  // --- Consumer Group Lag Monitoring (issue #66) ---------------------------
+  // How frequently (ms) the consumer-lag monitor polls Redis Streams consumer
+  // groups for pending-entry counts, consumer counts, and idle time.
+  CONSUMER_LAG_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(10000),
+  // Pending-entries threshold: warn (degrades the consumer group).
+  CONSUMER_LAG_WARN_ENTRIES: z.coerce.number().int().nonnegative().default(1000),
+  // Pending-entries threshold: critical (marks the consumer group unhealthy).
+  CONSUMER_LAG_CRITICAL_ENTRIES: z.coerce.number().int().nonnegative().default(10000),
+  // Consumer idle threshold: warn (ms). Consumer idle longer than this is
+  // considered potentially stale.
+  CONSUMER_LAG_WARN_IDLE_MS: z.coerce.number().int().nonnegative().default(60000),
+  // Consumer idle threshold: critical (ms). Consumer idle longer than this
+  // suggests a disconnected or stuck consumer.
+  CONSUMER_LAG_CRITICAL_IDLE_MS: z.coerce.number().int().nonnegative().default(300000),
+  // --- End-to-End Encryption (issue #89) ------------------------------------
+  // 64-character hex-encoded 32-byte key for NaCl secretbox field-level
+  // encryption of sensitive payload fields. When set, the ingestion pipeline
+  // will decrypt incoming encrypted fields and the billing/refund pipelines
+  // will encrypt sensitive fields before persistence.
+  E2E_ENCRYPTION_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
