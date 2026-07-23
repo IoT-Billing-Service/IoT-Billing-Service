@@ -4,6 +4,7 @@
   "scripts": {
     "compile": "hardhat compile",
     "test": "hardhat test",
+    "test:ci": "node --test tests/ci/*.test.mjs",
     "test:pause": "hardhat test test/EmergencyPause.test.js",
     "deploy": "hardhat run scripts/deploy.js",
     "verify:emergency-pause": "hardhat run scripts/verify-emergency-pause.js"

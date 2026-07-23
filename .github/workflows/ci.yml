@@ -1,0 +1,163 @@
+name: Continuous Integration
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Pull requests receive only the repository's read token. Deployment credentials
+# are intentionally unavailable in this workflow.
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect affected components
+    runs-on: ubuntu-24.04
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      contracts: ${{ steps.filter.outputs.contracts }}
+      workflow: ${{ steps.filter.outputs.workflow }}
+      node-dependencies: ${{ steps.filter.outputs.node-dependencies }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/**'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/**'
+            contracts:
+              - 'contracts/**'
+              - '.github/workflows/**'
+              - 'package.json'
+              - 'hardhat.config.js'
+              - 'test/**'
+            workflow:
+              - '.github/workflows/**'
+              - 'monitoring/**'
+              - 'scripts/validate-ci-workflows.mjs'
+              - 'scripts/verify-production.mjs'
+              - 'tests/ci/**'
+              - 'docs/design/github-actions-optimization.md'
+            node-dependencies:
+              - 'package.json'
+              - 'package-lock.json'
+              - 'backend/package.json'
+              - 'backend/package-lock.json'
+              - 'frontend/package.json'
+              - 'frontend/package-lock.json'
+
+  backend:
+    name: Backend quality and tests
+    runs-on: ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run format
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  frontend:
+    name: Frontend quality and tests
+    runs-on: ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run typecheck
+      # The repository currently has no frontend unit tests. Keep the lane green
+      # while still executing every test as soon as one is added.
+      - run: npm test -- --passWithNoTests
+      - run: npm run build
+
+  contracts:
+    name: Contracts checks
+    runs-on: ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.contracts == 'true'
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: contracts/contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.0
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts/contracts
+      - run: cargo fmt --all -- --check
+      - run: cargo test --workspace --locked
+
+  workflow-policy:
+    name: Workflow and monitoring policy
+    runs-on: ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.workflow == 'true'
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run test:ci
+
+  dependency-audit:
+    name: Dependency vulnerability audit
+    runs-on: ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.node-dependencies == 'true'
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [., backend, frontend]
+    defaults:
+      run:
+        working-directory: ${{ matrix.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.workspace }}/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm audit --omit=dev --audit-level=high
