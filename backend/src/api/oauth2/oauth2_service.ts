@@ -20,7 +20,7 @@
  */
 
 import crypto from 'node:crypto';
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { getEnv } from '../../config/env.js';
 import { validateScopes, normaliseScopes } from './scopes.js';
 
@@ -219,7 +219,7 @@ export class OAuth2Service {
     }
 
     // 2. Validate redirect URI
-    const allowedUris = client.redirectUris.split(',').map((u) => u.trim());
+    const allowedUris = client.redirectUris.split(',').map((u: string) => u.trim());
     if (!allowedUris.includes(redirectUri)) {
       throw new OAuth2Error('invalid_request', 'redirect_uri does not match registered URIs');
     }
@@ -296,7 +296,7 @@ export class OAuth2Service {
     const codeHash = sha256Hex(code);
 
     // Atomic read-and-mark-used inside a transaction
-    const authCode = await this.prisma.$transaction(async (tx) => {
+    const authCode = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const record = await tx.oAuth2AuthCode.findUnique({ where: { codeHash } });
 
       if (!record) throw new OAuth2Error('invalid_grant', 'Unknown authorisation code');

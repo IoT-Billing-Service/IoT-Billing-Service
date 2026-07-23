@@ -30,6 +30,11 @@ const envSchema = z.object({
   // (keepalive * N + buffer). Default 1260s (21m) keeps the token valid across
   // many keepalive windows instead of the old 15m boundary that raced them.
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(1260),
+  // OAuth2 authorization-code and token lifetimes are deliberately distinct
+  // from first-party session settings.  They are consumed by the PKCE flow.
+  OAUTH2_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(600),
+  OAUTH2_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(1260),
+  OAUTH2_REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
   // Per-token random expiry spread. Each token expires at base + random(0,
   // jitter) seconds so 100k devices do not all expire on the same instant and
   // stampede the auth endpoint. Default spreads load across a 2-minute window.

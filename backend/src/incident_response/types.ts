@@ -91,6 +91,7 @@ export type DetectionSource =
 
 /** A detected incident ready for runbook execution. */
 export interface DetectedIncident {
+  [key: string]: unknown;
   /** Unique identifier for this incident occurrence. */
   id: string;
   /** Human-readable title. */

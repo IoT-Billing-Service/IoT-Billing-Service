@@ -189,6 +189,155 @@ export const billingOperationDuration: promClient.Histogram = new promClient.His
   buckets: [10, 50, 100, 150, 200, 250, 500, 1000],
 });
 
+export const billingSignatureFailuresTotal: promClient.Counter = new promClient.Counter({
+  name: 'billing_signature_failures_total',
+  help: 'Total billing transactions rejected because cryptographic verification failed',
+});
+
+export const backupVerificationSuccessTotal: promClient.Counter = new promClient.Counter({
+  name: 'backup_verification_success_total',
+  help: 'Successful scheduled database backup verifications',
+});
+
+export const backupVerificationFailureTotal: promClient.Counter = new promClient.Counter({
+  name: 'backup_verification_failure_total',
+  help: 'Failed scheduled database backup verifications',
+});
+
+export const restoreTestSuccessTotal: promClient.Counter = new promClient.Counter({
+  name: 'backup_restore_test_success_total',
+  help: 'Successful backup restore tests',
+});
+
+export const restoreTestFailureTotal: promClient.Counter = new promClient.Counter({
+  name: 'backup_restore_test_failure_total',
+  help: 'Failed backup restore tests',
+});
+
+export const capacityUtilizationRatio: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_utilization_ratio',
+  help: 'Projected capacity utilization growth ratio by aggregation period',
+  labelNames: ['period'],
+});
+
+export const capacityProjectedGrowthRate: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_projected_growth_rate',
+  help: 'Projected capacity growth rate by aggregation period',
+  labelNames: ['period'],
+});
+
+export const capacityTrendDataPoints: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_trend_data_points',
+  help: 'Number of data points used for capacity projection by period',
+  labelNames: ['period'],
+});
+
+export const capacityTrendLastUpdated: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_trend_last_updated_seconds',
+  help: 'Unix timestamp of the latest capacity projection by period',
+  labelNames: ['period'],
+});
+
+export const opsDashboardRequests: promClient.Counter = new promClient.Counter({
+  name: 'ops_dashboard_requests_total',
+  help: 'Operational dashboard requests by result',
+  labelNames: ['status'],
+});
+
+export const opsDashboardLatency: promClient.Histogram = new promClient.Histogram({
+  name: 'ops_dashboard_latency_ms',
+  help: 'Operational dashboard response latency in ms',
+  buckets: [10, 25, 50, 100, 200, 500, 1000],
+});
+
+export const subscriptionRenewalsSucceededTotal: promClient.Counter = new promClient.Counter({
+  name: 'subscription_renewals_succeeded_total',
+  help: 'Successful subscription renewals',
+});
+
+export const subscriptionRenewalsFailedTotal: promClient.Counter = new promClient.Counter({
+  name: 'subscription_renewals_failed_total',
+  help: 'Failed subscription renewals',
+});
+
+export const subscriptionRenewalQueueDepth: promClient.Gauge = new promClient.Gauge({
+  name: 'subscription_renewal_queue_depth',
+  help: 'Subscription renewals awaiting processing in the current cron tick',
+});
+
+export const subscriptionRenewalRunning: promClient.Gauge = new promClient.Gauge({
+  name: 'subscription_renewal_running',
+  help: 'Whether the subscription renewal cron is currently running',
+});
+
+export function recordBillingSignatureFailure(): void {
+  billingSignatureFailuresTotal.inc();
+}
+
+export function recordBackupVerificationSuccess(): void {
+  backupVerificationSuccessTotal.inc();
+}
+
+export function recordBackupVerificationFailure(): void {
+  backupVerificationFailureTotal.inc();
+}
+
+export function recordRestoreTestSuccess(): void {
+  restoreTestSuccessTotal.inc();
+}
+
+export function recordRestoreTestFailure(): void {
+  restoreTestFailureTotal.inc();
+}
+
+export function setCapacityUtilizationRatio(
+  _dimension: string,
+  period: string,
+  ratio: number,
+): void {
+  capacityUtilizationRatio.set({ period }, ratio);
+}
+
+export function setCapacityProjectedGrowthRate(
+  _dimension: string,
+  period: string,
+  rate: number,
+): void {
+  capacityProjectedGrowthRate.set({ period }, rate);
+}
+
+export function setCapacityTrendDataPoints(
+  _dimension: string,
+  period: string,
+  count: number,
+): void {
+  capacityTrendDataPoints.set({ period }, count);
+}
+
+export function setCapacityTrendLastUpdated(
+  _dimension: string,
+  period: string,
+  timestampSeconds: number,
+): void {
+  capacityTrendLastUpdated.set({ period }, timestampSeconds);
+}
+
+export function incrementSubscriptionRenewalsSucceeded(): void {
+  subscriptionRenewalsSucceededTotal.inc();
+}
+
+export function incrementSubscriptionRenewalsFailed(): void {
+  subscriptionRenewalsFailedTotal.inc();
+}
+
+export function setSubscriptionRenewalQueueDepth(depth: number): void {
+  subscriptionRenewalQueueDepth.set(depth);
+}
+
+export function setSubscriptionRenewalRunning(running: boolean): void {
+  subscriptionRenewalRunning.set(running ? 1 : 0);
+}
+
 // Billing-tier config hot-reload observability (issue #63). Incremented when a
 // batch observes the active config version change mid-processing, so the batch
 // is re-processed under the new version. Labelled by the start/end version so

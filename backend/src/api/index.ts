@@ -16,6 +16,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerGeoPricingRoutes } from './routes/geo_pricing.js';
+import { registerOpsRoutes } from './routes/ops.js';
 import { registerTracingHooks } from './middleware/tracing.js';
 import {
   TelemetryNotificationListener,
@@ -45,6 +46,7 @@ import { getSseManager } from '../core/ingestion/sse_manager.js';
 import { getReplicationMonitor } from '../replication/replication_monitor.js';
 import { createIncidentResponseModule } from '../incident_response/index.js';
 import { registerIncidentResponseRoutes } from '../incident_response/routes.js';
+import { RenewalCron } from '../billing/renewal_cron.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -107,6 +109,8 @@ async function start(): Promise<void> {
   const app = await buildApp();
 
   const prisma = new PrismaClient();
+  const renewalCron = new RenewalCron(buildPrismaSubscriptionStore(prisma));
+  renewalCron.start();
 
   // Ensure the timescale pool is created so it shows up on Prometheus gauges
   // before any traffic arrives.
@@ -350,7 +354,17 @@ function buildPrismaSubscriptionStore(prisma: PrismaClient): SubscriptionStore {
         take: 50,
         orderBy: { expiresAt: 'asc' },
       });
-      return rows.map((s) => ({
+      return rows.map((s: {
+        id: string;
+        accountId: string;
+        planId: string;
+        amountDue: bigint;
+        periodDays: number;
+        expiresAt: Date;
+        autoRenew: boolean;
+        renewalStatus: string;
+        lockVersion: number;
+      }) => ({
         id: s.id,
         accountId: s.accountId,
         planId: s.planId,
