@@ -17,10 +17,6 @@ import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerGeoPricingRoutes } from './routes/geo_pricing.js';
 import { registerOpsRoutes } from './routes/ops.js';
-import { registerIngestionRoutes, initIngestionService } from './routes/ingestion.js';
-import { TenantCache } from '../core/ingestion/tenant_cache.js';
-import { TenantRateLimiter, buildTenantRateLimitMiddleware } from './middleware/rate_limiter.js';
-import { getRedis } from '../database/redis.js';
 import { registerTracingHooks } from './middleware/tracing.js';
 import {
   TelemetryNotificationListener,
@@ -51,7 +47,7 @@ import { getReplicationMonitor } from '../replication/replication_monitor.js';
 import { getConsumerLagMonitor } from '../stream/consumer_lag_monitor.js';
 import { createIncidentResponseModule } from '../incident_response/index.js';
 import { registerIncidentResponseRoutes } from '../incident_response/routes.js';
-import { initSecretManager, getSecretManager } from '../security/index.js';
+import { RenewalCron } from '../billing/renewal_cron.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -103,25 +99,8 @@ async function start(): Promise<void> {
 
   const env = getEnv();
   const prisma = new PrismaClient();
-  const redis = getRedis();
-
-  const tenantCache = new TenantCache(redis, prisma);
-  const tenantRateLimiter = new TenantRateLimiter(redis);
-  const tenantRateLimitMiddleware = buildTenantRateLimitMiddleware(tenantCache, tenantRateLimiter);
-
-  // Issue #36: Start the subscription auto-renewal cron for recurring billing.
-  const { RenewalCron } = await import('../billing/renewal_cron.js');
-  const renewalStore = buildPrismaSubscriptionStore(prisma);
-  const renewalCron = new RenewalCron(renewalStore, {
-    onError: (err: unknown): void => {
-      console.error('[startup] renewal cron error:', err);
-    },
-  });
+  const renewalCron = new RenewalCron(buildPrismaSubscriptionStore(prisma));
   renewalCron.start();
-
-  const app = await buildApp(tenantRateLimitMiddleware);
-  
-  initIngestionService(prisma);
 
   // Ensure the timescale pool is created so it shows up on Prometheus gauges
   // before any traffic arrives.
@@ -374,7 +353,17 @@ function buildPrismaSubscriptionStore(prisma: PrismaClient): SubscriptionStore {
         take: 50,
         orderBy: { expiresAt: 'asc' },
       });
-      return rows.map((s: SubscriptionRow & { id: string; accountId: string; planId: string; amountDue: number; periodDays: number; expiresAt: Date; autoRenew: boolean; renewalStatus: string; lockVersion: number }) => ({
+      return rows.map((s: {
+        id: string;
+        accountId: string;
+        planId: string;
+        amountDue: bigint;
+        periodDays: number;
+        expiresAt: Date;
+        autoRenew: boolean;
+        renewalStatus: string;
+        lockVersion: number;
+      }) => ({
         id: s.id,
         accountId: s.accountId,
         planId: s.planId,

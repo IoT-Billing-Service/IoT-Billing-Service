@@ -667,8 +667,7 @@ export class RunbookEngine {
     // Check for equality comparison.
     const eqMatch = trimmed.match(/^(\w+(?:\.\w+)*)\s*==\s*"([^"]*)"$/);
     if (eqMatch !== null) {
-      const key: string = eqMatch[1] ?? '';
-      const expectedValue: string = eqMatch[2] ?? '';
+      const [, key = '', expectedValue = ''] = eqMatch;
       const actualValue = this.resolveValue(key, incident);
       return actualValue === expectedValue;
     }
@@ -676,8 +675,7 @@ export class RunbookEngine {
     // Check for inequality comparison.
     const neqMatch = trimmed.match(/^(\w+(?:\.\w+)*)\s*!=\s*"([^"]*)"$/);
     if (neqMatch !== null) {
-      const key: string = neqMatch[1] ?? '';
-      const expectedValue: string = neqMatch[2] ?? '';
+      const [, key = '', expectedValue = ''] = neqMatch;
       const actualValue = this.resolveValue(key, incident);
       return actualValue !== expectedValue;
     }
@@ -685,9 +683,7 @@ export class RunbookEngine {
     // Check for numeric comparison.
     const numMatch = trimmed.match(/^(\w+(?:\.\w+)*)\s*(>=|<=|>|<)\s*(\d+)$/);
     if (numMatch !== null) {
-      const key: string = numMatch[1] ?? '';
-      const operator: string = numMatch[2] ?? '';
-      const strValue: string = numMatch[3] ?? '';
+      const [, key = '', operator = '', strValue = ''] = numMatch;
       const actualValue = Number(this.resolveValue(key, incident));
       const expectedValue = Number(strValue);
 

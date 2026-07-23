@@ -1,0 +1,59 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_url:
+        description: Public backend URL to verify after the platform deployment completes
+        required: true
+        type: string
+
+# The production environment must require reviewers in GitHub repository settings.
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  pre-deploy-verification:
+    name: Verify release candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: backend
+      - run: npm run typecheck && npm test && npm run build
+        working-directory: backend
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run test:ci
+
+  deploy:
+    name: Deploy and monitor
+    needs: pre-deploy-verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trigger the managed-platform deployment
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          test -n "$RENDER_DEPLOY_HOOK"
+          curl --fail-with-body --retry 3 --retry-all-errors --request POST "$RENDER_DEPLOY_HOOK"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify health, cryptographic verification telemetry, and P99 SLO
+        env:
+          DEPLOYMENT_URL: ${{ inputs.deployment_url }}
+        run: node scripts/verify-production.mjs
