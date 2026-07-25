@@ -38,8 +38,15 @@ import {
   recordBackupVerificationFailure,
   recordRestoreTestSuccess,
   recordRestoreTestFailure,
+  updateRequestQueueDepth,
+  updateActiveRequestCount,
 } from './metrics/prometheus.js';
 import { registerCircuitHealth, registerBackupHealth } from './health.js';
+import {
+  initializeFeatureFlagWatcher,
+  stopFeatureFlagWatcher,
+} from '../core/feature_flags/index.js';
+import { getSheddingStatus } from '../core/capacity_shedding/index.js';
 import { GcPauseMonitor } from './metrics/gc_monitor.js';
 import { PoolMetricsCollector } from './metrics/pool_metrics_collector.js';
 import { getSseManager } from '../core/ingestion/sse_manager.js';
@@ -50,6 +57,26 @@ import { registerIncidentResponseRoutes } from '../incident_response/routes.js';
 import { RenewalCron } from '../billing/renewal_cron.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
+
+export function registerSheddingStatusRoute(app: FastifyInstance): void {
+  app.get('/shedding-status', async () => {
+    const status = getSheddingStatus();
+    updateRequestQueueDepth(status.queueDepth);
+    updateActiveRequestCount(status.activeRequests);
+    return {
+      queueDepth: status.queueDepth,
+      activeRequests: status.activeRequests,
+      sheddingLevel: status.degradationProfile.shedNonCritical ? 'critical'
+        : status.degradationProfile.disabledFlags.length > 5 ? 'high'
+        : status.degradationProfile.disabledFlags.length > 0 ? 'medium'
+        : 'normal',
+      activePriority: status.degradationProfile.activePriority,
+      disabledFlags: status.degradationProfile.disabledFlags,
+      maxQueueDepth: status.config.maxQueueDepth,
+      maxConcurrency: status.config.maxConcurrency,
+    };
+  });
+}
 
 export async function buildApp(
   tenantRateLimitMiddleware?: (request: any, reply: any) => Promise<void>
@@ -82,6 +109,7 @@ export async function buildApp(
   registerIngestionRoutes(app, tenantRateLimitMiddleware);
   registerCircuitHealth(app);
   registerGeoPricingRoutes(app);
+  registerSheddingStatusRoute(app);
 
   // Initialise the SSE manager singleton early so the admin event-stream
   // endpoint can register clients immediately on first request.
@@ -101,6 +129,9 @@ async function start(): Promise<void> {
   const prisma = new PrismaClient();
   const renewalCron = new RenewalCron(buildPrismaSubscriptionStore(prisma));
   renewalCron.start();
+
+  const redis = getRedis();
+  await initializeFeatureFlagWatcher(redis);
 
   // Ensure the timescale pool is created so it shows up on Prometheus gauges
   // before any traffic arrives.
@@ -181,6 +212,7 @@ async function start(): Promise<void> {
     consumerLagMonitor.stop();
     runtimeConfigAuditor.stop();
     stopConfigWatcher();
+    stopFeatureFlagWatcher();
     incidentResponse.stop();
     getSecretManager().stop();
     await listener.stop();
@@ -210,6 +242,8 @@ async function start(): Promise<void> {
     poolCollector.stop();
     replicationMonitor.stop();
     consumerLagMonitor.stop();
+    stopConfigWatcher();
+    stopFeatureFlagWatcher();
     incidentResponse.stop();
     getSecretManager().stop();
     await listener.stop();
