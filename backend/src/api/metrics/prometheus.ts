@@ -965,6 +965,66 @@ export function setConsumerGroupLagHealth(
   consumerGroupLagHealth.set({ stream, group }, val);
 }
 
+// --- Feature flag metrics (issue #64) -----------------------------------------
+
+export const featureFlagEvaluations: promClient.Counter = new promClient.Counter({
+  name: 'feature_flag_evaluations_total',
+  help: 'Total number of feature flag evaluations',
+  labelNames: ['flag'],
+});
+
+export const featureFlagOverrides: promClient.Gauge = new promClient.Gauge({
+  name: 'feature_flag_overrides',
+  help: 'Feature flag override state (1=enabled, 0=disabled, -1=default)',
+  labelNames: ['flag'],
+});
+
+export const capacitySheddingLevel: promClient.Gauge = new promClient.Gauge({
+  name: 'capacity_shedding_level',
+  help: 'Current capacity shedding level (0=normal, 1=medium, 2=high, 3=critical)',
+});
+
+export const sheddedRequestsTotal: promClient.Counter = new promClient.Counter({
+  name: 'shedded_requests_total',
+  help: 'Total number of requests shed due to capacity',
+  labelNames: ['priority', 'reason'],
+});
+
+export const requestQueueDepth: promClient.Gauge = new promClient.Gauge({
+  name: 'request_queue_depth',
+  help: 'Current depth of the capacity shedding request queue',
+});
+
+export const activeRequestCount: promClient.Gauge = new promClient.Gauge({
+  name: 'active_request_count',
+  help: 'Current number of active in-flight requests',
+});
+
+export function incrementFeatureFlagEvaluations(flag: string): void {
+  featureFlagEvaluations.inc({ flag });
+}
+
+export function setFeatureFlagOverride(flag: string, enabled: boolean): void {
+  featureFlagOverrides.set({ flag }, enabled ? 1 : 0);
+}
+
+export function setCapacitySheddingLevel(level: number): void {
+  capacitySheddingLevel.set(level);
+}
+
+export function observeSheddedRequests(priority: number, reason: string): void {
+  sheddedRequestsTotal.inc({ priority: String(priority), reason });
+  requestQueueDepth.set(0);
+}
+
+export function updateRequestQueueDepth(depth: number): void {
+  requestQueueDepth.set(depth);
+}
+
+export function updateActiveRequestCount(count: number): void {
+  activeRequestCount.set(count);
+}
+
 // Metrics endpoint -------------------------------------------------------------
 
 export function getMetricsRegistry(): promClient.Registry {
