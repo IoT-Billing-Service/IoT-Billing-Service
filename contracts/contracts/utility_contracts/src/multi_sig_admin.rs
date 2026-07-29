@@ -4,9 +4,7 @@
 //! fund-withdrawal, enforce rate bounds, and add circuit breaker.
 
 use crate::{ContractError, DataKey};
-use soroban_sdk::{
-    contracttype, panic_with_error, Address, Env, Symbol, Vec,
-};
+use soroban_sdk::{contracttype, panic_with_error, Address, Env, Symbol, Vec};
 
 // ── Constants ──
 pub const TIMELOCK_DELAY: u64 = 86_400; // 24h
@@ -71,19 +69,25 @@ pub fn init(env: &Env, admin: Address, admins: Vec<Address>, req: u32) {
     }
     env.storage().instance().set(
         &DataKey::AdminMofN,
-        &MofNConfig { admins, required: req, total: n },
+        &MofNConfig {
+            admins,
+            required: req,
+            total: n,
+        },
     );
-    env.events().publish(
-        (Symbol::new(env, "MofNInit"),),
-        (admin, n, req),
-    );
+    env.events()
+        .publish((Symbol::new(env, "MofNInit"),), (admin, n, req));
 }
 
 // ── Auth ──
 
 pub fn auth(env: &Env, caller: Address, seed: Symbol) -> bool {
     // Check circuit breaker first
-    if let Some(cb) = env.storage().instance().get::<DataKey, CbState>(&DataKey::CbState) {
+    if let Some(cb) = env
+        .storage()
+        .instance()
+        .get::<DataKey, CbState>(&DataKey::CbState)
+    {
         if cb.triggered {
             let mut ok = false;
             for i in 0..cb.backup.len() {
@@ -120,12 +124,14 @@ pub fn auth(env: &Env, caller: Address, seed: Symbol) -> bool {
     caller.require_auth();
 
     let key = DataKey::AdminApproval(seed.clone());
-    let mut app: ActionApproval = env.storage().temporary().get(&key).unwrap_or(
-        ActionApproval {
+    let mut app: ActionApproval = env
+        .storage()
+        .temporary()
+        .get(&key)
+        .unwrap_or(ActionApproval {
             approvers: Vec::new(env),
             threshold: cfg.required,
-        },
-    );
+        });
 
     // Dedup
     for i in 0..app.approvers.len() {
@@ -154,7 +160,13 @@ pub fn clamp_rate(new: i128, base: i128) -> i128 {
     }
     let lo = base * RATE_MIN_BPS / 10_000;
     let hi = base * RATE_MAX_BPS / 10_000;
-    if new < lo { lo } else if new > hi { hi } else { new }
+    if new < lo {
+        lo
+    } else if new > hi {
+        hi
+    } else {
+        new
+    }
 }
 
 // ── Timelock ──
@@ -167,7 +179,11 @@ pub fn schedule(env: &Env, caller: Address, amount: i128, to: Address, eta: u64)
     if eta < now + TIMELOCK_DELAY {
         panic_with_error!(env, ContractError::InvalidUsageValue);
     }
-    let mut ctr: u64 = env.storage().instance().get(&DataKey::WdCounter).unwrap_or(0);
+    let mut ctr: u64 = env
+        .storage()
+        .instance()
+        .get(&DataKey::WdCounter)
+        .unwrap_or(0);
     ctr += 1;
     let w = TimelockW {
         amount,
@@ -179,10 +195,8 @@ pub fn schedule(env: &Env, caller: Address, amount: i128, to: Address, eta: u64)
     };
     env.storage().instance().set(&DataKey::TimelockWD(ctr), &w);
     env.storage().instance().set(&DataKey::WdCounter, &ctr);
-    env.events().publish(
-        (Symbol::new(env, "SchWD"),),
-        (ctr, amount, to, eta),
-    );
+    env.events()
+        .publish((Symbol::new(env, "SchWD"),), (ctr, amount, to, eta));
     ctr
 }
 
@@ -203,10 +217,8 @@ pub fn execute(env: &Env, id: u64) {
     }
     w.done = true;
     env.storage().instance().set(&DataKey::TimelockWD(id), &w);
-    env.events().publish(
-        (Symbol::new(env, "ExecWD"),),
-        (id, w.amount, w.recipient),
-    );
+    env.events()
+        .publish((Symbol::new(env, "ExecWD"),), (id, w.amount, w.recipient));
 }
 
 pub fn cancel(env: &Env, caller: Address, id: u64) {
@@ -239,7 +251,8 @@ pub fn trigger_cb(env: &Env, caller: Address, backup: Vec<Address>) {
         backup,
     };
     env.storage().instance().set(&DataKey::CbState, &state);
-    env.events().publish((Symbol::new(env, "CBTrig"),), (caller,));
+    env.events()
+        .publish((Symbol::new(env, "CBTrig"),), (caller,));
 }
 
 pub fn reset_cb(env: &Env, caller: Address) {
@@ -251,7 +264,8 @@ pub fn reset_cb(env: &Env, caller: Address) {
         panic_with_error!(env, ContractError::EmergencyDrainNotAuthorized);
     }
     env.storage().instance().remove(&DataKey::CbState);
-    env.events().publish((Symbol::new(env, "CBReset"),), (caller_clone,));
+    env.events()
+        .publish((Symbol::new(env, "CBReset"),), (caller_clone,));
 }
 
 pub fn is_cb(env: &Env) -> bool {
@@ -265,7 +279,7 @@ pub fn is_cb(env: &Env) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, Env, Symbol, symbol_short};
+    use soroban_sdk::{symbol_short, testutils::Address as _, Address, Env, Symbol};
 
     fn setup(env: &Env, n: u32, req: u32) -> (Address, Vec<Address>) {
         let admin = Address::generate(env);

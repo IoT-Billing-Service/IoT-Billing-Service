@@ -57,11 +57,17 @@ fn fuzz_one_million_cycles_error_under_one_unit() {
 
     let exact = (reading * cycles) / PRECISION_FACTOR;
     assert_eq!(billed, exact, "carry billing must be exact over 1e6 cycles");
-    assert!(reservoir < PRECISION_FACTOR, "residual dust must be sub-unit");
+    assert!(
+        reservoir < PRECISION_FACTOR,
+        "residual dust must be sub-unit"
+    );
 
     // Contrast: naive truncation drops the remainder every cycle.
     let naive = cycles * naive_truncating(reading, RATE, PRECISION_FACTOR);
     // The dropped value the carry preserves (0.0000001 * 1e6 = 0.1 unit here).
     assert!(billed >= naive);
-    assert_eq!(billed - naive, (reading % PRECISION_FACTOR) * cycles / PRECISION_FACTOR);
+    assert_eq!(
+        billed - naive,
+        (reading % PRECISION_FACTOR) * cycles / PRECISION_FACTOR
+    );
 }

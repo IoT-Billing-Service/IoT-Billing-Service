@@ -111,7 +111,10 @@ fn test_rebalance_pool_stress_1000() {
         last_count = state.rebalance_count;
     }
 
-    assert_eq!(last_count, 1000, "exactly 1000 rebalances should be recorded");
+    assert_eq!(
+        last_count, 1000,
+        "exactly 1000 rebalances should be recorded"
+    );
 }
 
 /// Drift simulation for billing-cycle assignment.
@@ -436,82 +439,84 @@ fn test_epoch_timestamp_manipulation() {
             // Acceptance 3: forward movement is mathematically correct (no overflow panic)
             if let Some(e) = elapsed {
                 let expected = rate.saturating_mul(e as i128);
-            assert_eq!(accumulation, expected);
-        }
-    }
-}
-
-/// Fuzz the settlement two-phase commit invariant.
-///
-/// Creates N random settlement entries, randomly commits/rolls back steps,
-/// and verifies that `asset_debit(tx) XOR stream_finalize(tx)` (i.e. it must
-/// never be the case that debit is committed while finalize is not, or vice
-/// versa) holds at every step of every journal entry.
-#[test]
-fn test_settlement_xor_invariant_under_random_failures() {
-    use crate::settlement_orchestrator::{
-        SettlementManager, SettlementManagerClient, SettlementStep, StepStatus,
-    };
-    use soroban_sdk::testutils::Address as _;
-
-    const N_SETTLEMENTS: u64 = 20;
-
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let mgr_id = env.register_contract(None, SettlementManager);
-    let mgr = SettlementManagerClient::new(&env, &mgr_id);
-
-    // Generate random addresses (mock contracts with no storage — calling them
-    // will fail, which is exactly what we need to exercise the rollback path).
-    let mut rng_state: u64 = 0xSETTLE_MEET;
-    let mut rng = || {
-        rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-        rng_state
-    };
-
-    let contracts: Vec<(Address, Address, Address)> = (0..N_SETTLEMENTS)
-        .map(|_| {
-            (
-                Address::generate(&env),
-                Address::generate(&env),
-                Address::generate(&env),
-            )
-        })
-        .collect();
-
-    // Make every settlement entry a fresh init so we have a clean journal.
-    for (i, (a, b, c)) in contracts.iter().enumerate() {
-        let tx = i as u64;
-        mgr.init_settlement(&tx, a, b, c);
-    }
-
-    // ---- Fuzz loop: randomly commit or roll each step -------------------
-    for i in 0..N_SETTLEMENTS {
-        let tx = i;
-
-        // Randomly decide if each step should be committed or rolled back.
-        for step in &[
-            SettlementStep::AssetDebit,
-            SettlementStep::InsuranceCredit,
-            SettlementStep::StreamFinalize,
-        ] {
-            let action = rng() % 3; // 0=skip, 1=commit, 2=rollback
-            match action {
-                1 => mgr.commit_step(&tx, step),
-                2 => mgr.rollback_step(&tx, step),
-                _ => {} // leave as Pending
+                assert_eq!(accumulation, expected);
             }
         }
+    }
 
-        // ---- Invariant check --------------------------------------------
-        let entry = mgr.get_settlement(&tx).unwrap();
-        let debit_done = entry.asset_debit_status == StepStatus::Committed;
-        let finalize_done = entry.stream_finalize_status == StepStatus::Committed;
+    /// Fuzz the settlement two-phase commit invariant.
+    ///
+    /// Creates N random settlement entries, randomly commits/rolls back steps,
+    /// and verifies that `asset_debit(tx) XOR stream_finalize(tx)` (i.e. it must
+    /// never be the case that debit is committed while finalize is not, or vice
+    /// versa) holds at every step of every journal entry.
+    #[test]
+    fn test_settlement_xor_invariant_under_random_failures() {
+        use crate::settlement_orchestrator::{
+            SettlementManager, SettlementManagerClient, SettlementStep, StepStatus,
+        };
+        use soroban_sdk::testutils::Address as _;
 
-        // XOR must *never* be true — debit and finalize must be on the same
-        // side of the commit/not-commit boundary.
-        assert!(
+        const N_SETTLEMENTS: u64 = 20;
+
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let mgr_id = env.register_contract(None, SettlementManager);
+        let mgr = SettlementManagerClient::new(&env, &mgr_id);
+
+        // Generate random addresses (mock contracts with no storage — calling them
+        // will fail, which is exactly what we need to exercise the rollback path).
+        let mut rng_state: u64 = 0xDEAD_BEEF_CAFE_1234;
+        let mut rng = || {
+            rng_state = rng_state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            rng_state
+        };
+
+        let contracts: Vec<(Address, Address, Address)> = (0..N_SETTLEMENTS)
+            .map(|_| {
+                (
+                    Address::generate(&env),
+                    Address::generate(&env),
+                    Address::generate(&env),
+                )
+            })
+            .collect();
+
+        // Make every settlement entry a fresh init so we have a clean journal.
+        for (i, (a, b, c)) in contracts.iter().enumerate() {
+            let tx = i as u64;
+            mgr.init_settlement(&tx, a, b, c);
+        }
+
+        // ---- Fuzz loop: randomly commit or roll each step -------------------
+        for i in 0..N_SETTLEMENTS {
+            let tx = i;
+
+            // Randomly decide if each step should be committed or rolled back.
+            for step in &[
+                SettlementStep::AssetDebit,
+                SettlementStep::InsuranceCredit,
+                SettlementStep::StreamFinalize,
+            ] {
+                let action = rng() % 3; // 0=skip, 1=commit, 2=rollback
+                match action {
+                    1 => mgr.commit_step(&tx, step),
+                    2 => mgr.rollback_step(&tx, step),
+                    _ => {} // leave as Pending
+                }
+            }
+
+            // ---- Invariant check --------------------------------------------
+            let entry = mgr.get_settlement(&tx).unwrap();
+            let debit_done = entry.asset_debit_status == StepStatus::Committed;
+            let finalize_done = entry.stream_finalize_status == StepStatus::Committed;
+
+            // XOR must *never* be true — debit and finalize must be on the same
+            // side of the commit/not-commit boundary.
+            assert!(
             !(debit_done ^ finalize_done),
             "Invariant violation tx={tx}: debit={debit_done}, finalize={finalize_done}, statuses=({:?},{:?},{:?})",
             entry.asset_debit_status,
@@ -519,29 +524,29 @@ fn test_settlement_xor_invariant_under_random_failures() {
             entry.stream_finalize_status,
         );
 
-        // Secondary invariant: if any step was rolled back, the entire
-        // settlement must eventually resolve consistently.
-        let any_rolled = entry.asset_debit_status == StepStatus::RolledBack
-            || entry.insurance_credit_status == StepStatus::RolledBack
-            || entry.stream_finalize_status == StepStatus::RolledBack;
-        if any_rolled {
-            // If one is rolled back, the others must not be committed.
-            assert_ne!(
-                entry.asset_debit_status,
-                StepStatus::Committed,
-                "tx={tx}: asset debit committed after rollback"
-            );
-            assert_ne!(
-                entry.insurance_credit_status,
-                StepStatus::Committed,
-                "tx={tx}: insurance credit committed after rollback"
-            );
-            assert_ne!(
-                entry.stream_finalize_status,
-                StepStatus::Committed,
-                "tx={tx}: stream finalize committed after rollback"
-            );
+            // Secondary invariant: if any step was rolled back, the entire
+            // settlement must eventually resolve consistently.
+            let any_rolled = entry.asset_debit_status == StepStatus::RolledBack
+                || entry.insurance_credit_status == StepStatus::RolledBack
+                || entry.stream_finalize_status == StepStatus::RolledBack;
+            if any_rolled {
+                // If one is rolled back, the others must not be committed.
+                assert_ne!(
+                    entry.asset_debit_status,
+                    StepStatus::Committed,
+                    "tx={tx}: asset debit committed after rollback"
+                );
+                assert_ne!(
+                    entry.insurance_credit_status,
+                    StepStatus::Committed,
+                    "tx={tx}: insurance credit committed after rollback"
+                );
+                assert_ne!(
+                    entry.stream_finalize_status,
+                    StepStatus::Committed,
+                    "tx={tx}: stream finalize committed after rollback"
+                );
+            }
         }
     }
-}
 }

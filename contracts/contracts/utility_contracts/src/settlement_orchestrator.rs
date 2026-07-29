@@ -1,6 +1,6 @@
 use soroban_sdk::{
-    contract, contractimpl, contracttype, panic_with_error, symbol_short, Address, Env, Map, Symbol,
-    Vec,
+    contract, contractimpl, contracttype, panic_with_error, symbol_short, Address, Env, Map,
+    Symbol, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -153,7 +153,14 @@ impl SettlementManager {
             credit_args.clone(),
         );
         if !credit_ok {
-            Self::rollback_one_step(&env, &mut entry, tx_id, SettlementStep::AssetDebit, &entry.asset_contract, debit_args.clone());
+            Self::rollback_one_step(
+                &env,
+                &mut entry,
+                tx_id,
+                SettlementStep::AssetDebit,
+                &entry.asset_contract,
+                debit_args.clone(),
+            );
             return false;
         }
 
@@ -168,8 +175,22 @@ impl SettlementManager {
             finalize_args.clone(),
         );
         if !finalize_ok {
-            Self::rollback_one_step(&env, &mut entry, tx_id, SettlementStep::InsuranceCredit, &entry.insurance_contract, credit_args.clone());
-            Self::rollback_one_step(&env, &mut entry, tx_id, SettlementStep::AssetDebit, &entry.asset_contract, debit_args.clone());
+            Self::rollback_one_step(
+                &env,
+                &mut entry,
+                tx_id,
+                SettlementStep::InsuranceCredit,
+                &entry.insurance_contract,
+                credit_args.clone(),
+            );
+            Self::rollback_one_step(
+                &env,
+                &mut entry,
+                tx_id,
+                SettlementStep::AssetDebit,
+                &entry.asset_contract,
+                debit_args.clone(),
+            );
             return false;
         }
 
@@ -241,11 +262,8 @@ impl SettlementManager {
                 && entry.insurance_credit_status == StepStatus::Committed
             {
                 let func = Symbol::new(&env, "finalize");
-                let result = env.try_invoke_contract::<(), _>(
-                    &entry.stream_contract,
-                    &func,
-                    Vec::new(&env),
-                );
+                let result =
+                    env.try_invoke_contract::<(), _>(&entry.stream_contract, &func, Vec::new(&env));
                 if result.is_ok() {
                     Self::set_step_status(
                         &mut entry.clone(),
@@ -262,10 +280,8 @@ impl SettlementManager {
             Self::rollback_committed_steps(&env, &mut entry.clone(), tx_id);
             rolled_back += 1;
 
-            env.events().publish(
-                (symbol_short!("SRecov"),),
-                (tx_id, recovered, rolled_back),
-            );
+            env.events()
+                .publish((symbol_short!("SRecov"),), (tx_id, recovered, rolled_back));
         }
 
         (recovered, rolled_back)

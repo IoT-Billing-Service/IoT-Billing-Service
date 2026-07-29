@@ -27,7 +27,9 @@
 
 extern crate alloc;
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec,
+};
 
 /// Per-event size estimate (Address + u128 + u64 + u64 ≈ 128 bytes).
 pub const EVENT_SIZE_BYTES: u32 = 128;
@@ -212,7 +214,9 @@ impl TelemetryBuffer {
     /// Set the admin allowed to call `repair_buffer`.
     pub fn set_admin(env: Env, admin: Address) {
         env.current_contract_address().require_auth();
-        env.storage().instance().set(&symbol_short!("admin"), &admin);
+        env.storage()
+            .instance()
+            .set(&symbol_short!("admin"), &admin);
     }
 
     pub fn pending_len(env: Env) -> u32 {

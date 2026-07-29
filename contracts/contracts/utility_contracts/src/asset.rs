@@ -24,8 +24,10 @@
 //! (an inner `#![cfg(test)]` mid-file plus `ink!` macros with no `ink`
 //! dependency) and were never part of the module tree.
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, token, Env, Symbol};
 use crate::remainder_accumulator::validate_decimal_consistency;
+use soroban_sdk::{
+    contract, contractimpl, contracttype, symbol_short, token, Address, Env, Symbol,
+};
 
 /// Storage key for token decimal precision
 const DECIMALS_KEY: Symbol = symbol_short!("decimals");
@@ -65,18 +67,25 @@ impl AssetManager {
             reserve: initial_balance,
             rebalance_count: 0,
         };
-        env.storage().instance().set(&POOL_BALANCE, &initial_balance);
+        env.storage()
+            .instance()
+            .set(&POOL_BALANCE, &initial_balance);
         env.storage().instance().set(&POOL_STATE, &state);
     }
 
     /// Set the decimal precision for a token
     pub fn set_token_decimals(env: Env, token: Address, decimals: u32) {
-        env.storage().instance().set(&(DECIMALS_KEY, token), &decimals);
+        env.storage()
+            .instance()
+            .set(&(DECIMALS_KEY, token), &decimals);
     }
 
     /// Get the decimal precision for a token (default to 18 if not set)
     pub fn get_token_decimals(env: &Env, token: &Address) -> u32 {
-        env.storage().instance().get(&(DECIMALS_KEY, token.clone())).unwrap_or(18)
+        env.storage()
+            .instance()
+            .get(&(DECIMALS_KEY, token.clone()))
+            .unwrap_or(18)
     }
 
     /// Transfer tokens with decimal validation
@@ -85,7 +94,7 @@ impl AssetManager {
         let token_decimals = Self::get_token_decimals(&env, &token);
         // For now, validate against standard Soroban token decimals (18)
         validate_decimal_consistency(token_decimals, 18);
-        
+
         // Perform transfer
         let client = token::Client::new(&env, &token);
         client.transfer(&from, &to, &(amount as i128));
@@ -113,12 +122,15 @@ impl AssetManager {
         let pool_balance: u128 = env.storage().instance().get(&POOL_BALANCE).unwrap_or(0);
 
         let mut pool_state: PoolState =
-            env.storage().instance().get(&POOL_STATE).unwrap_or(PoolState {
-                total_balance: pool_balance,
-                allocated: 0,
-                reserve: pool_balance,
-                rebalance_count: 0,
-            });
+            env.storage()
+                .instance()
+                .get(&POOL_STATE)
+                .unwrap_or(PoolState {
+                    total_balance: pool_balance,
+                    allocated: 0,
+                    reserve: pool_balance,
+                    rebalance_count: 0,
+                });
 
         // ---- Phase 2: mutate the owned local only (no storage access) ----
         let target_reserve = pool_balance / RESERVE_DIVISOR;

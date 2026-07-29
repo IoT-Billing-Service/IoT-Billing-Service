@@ -21,7 +21,7 @@ extern crate std;
 
 use crate::u256::{
     aggregate_tenant_usage, aggregate_tenant_usage_batched, finalize_payable_u128,
-    AggregationError, U256, MAX_DEVICE_READING, MAX_DEVICES_PER_TENANT,
+    AggregationError, MAX_DEVICES_PER_TENANT, MAX_DEVICE_READING, U256,
 };
 use proptest::prelude::*;
 use std::vec;

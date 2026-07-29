@@ -59,7 +59,10 @@ fn test_flash_loan_manipulation_trips_breaker() {
     // deviating → both checks fail → circuit breaker → last-known-good.
     let stale_ts = now(&env) - (MAX_STALENESS_SECS + 10);
     let used2 = client.record_and_resolve(&80i128, &stale_ts);
-    assert_eq!(used2, 100, "circuit breaker must fall back to last good price");
+    assert_eq!(
+        used2, 100,
+        "circuit breaker must fall back to last good price"
+    );
 }
 
 /// A fresh price within tolerance is used directly and advances the good price.

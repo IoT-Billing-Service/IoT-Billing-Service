@@ -214,14 +214,11 @@ impl TelemetryBilling {
             return 0;
         }
 
-        let pending: Map<u64, TelemetryEvent> = match env
-            .storage()
-            .persistent()
-            .get(&symbol_short!("pendq"))
-        {
-            Some(p) => p,
-            None => return 0,
-        };
+        let pending: Map<u64, TelemetryEvent> =
+            match env.storage().persistent().get(&symbol_short!("pendq")) {
+                Some(p) => p,
+                None => return 0,
+            };
 
         let mut events = Self::load_events(&env);
         let mut aligned = 0u32;
@@ -232,9 +229,10 @@ impl TelemetryBilling {
         env.storage()
             .persistent()
             .set(&DataKey::TelemetryEvents, &events);
-        env.storage()
-            .persistent()
-            .set(&symbol_short!("pendq"), &Map::<u64, TelemetryEvent>::new(&env));
+        env.storage().persistent().set(
+            &symbol_short!("pendq"),
+            &Map::<u64, TelemetryEvent>::new(&env),
+        );
 
         aligned
     }
@@ -248,7 +246,11 @@ impl TelemetryBilling {
         if alert {
             env.events().publish(
                 (symbol_short!("CycDevAl"),),
-                (observed, trailing_avg, deviation_bps(observed, trailing_avg)),
+                (
+                    observed,
+                    trailing_avg,
+                    deviation_bps(observed, trailing_avg),
+                ),
             );
         }
         alert
@@ -304,7 +306,10 @@ mod tests {
             billing_cycle_rollup_units(&b, 1, 2)
         );
         // Both equal the tiered charge on the cumulative total (1600).
-        assert_eq!(billing_cycle_rollup_units(&a, 1, 2), tiered_charge(1600, 1, 2));
+        assert_eq!(
+            billing_cycle_rollup_units(&a, 1, 2),
+            tiered_charge(1600, 1, 2)
+        );
     }
 
     #[test]
