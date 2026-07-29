@@ -35,6 +35,12 @@ import { InMemoryNonceCache, type SignedPayload } from '../../core/ingestion/val
 import type { PowSolution } from '../../core/crypto/pow_verifier.js';
 import { encryptionKeyFromHex } from '../../core/crypto/e2e_encryption.js';
 import { getEnv } from '../../config/env.js';
+import {
+  TelemetryStreamBus,
+  incrementStreamPublished,
+  incrementStreamDelivered,
+  incrementStreamErrors,
+} from '../../core/ingestion/telemetry_stream.js';
 
 // ── Schema ─────────────────────────────────────────────────────────────────────
 
@@ -160,6 +166,34 @@ export function registerIngestionRoutes(
         proof,
         powSolution,
       });
+
+      // Publish validated telemetry to the real-time stream bus (Issue #1).
+      // Only successful ingestion events are forwarded to SSE clients;
+      // validation failures are counted but not streamed.
+      if (result.success && result.deviceId !== undefined) {
+        try {
+          const metrics: Record<string, number> = {};
+          for (const [k, v] of Object.entries(
+            (payload.metrics as Record<string, number | string>) ?? {},
+          )) {
+            const n = typeof v === 'number' ? v : Number(v);
+            if (!Number.isNaN(n)) metrics[k] = n;
+          }
+
+          const bus = TelemetryStreamBus.getInstance();
+          bus.publish({
+            serverTs: new Date().toISOString(),
+            deviceId: result.deviceId,
+            metrics,
+            recordsWritten: result.recordsWritten ?? 0,
+          });
+          incrementStreamPublished();
+          incrementStreamDelivered(result.recordsWritten ?? 0);
+        } catch {
+          // Stream publish failures must never surface as ingestion errors.
+          incrementStreamErrors();
+        }
+      }
 
       const httpStatus = result.success ? 200 : statusForError(result.errorCode);
 
