@@ -310,7 +310,10 @@ mod tests {
 
     #[test]
     fn ordering_compares_high_limb_first() {
-        let small = U256 { hi: 0, lo: u128::MAX };
+        let small = U256 {
+            hi: 0,
+            lo: u128::MAX,
+        };
         let large = U256 { hi: 1, lo: 0 };
         assert!(large > small);
     }

@@ -19,6 +19,16 @@ import { registerGeoPricingRoutes } from './routes/geo_pricing.js';
 import { registerOpsRoutes } from './routes/ops.js';
 import { registerTracingHooks } from './middleware/tracing.js';
 import {
+  registerTelemetryStreamRoutes,
+  startTelemetryBridge,
+  stopTelemetryBridge,
+} from './routes/telemetry_stream.js';
+import { registerIngestionRoutes } from './routes/ingestion.js';
+import {
+  registerAttestationRoutes,
+  initAttestationService,
+} from './routes/attestation.js';
+import {
   TelemetryNotificationListener,
   closeTimescalePool,
   getSharedPoolManager,
@@ -66,10 +76,13 @@ export function registerSheddingStatusRoute(app: FastifyInstance): void {
     return {
       queueDepth: status.queueDepth,
       activeRequests: status.activeRequests,
-      sheddingLevel: status.degradationProfile.shedNonCritical ? 'critical'
-        : status.degradationProfile.disabledFlags.length > 5 ? 'high'
-        : status.degradationProfile.disabledFlags.length > 0 ? 'medium'
-        : 'normal',
+      sheddingLevel: status.degradationProfile.shedNonCritical
+        ? 'critical'
+        : status.degradationProfile.disabledFlags.length > 5
+          ? 'high'
+          : status.degradationProfile.disabledFlags.length > 0
+            ? 'medium'
+            : 'normal',
       activePriority: status.degradationProfile.activePriority,
       disabledFlags: status.degradationProfile.disabledFlags,
       maxQueueDepth: status.config.maxQueueDepth,
@@ -79,7 +92,7 @@ export function registerSheddingStatusRoute(app: FastifyInstance): void {
 }
 
 export async function buildApp(
-  tenantRateLimitMiddleware?: (request: any, reply: any) => Promise<void>
+  tenantRateLimitMiddleware?: (request: any, reply: any) => Promise<void>,
 ): Promise<FastifyInstance> {
   const env = getEnv();
 
@@ -110,6 +123,13 @@ export async function buildApp(
   registerCircuitHealth(app);
   registerGeoPricingRoutes(app);
   registerSheddingStatusRoute(app);
+  registerTelemetryStreamRoutes(app);
+
+  // Issue #3: register hardware attestation endpoints.
+  // Initialize a default in-memory attestation service for local/dev usage;
+  // production startup swaps this for the Prisma-backed implementation below.
+  initAttestationService();
+  registerAttestationRoutes(app);
 
   // Initialise the SSE manager singleton early so the admin event-stream
   // endpoint can register clients immediately on first request.
@@ -127,6 +147,7 @@ async function start(): Promise<void> {
 
   const env = getEnv();
   const prisma = new PrismaClient();
+  initAttestationService(undefined, undefined, undefined, prisma);
   const renewalCron = new RenewalCron(buildPrismaSubscriptionStore(prisma));
   renewalCron.start();
 
@@ -160,6 +181,10 @@ async function start(): Promise<void> {
   // admin dashboards receive real-time sync status updates (issue #68).
   const sse = getSseManager();
   synchronizerPollToSse(synchronizer, sse);
+
+  // Issue #1: start the SSE telemetry bridge so validated ingest events are
+  // forwarded to all connected SSE clients in real-time.
+  startTelemetryBridge();
 
   const listener = new TelemetryNotificationListener();
   await listener.start();
@@ -206,6 +231,7 @@ async function start(): Promise<void> {
     synchronizer.stop();
     renewalCron.stop();
     getSseManager().shutdown();
+    stopTelemetryBridge();
     gcMonitor.stop();
     poolCollector.stop();
     replicationMonitor.stop();
@@ -238,6 +264,7 @@ async function start(): Promise<void> {
     synchronizer.stop();
     renewalCron.stop();
     getSseManager().shutdown();
+    stopTelemetryBridge();
     gcMonitor.stop();
     poolCollector.stop();
     replicationMonitor.stop();
@@ -387,27 +414,29 @@ function buildPrismaSubscriptionStore(prisma: PrismaClient): SubscriptionStore {
         take: 50,
         orderBy: { expiresAt: 'asc' },
       });
-      return rows.map((s: {
-        id: string;
-        accountId: string;
-        planId: string;
-        amountDue: bigint;
-        periodDays: number;
-        expiresAt: Date;
-        autoRenew: boolean;
-        renewalStatus: string;
-        lockVersion: number;
-      }) => ({
-        id: s.id,
-        accountId: s.accountId,
-        planId: s.planId,
-        amountDue: s.amountDue,
-        periodDays: s.periodDays,
-        expiresAt: s.expiresAt,
-        autoRenew: s.autoRenew,
-        renewalStatus: s.renewalStatus as SubscriptionRenewalStatus,
-        lockVersion: s.lockVersion,
-      }));
+      return rows.map(
+        (s: {
+          id: string;
+          accountId: string;
+          planId: string;
+          amountDue: bigint;
+          periodDays: number;
+          expiresAt: Date;
+          autoRenew: boolean;
+          renewalStatus: string;
+          lockVersion: number;
+        }) => ({
+          id: s.id,
+          accountId: s.accountId,
+          planId: s.planId,
+          amountDue: s.amountDue,
+          periodDays: s.periodDays,
+          expiresAt: s.expiresAt,
+          autoRenew: s.autoRenew,
+          renewalStatus: s.renewalStatus as SubscriptionRenewalStatus,
+          lockVersion: s.lockVersion,
+        }),
+      );
     },
   };
 }

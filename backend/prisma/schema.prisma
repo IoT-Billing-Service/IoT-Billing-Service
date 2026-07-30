@@ -139,7 +139,38 @@ model HardwareCertificate {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  attestationRecords AttestationRecord[]
+
   @@map("hardware_certificates")
+}
+
+/// Append-only attestation audit trail (issue #3).
+/// Records every successful hardware attestation.  Rows are never mutated
+/// after insertion — this provides an immutable, time-ordered ledger of all
+/// verified device identities, satisfying PCI-DSS Req 10.3 and SOC2 CC7.2.
+model AttestationRecord {
+  id            String   @id @default(cuid())
+  /// Device serial / identifier that was attested.
+  deviceId      String   @map("device_id")
+  /// Ed25519 public key (64 hex chars = 32 bytes) presented at attestation.
+  publicKey     String   @map("public_key")
+  /// Hardware certificate serial that backed this attestation.
+  certSerial    String   @map("cert_serial")
+  /// Nonce consumed during this attestation (prevents replay linkage).
+  nonce         String
+  /// SHA-512/256 digest (64 hex chars) of the canonical attestation message.
+  /// Allows auditors to reproduce the verification without the original payload.
+  messageDigest String   @map("message_digest")
+  /// Server-side timestamp when attestation was accepted.
+  attestedAt    DateTime @default(now()) @map("attested_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  certificate HardwareCertificate @relation(fields: [certSerial], references: [serial])
+
+  @@index([deviceId])
+  @@index([certSerial])
+  @@index([attestedAt])
+  @@map("attestation_records")
 }
 
 model LedgerSyncState {

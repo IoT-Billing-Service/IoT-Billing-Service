@@ -1,6 +1,8 @@
 #![no_std]
 use crate::gas_budget::GasBudget;
-use crate::nonce_sync::{compute_leaf_hash, verify_merkle_proof, BatchLeaf, MerkleProof, BatchSubmission};
+use crate::nonce_sync::{
+    compute_leaf_hash, verify_merkle_proof, BatchLeaf, BatchSubmission, MerkleProof,
+};
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
     BytesN, Env, Symbol, Val, Vec,

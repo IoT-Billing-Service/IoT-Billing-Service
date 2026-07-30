@@ -110,9 +110,18 @@ mod tests {
     #[test]
     fn extends_only_below_threshold() {
         assert!(should_extend(0, MIN_TTL_THRESHOLD_LEDGERS));
-        assert!(should_extend(MIN_TTL_THRESHOLD_LEDGERS - 1, MIN_TTL_THRESHOLD_LEDGERS));
-        assert!(!should_extend(MIN_TTL_THRESHOLD_LEDGERS, MIN_TTL_THRESHOLD_LEDGERS));
-        assert!(!should_extend(TTL_EXTEND_TO_LEDGERS, MIN_TTL_THRESHOLD_LEDGERS));
+        assert!(should_extend(
+            MIN_TTL_THRESHOLD_LEDGERS - 1,
+            MIN_TTL_THRESHOLD_LEDGERS
+        ));
+        assert!(!should_extend(
+            MIN_TTL_THRESHOLD_LEDGERS,
+            MIN_TTL_THRESHOLD_LEDGERS
+        ));
+        assert!(!should_extend(
+            TTL_EXTEND_TO_LEDGERS,
+            MIN_TTL_THRESHOLD_LEDGERS
+        ));
     }
 
     #[test]

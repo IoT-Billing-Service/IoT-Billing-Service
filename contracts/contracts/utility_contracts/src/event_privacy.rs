@@ -35,7 +35,9 @@ extern crate alloc;
 
 use alloc::vec::Vec as ByteVec;
 use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
+};
 
 use crate::DataKey;
 

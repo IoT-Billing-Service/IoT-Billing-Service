@@ -1,9 +1,9 @@
 extern crate std;
 
 use crate::nonce_sync::{
-    build_merkle_tree, compute_leaf_hash, verify_merkle_proof, BatchLeaf, BatchState, DeviceNonceState,
-    NonceAlertType, NonceDesyncAlert, NonceResetRequest, NonceSyncManager, NonceSyncManagerClient,
-    SignedHeartbeat, NONCE_WINDOW_SIZE,
+    build_merkle_tree, compute_leaf_hash, verify_merkle_proof, BatchLeaf, BatchState,
+    DeviceNonceState, NonceAlertType, NonceDesyncAlert, NonceResetRequest, NonceSyncManager,
+    NonceSyncManagerClient, SignedHeartbeat, NONCE_WINDOW_SIZE,
 };
 use crate::{ContractError, DataKey};
 use soroban_sdk::{
@@ -373,11 +373,23 @@ mod reorg_protection_tests {
     #[test]
     fn test_confirmation_depth_logic() {
         // Observed at 100, current 102 → only 2 confirmations, not enough.
-        assert!(!has_sufficient_confirmations(102, 100, MIN_LEDGER_CONFIRMATIONS));
+        assert!(!has_sufficient_confirmations(
+            102,
+            100,
+            MIN_LEDGER_CONFIRMATIONS
+        ));
         // Observed at 100, current 103 → exactly 3 confirmations, enough.
-        assert!(has_sufficient_confirmations(103, 100, MIN_LEDGER_CONFIRMATIONS));
+        assert!(has_sufficient_confirmations(
+            103,
+            100,
+            MIN_LEDGER_CONFIRMATIONS
+        ));
         // A sequence rollback (current < observed) must not underflow.
-        assert!(!has_sufficient_confirmations(99, 100, MIN_LEDGER_CONFIRMATIONS));
+        assert!(!has_sufficient_confirmations(
+            99,
+            100,
+            MIN_LEDGER_CONFIRMATIONS
+        ));
     }
 
     #[test]
@@ -408,7 +420,8 @@ mod reorg_protection_tests {
 
         // Bury it under 3 confirmations and finalize → exactly one billing action.
         set_sequence(&env, 103);
-        let actions = NonceSyncManager::finalize_confirmed_telemetry(env.clone(), device_mac.clone());
+        let actions =
+            NonceSyncManager::finalize_confirmed_telemetry(env.clone(), device_mac.clone());
         assert_eq!(actions.len(), 1);
         assert_eq!(actions.get(0).unwrap().reading, 500);
         assert!(NonceSyncManager::was_nonce_processed(
@@ -442,7 +455,8 @@ mod reorg_protection_tests {
 
         // Only 2 confirmations → nothing finalized, nothing billed.
         set_sequence(&env, 102);
-        let actions = NonceSyncManager::finalize_confirmed_telemetry(env.clone(), device_mac.clone());
+        let actions =
+            NonceSyncManager::finalize_confirmed_telemetry(env.clone(), device_mac.clone());
         assert_eq!(actions.len(), 0);
         assert!(!NonceSyncManager::was_nonce_processed(
             env.clone(),
@@ -457,7 +471,8 @@ mod reorg_protection_tests {
 
         // After enough confirmations it bills exactly once.
         set_sequence(&env, 103);
-        let actions = NonceSyncManager::finalize_confirmed_telemetry(env.clone(), device_mac.clone());
+        let actions =
+            NonceSyncManager::finalize_confirmed_telemetry(env.clone(), device_mac.clone());
         assert_eq!(actions.len(), 1);
         // Repeated finalization is idempotent — no second charge.
         let again = NonceSyncManager::finalize_confirmed_telemetry(env.clone(), device_mac.clone());
@@ -603,9 +618,18 @@ mod batch_signing_tests {
         // Phase 3: finalize
         let leaves = soroban_sdk::vec![
             &env,
-            BatchLeaf { device_id: d1.clone(), reading: 1000 },
-            BatchLeaf { device_id: d2.clone(), reading: 2000 },
-            BatchLeaf { device_id: d3.clone(), reading: 3000 },
+            BatchLeaf {
+                device_id: d1.clone(),
+                reading: 1000
+            },
+            BatchLeaf {
+                device_id: d2.clone(),
+                reading: 2000
+            },
+            BatchLeaf {
+                device_id: d3.clone(),
+                reading: 3000
+            },
         ];
         let submission = client.finalize_batch(&device_mac, &leaves).unwrap();
 
@@ -724,12 +748,8 @@ mod batch_signing_tests {
             // The attacker's replayed hash differs from the original leaf hash
             // because the device_id is wrong. Verification against the original
             // proof MUST fail.
-            let replayed_ok = verify_merkle_proof(
-                &env,
-                &replayed_hash,
-                &proof,
-                &submission.merkle_root,
-            );
+            let replayed_ok =
+                verify_merkle_proof(&env, &replayed_hash, &proof, &submission.merkle_root);
             assert!(
                 !replayed_ok,
                 "replay of leaf {i} with wrong device_id must fail"

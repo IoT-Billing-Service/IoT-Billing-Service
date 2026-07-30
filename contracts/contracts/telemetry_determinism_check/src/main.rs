@@ -120,7 +120,9 @@ fn main() {
             let mut shuffled = base.clone();
             rng.shuffle(&mut shuffled);
             if billing_cycle_rollup_units(&shuffled, t1, t2) != baseline {
-                fail(&format!("randomized case (seed {seed}) was order-sensitive"));
+                fail(&format!(
+                    "randomized case (seed {seed}) was order-sensitive"
+                ));
             }
             cases += 1;
         }

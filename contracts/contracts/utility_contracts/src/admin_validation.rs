@@ -32,8 +32,7 @@ use soroban_sdk::{Address, Env, String};
 use crate::ContractError;
 
 /// The Stellar all-zero ed25519 account (strkey form).
-pub const ZERO_ACCOUNT_STRKEY: &str =
-    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+pub const ZERO_ACCOUNT_STRKEY: &str = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
 
 /// Number of ledgers after the first admin set during which `recover_admin` may
 /// be invoked.

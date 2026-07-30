@@ -89,7 +89,12 @@ fn onchain_atomic_flush_retains_on_failure() {
     let device = Address::generate(&env);
 
     for n in 0..120u32 {
-        let ev = TelemetryEvent { device: device.clone(), value: n as u128, timestamp: n as u64, nonce: n as u64 };
+        let ev = TelemetryEvent {
+            device: device.clone(),
+            value: n as u128,
+            timestamp: n as u64,
+            nonce: n as u64,
+        };
         client.append_event(&ev);
     }
 

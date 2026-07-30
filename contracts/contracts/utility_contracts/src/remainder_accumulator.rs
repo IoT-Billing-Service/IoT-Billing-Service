@@ -120,7 +120,12 @@ pub fn validate_decimal_consistency(decimals_a: u32, decimals_b: u32) {
     } else {
         decimals_b - decimals_a
     };
-    assert!(mismatch <= 2, "Decimal precision mismatch too large: {} vs {}", decimals_a, decimals_b);
+    assert!(
+        mismatch <= 2,
+        "Decimal precision mismatch too large: {} vs {}",
+        decimals_a,
+        decimals_b
+    );
 }
 
 /// 7-decimal fixed-point scale.
@@ -317,7 +322,10 @@ mod tests {
         }
         let exact = (reading * cycles) / PRECISION_FACTOR;
         assert_eq!(billed, exact);
-        assert!(acc.reservoir < PRECISION_FACTOR, "residual dust must stay sub-unit");
+        assert!(
+            acc.reservoir < PRECISION_FACTOR,
+            "residual dust must stay sub-unit"
+        );
     }
 
     // ---------------------------------------------------------------------------
@@ -360,12 +368,12 @@ mod tests {
             let price = Price7Dec::from_raw(price_raw);
             let usage = Usage7Dec::from_raw(usage_raw);
             let result = calculate_stream_rate(price, usage);
-            
+
             // Calculate the exact value as a product, then check that the result
             // is within 1 of the exact value (since we're using integer division)
             let exact_product = price_raw.saturating_mul(usage_raw);
             let expected_token_raw = exact_product.saturating_mul(10_000); // 10^(18-7-7) = 10^4
-            
+
             // The result should be equal to expected (since integer division is exact here)
             // Because we're multiplying first by 10^11 then dividing by 10^7 = multiply by 10^4
             prop_assert_eq!(result.value(), expected_token_raw);
@@ -378,11 +386,11 @@ mod tests {
         validate_decimal_consistency(18, 16);
         validate_decimal_consistency(7, 9);
         validate_decimal_consistency(18, 18);
-        
+
         // Should panic (mismatch > 2)
         let result = std::panic::catch_unwind(|| validate_decimal_consistency(18, 15));
         assert!(result.is_err());
-        
+
         let result = std::panic::catch_unwind(|| validate_decimal_consistency(7, 10));
         assert!(result.is_err());
     }

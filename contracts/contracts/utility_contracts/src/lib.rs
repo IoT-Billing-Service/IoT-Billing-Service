@@ -199,35 +199,35 @@ mod debt_fuzz_tests;
 #[cfg(test)]
 mod dust_sweeper_tests;
 #[cfg(test)]
+mod event_privacy_tests;
+#[cfg(test)]
+mod flow_rate_overflow_fuzz;
+#[cfg(test)]
 mod fuzz_tests;
 #[cfg(test)]
 mod ghost_sweeper_tests;
 #[cfg(test)]
 mod nonce_sync_tests;
 #[cfg(test)]
+mod oracle_circuit_breaker_tests;
+#[cfg(test)]
 mod pause_resume_fuzz_tests;
 #[cfg(test)]
 mod pause_resume_tests;
+#[cfg(test)]
+mod precision_factor_fuzz;
+#[cfg(test)]
+mod reentrancy_fuzz_cross_contract;
+#[cfg(test)]
+mod reentrancy_guard_tests;
 #[cfg(test)]
 mod streaming_invariant_tests;
 #[cfg(test)]
 mod stroop_fuzz_tests;
 #[cfg(test)]
-mod event_privacy_tests;
-#[cfg(test)]
-mod flow_rate_overflow_fuzz;
-#[cfg(test)]
-mod reentrancy_guard_tests;
-#[cfg(test)]
-mod reentrancy_fuzz_cross_contract;
-#[cfg(test)]
-mod oracle_circuit_breaker_tests;
+mod tariff_oracle_tests;
 #[cfg(test)]
 mod telemetry_buffer_fuzz;
-#[cfg(test)]
-mod precision_factor_fuzz;
-#[cfg(test)]
-mod tariff_oracle_tests;
 #[cfg(test)]
 mod temporary_storage_tests;
 
@@ -318,23 +318,23 @@ use gas_estimator::GasCostEstimator;
 pub mod admin_validation;
 pub mod energy_grid;
 pub mod enterprise;
+pub mod event_privacy;
 pub mod gas_budget;
 pub mod ghost_sweeper;
 pub mod grant_stream_listener;
-pub mod multi_sig_admin;
 pub mod multi_sensor;
+pub mod multi_sig_admin;
 pub mod namespace;
 pub mod nonce_sync;
 pub mod oracle_circuit_breaker;
 pub mod reentrancy_guard;
+pub mod remainder_accumulator;
 pub mod secure_call_interface;
 pub mod settlement_orchestrator;
 pub mod storage_ttl;
-pub mod remainder_accumulator;
 pub mod tariff_oracle;
 pub mod telemetry_billing;
 pub mod telemetry_buffer;
-pub mod event_privacy;
 pub mod temporary_storage;
 pub mod u256;
 pub mod velocity_limit;
@@ -1822,14 +1822,14 @@ fn get_admin_or_panic(env: &Env) -> Address {
 fn require_admin_auth(env: &Env) {
     let admin = get_admin_or_panic(env);
     admin.require_auth();
-        // Issue #24: Require multi-sig approval for velocity limit changes
-        if multi_sig_admin::is_cb(&env) {
-            // Circuit breaker active — single admin auth suffices
-        } else if env.storage().instance().has(&DataKey::AdminMofN) {
-            if !multi_sig_admin::auth(&env, admin.clone(), symbol_short!("set_vl")) {
-                return;
-            }
+    // Issue #24: Require multi-sig approval for velocity limit changes
+    if multi_sig_admin::is_cb(&env) {
+        // Circuit breaker active — single admin auth suffices
+    } else if env.storage().instance().has(&DataKey::AdminMofN) {
+        if !multi_sig_admin::auth(&env, admin.clone(), symbol_short!("set_vl")) {
+            return;
         }
+    }
 }
 
 /// Get or create dust aggregation for a specific token
@@ -3021,10 +3021,8 @@ impl UtilityContract {
         env.storage()
             .persistent()
             .set(&TIME_ANCHOR_KEY, &anchored_ts);
-        env.events().publish(
-            (symbol_short!("TAnchor"),),
-            (oracle, anchored_ts),
-        );
+        env.events()
+            .publish((symbol_short!("TAnchor"),), (oracle, anchored_ts));
     }
 
     /// Sets the maintenance wallet address and protocol fee configuration.

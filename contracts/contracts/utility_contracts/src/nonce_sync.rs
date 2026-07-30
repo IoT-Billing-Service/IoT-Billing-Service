@@ -1005,10 +1005,7 @@ impl NonceSyncManager {
     /// Phase 2 — finalize every pending entry for a device that has reached
     /// `MIN_LEDGER_CONFIRMATIONS`. Returns the billing actions that are now
     /// safe to charge. Entries not yet deep enough remain queued.
-    pub fn finalize_confirmed_telemetry(
-        env: Env,
-        device_mac: BytesN<32>,
-    ) -> Vec<BillingAction> {
+    pub fn finalize_confirmed_telemetry(env: Env, device_mac: BytesN<32>) -> Vec<BillingAction> {
         let current_seq = env.ledger().sequence();
         let queue = Self::load_pending_queue(&env, &device_mac);
 
@@ -1059,10 +1056,8 @@ impl NonceSyncManager {
         Self::store_pending_queue(&env, &device_mac, &remaining);
 
         if finalized.len() > 0 {
-            env.events().publish(
-                (symbol_short!("TFinal"),),
-                (device_mac, finalized.len()),
-            );
+            env.events()
+                .publish((symbol_short!("TFinal"),), (device_mac, finalized.len()));
         }
 
         finalized
@@ -1119,11 +1114,8 @@ impl NonceSyncManager {
         {
             // `ed25519_verify` panics on an invalid signature; reaching the
             // next statement means the signature is valid.
-            env.crypto().ed25519_verify(
-                &telemetry.public_key,
-                &message_data,
-                &telemetry.signature,
-            );
+            env.crypto()
+                .ed25519_verify(&telemetry.public_key, &message_data, &telemetry.signature);
             true
         }
 
@@ -1214,14 +1206,8 @@ pub fn compute_leaf_hash(
     contract_id: &Address,
 ) -> BytesN<32> {
     let mut data = soroban_sdk::Bytes::new(env);
-    data.append(&soroban_sdk::Bytes::from_slice(
-        env,
-        &device_id.to_xdr(env),
-    ));
-    data.append(&soroban_sdk::Bytes::from_slice(
-        env,
-        &reading.to_be_bytes(),
-    ));
+    data.append(&soroban_sdk::Bytes::from_slice(env, &device_id.to_xdr(env)));
+    data.append(&soroban_sdk::Bytes::from_slice(env, &reading.to_be_bytes()));
     data.append(&soroban_sdk::Bytes::from_slice(
         env,
         &batch_nonce.to_be_bytes(),
@@ -1237,10 +1223,7 @@ pub fn compute_leaf_hash(
 ///
 /// The tree is padded to the next power of two with zero hashes so that every
 /// leaf has a complete proof path of length log2(next_pow2).
-pub fn build_merkle_tree(
-    env: &Env,
-    leaves: &Vec<BytesN<32>>,
-) -> (BytesN<32>, Vec<MerkleProof>) {
+pub fn build_merkle_tree(env: &Env, leaves: &Vec<BytesN<32>>) -> (BytesN<32>, Vec<MerkleProof>) {
     let n = leaves.len() as u32;
     if n == 0 {
         let zero = BytesN::from_array(env, &[0u8; 32]);
@@ -1349,10 +1332,8 @@ impl NonceSyncManager {
             .persistent()
             .set(&DataKey::BatchNonce(device_mac.clone()), &state);
 
-        env.events().publish(
-            (symbol_short!("BInit"),),
-            (device_mac, batch_nonce, seq),
-        );
+        env.events()
+            .publish((symbol_short!("BInit"),), (device_mac, batch_nonce, seq));
         batch_nonce
     }
 
@@ -1389,12 +1370,7 @@ impl NonceSyncManager {
         // Emit event with the reading (the batcher collects these off-chain).
         env.events().publish(
             (symbol_short!("BAdd"),),
-            (
-                device_mac,
-                device_id,
-                reading,
-                state.batch_nonce,
-            ),
+            (device_mac, device_id, reading, state.batch_nonce),
         );
         Ok(())
     }
@@ -1429,7 +1405,13 @@ impl NonceSyncManager {
         let contract_id = env.current_contract_id();
         let mut hashes: Vec<BytesN<32>> = Vec::new(&env);
         for leaf in leaves.iter() {
-            let h = compute_leaf_hash(&env, &leaf.device_id, leaf.reading, state.batch_nonce, &contract_id);
+            let h = compute_leaf_hash(
+                &env,
+                &leaf.device_id,
+                leaf.reading,
+                state.batch_nonce,
+                &contract_id,
+            );
             hashes.push_back(h);
         }
 

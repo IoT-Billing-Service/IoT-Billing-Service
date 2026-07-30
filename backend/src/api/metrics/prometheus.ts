@@ -355,6 +355,65 @@ export function incrementConfigTransitionEvents(
   configTransitionEvents.inc({ start_version: startVersion, end_version: endVersion });
 }
 
+// ---------------------------------------------------------------------------
+// Hardware attestation metrics (issue #3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Total attestation requests, labelled by result (success / failure).
+ * Low-cardinality: `result` can only be `"success"` or `"failure"`.
+ */
+export const attestationRequestsTotal: promClient.Counter = new promClient.Counter({
+  name: 'attestation_requests_total',
+  help: 'Total hardware attestation requests by result',
+  labelNames: ['result'],
+});
+
+/**
+ * Attestation failures, labelled by machine-readable error code.
+ * The bounded set of 9 error codes keeps cardinality safe.
+ */
+export const attestationFailuresTotal: promClient.Counter = new promClient.Counter({
+  name: 'attestation_failures_total',
+  help: 'Hardware attestation failures by error code',
+  labelNames: ['error_code'],
+});
+
+/**
+ * End-to-end attestation duration in milliseconds.
+ * Buckets tuned for the < 50 ms P99 target.
+ */
+export const attestationDurationMs: promClient.Histogram = new promClient.Histogram({
+  name: 'attestation_duration_ms',
+  help: 'End-to-end hardware attestation latency in milliseconds',
+  buckets: [1, 5, 10, 20, 30, 50, 100, 200, 500],
+});
+
+/**
+ * Certificate revocations encountered during attestation.
+ * A sudden spike here signals a potential key-compromise event.
+ */
+export const attestationCertRevocationsTotal: promClient.Counter = new promClient.Counter({
+  name: 'attestation_cert_revocations_total',
+  help: 'Attestation requests rejected because the hardware certificate was revoked',
+});
+
+/** Record a successful attestation. */
+export function recordAttestationSuccess(durationMs: number): void {
+  attestationRequestsTotal.inc({ result: 'success' });
+  attestationDurationMs.observe(durationMs);
+}
+
+/** Record a failed attestation. */
+export function recordAttestationFailure(errorCode: string, durationMs: number): void {
+  attestationRequestsTotal.inc({ result: 'failure' });
+  attestationFailuresTotal.inc({ error_code: errorCode });
+  attestationDurationMs.observe(durationMs);
+  if (errorCode === 'ATTEST_ERR_CERT_REVOKED') {
+    attestationCertRevocationsTotal.inc();
+  }
+}
+
 // Config hot-reload counters (issue #74).
 // configReloadTotal: incremented on every successful hot-reload of MetricRangesConfig.
 // configValidationFailuresTotal: incremented whenever a candidate config is rejected

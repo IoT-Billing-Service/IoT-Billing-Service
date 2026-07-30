@@ -1,8 +1,12 @@
-use soroban_sdk::{Address, Env};
 use crate::{ContractError, DataKey};
+use soroban_sdk::{Address, Env};
 
 pub fn set_authorizer(env: Env, authorizer: Address) -> Result<(), ContractError> {
-    let total_locked: i128 = env.storage().instance().get(&DataKey::TotalLocked).unwrap_or(0);
+    let total_locked: i128 = env
+        .storage()
+        .instance()
+        .get(&DataKey::TotalLocked)
+        .unwrap_or(0);
 
     if total_locked > 0 {
         return Err(ContractError::EscrowAlreadyActive);
