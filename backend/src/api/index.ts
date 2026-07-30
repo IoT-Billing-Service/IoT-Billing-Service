@@ -25,6 +25,10 @@ import {
 } from './routes/telemetry_stream.js';
 import { registerIngestionRoutes } from './routes/ingestion.js';
 import {
+  registerAttestationRoutes,
+  initAttestationService,
+} from './routes/attestation.js';
+import {
   TelemetryNotificationListener,
   closeTimescalePool,
   getSharedPoolManager,
@@ -121,6 +125,12 @@ export async function buildApp(
   registerSheddingStatusRoute(app);
   registerTelemetryStreamRoutes(app);
 
+  // Issue #3: register hardware attestation endpoints.
+  // Initialize a default in-memory attestation service for local/dev usage;
+  // production startup swaps this for the Prisma-backed implementation below.
+  initAttestationService();
+  registerAttestationRoutes(app);
+
   // Initialise the SSE manager singleton early so the admin event-stream
   // endpoint can register clients immediately on first request.
   getSseManager();
@@ -137,6 +147,7 @@ async function start(): Promise<void> {
 
   const env = getEnv();
   const prisma = new PrismaClient();
+  initAttestationService(undefined, undefined, undefined, prisma);
   const renewalCron = new RenewalCron(buildPrismaSubscriptionStore(prisma));
   renewalCron.start();
 
