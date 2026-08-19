@@ -61,6 +61,40 @@ export interface Job<T = unknown> {
 
 export type JobHandler = (job: Job) => Promise<void>;
 
+/** Raw shape of a `scheduler_jobs` row as returned by `pg` (snake_case columns). */
+interface JobRow {
+  id: string;
+  type: string;
+  payload: unknown;
+  priority: number;
+  status: JobStatus;
+  retries: number;
+  max_retries: number;
+  worker_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Map a raw `scheduler_jobs` row to the camelCase {@link Job} shape.
+ * `pg` returns columns exactly as named in SQL, so this mapping is required —
+ * without it, fields like `maxRetries` silently come back `undefined`.
+ */
+function mapRowToJob(row: JobRow): Job {
+  return {
+    id: row.id,
+    type: row.type,
+    payload: row.payload,
+    priority: row.priority,
+    status: row.status,
+    retries: row.retries,
+    maxRetries: row.max_retries,
+    workerId: row.worker_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 export interface DistributedSchedulerOptions {
   /** How long a lease lasts before expiry (ms). Default 30 000. */
   leaseMs?: number;
@@ -140,6 +174,7 @@ export class DistributedScheduler {
   private running = false;
   private activeJobs = 0;
   private heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>();
+  private tableEnsured: Promise<void> | null = null;
 
   constructor(
     redis: Redis,
@@ -320,7 +355,7 @@ export class DistributedScheduler {
    * 4. On failure, loop to the next candidate.
    */
   private async claimNextJob(): Promise<Job | null> {
-    const candidates = await this.pool.query<Job>(
+    const candidates = await this.pool.query<JobRow>(
       `SELECT * FROM ${JOBS_TABLE}
        WHERE status IN ('PENDING', 'FAILED')
        ORDER BY priority ASC, created_at ASC
@@ -339,7 +374,7 @@ export class DistributedScheduler {
       if (acquired !== 'OK') continue;
 
       // We won the lease — flip DB state.
-      const updateRes = await this.pool.query<Job>(
+      const updateRes = await this.pool.query<JobRow>(
         `UPDATE ${JOBS_TABLE}
          SET status = 'ACTIVE', worker_id = $1, updated_at = now()
          WHERE id = $2 AND status IN ('PENDING', 'FAILED')
@@ -348,7 +383,7 @@ export class DistributedScheduler {
       );
 
       if (updateRes.rows.length > 0 && updateRes.rows[0] !== undefined) {
-        return updateRes.rows[0];
+        return mapRowToJob(updateRes.rows[0]);
       }
 
       // DB update lost a race — release the Redis lease.
@@ -441,7 +476,16 @@ export class DistributedScheduler {
   // Private: db setup
   // -----------------------------------------------------------------------
 
+  /**
+   * Runs the `CREATE TABLE IF NOT EXISTS` DDL at most once per instance.
+   * Without caching, this ran on every {@link enqueue} call, adding an
+   * avoidable DDL round-trip (and catalog lock contention under load) to the
+   * hot enqueue path — at odds with the <200ms P99 target.
+   */
   private async ensureJobsTable(): Promise<void> {
-    await this.pool.query(CREATE_JOBS_TABLE_SQL);
+    if (this.tableEnsured === null) {
+      this.tableEnsured = this.pool.query(CREATE_JOBS_TABLE_SQL).then(() => undefined);
+    }
+    await this.tableEnsured;
   }
 }

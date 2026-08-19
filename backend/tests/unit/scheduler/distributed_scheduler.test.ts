@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Redis } from 'ioredis';
 import type pg from 'pg';
-import { DistributedScheduler } from '../../../src/scheduler/distributed_scheduler.js';
+import { DistributedScheduler, type Job } from '../../../src/scheduler/distributed_scheduler.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -158,6 +158,82 @@ describe('DistributedScheduler', () => {
 
       const recovered = await scheduler.recoverAbandonedJobs();
       expect(recovered).toBe(0);
+    });
+  });
+
+  describe('DB row -> Job mapping', () => {
+    // Regression test: `pg` returns raw column names (snake_case), so a claimed
+    // job's `max_retries`/`worker_id`/`created_at`/`updated_at` columns must be
+    // mapped to the camelCase Job fields. Previously they were not, so
+    // `job.maxRetries` was always `undefined` and every failed job skipped
+    // retries entirely, going straight to the DLQ.
+    const dbRow = {
+      id: 'job-1',
+      type: 'test-type',
+      payload: { key: 'value' },
+      priority: 0,
+      status: 'PENDING',
+      retries: 0,
+      max_retries: 2,
+      worker_id: null,
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    };
+
+    function mockClaimableJob(): void {
+      mockPool.query.mockImplementation((sql: string) => {
+        if (sql.includes('CREATE TABLE')) return Promise.resolve({ rows: [] });
+        if (sql.includes('SELECT * FROM scheduler_jobs')) {
+          return Promise.resolve({ rows: [dbRow] });
+        }
+        if (sql.includes('UPDATE scheduler_jobs') && sql.includes('RETURNING *')) {
+          return Promise.resolve({ rows: [{ ...dbRow, status: 'ACTIVE', worker_id: 'w-1' }] });
+        }
+        return Promise.resolve({ rows: [] });
+      });
+    }
+
+    it('claims a job with correctly-mapped camelCase fields', async () => {
+      mockClaimableJob();
+      const internal = scheduler as unknown as { claimNextJob: () => Promise<Job | null> };
+
+      const job = await internal.claimNextJob();
+
+      expect(job?.maxRetries).toBe(2);
+      expect(job?.workerId).toBe('w-1');
+      expect(job?.createdAt).toBe(dbRow.created_at);
+    });
+
+    it('retries a failing job instead of sending it straight to the DLQ', async () => {
+      mockClaimableJob();
+      const internal = scheduler as unknown as {
+        claimNextJob: () => Promise<Job | null>;
+        executeJob: (job: Job) => Promise<void>;
+      };
+      scheduler.registerHandler('test-type', vi.fn().mockRejectedValue(new Error('boom')));
+
+      const job = await internal.claimNextJob();
+      await internal.executeJob(job as Job);
+
+      const retryUpdate = mockPool.query.mock.calls.find(
+        ([sql]: [string]) => typeof sql === 'string' && sql.includes("status = 'PENDING'") && sql.includes('retries'),
+      );
+      expect(retryUpdate).toBeDefined();
+      expect(retryUpdate?.[1]).toEqual([1, 'boom', 'job-1']);
+    });
+  });
+
+  describe('ensureJobsTable caching', () => {
+    it('only issues the CREATE TABLE DDL once across multiple enqueue calls', async () => {
+      mockPool.query.mockResolvedValue({ rows: [] });
+
+      await scheduler.enqueue('test-type', {});
+      await scheduler.enqueue('test-type', {});
+
+      const ddlCalls = mockPool.query.mock.calls.filter(
+        ([sql]: [string]) => typeof sql === 'string' && sql.includes('CREATE TABLE'),
+      );
+      expect(ddlCalls.length).toBe(1);
     });
   });
 });
