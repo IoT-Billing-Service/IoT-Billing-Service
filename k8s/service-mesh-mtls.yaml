@@ -1,0 +1,84 @@
+# Service Mesh mTLS Policy – Istio PeerAuthentication (issue #277)
+#
+# Enforces STRICT mTLS for all workloads in the `billing` namespace.
+# Every pod must present a valid SPIFFE workload-identity certificate issued
+# by Istio's built-in CA (istiod) before any inbound connection is accepted.
+#
+# STRICT mode means:
+#   - Plaintext traffic is rejected.
+#   - Clients that do not present a valid cert are denied by the sidecar proxy.
+#
+# Reference: https://istio.io/latest/docs/reference/config/security/peer_authentication/
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: billing-strict-mtls
+  namespace: billing
+  labels:
+    app.kubernetes.io/part-of: iot-billing-service
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  # No selector → applies to ALL workloads in the namespace.
+  mtls:
+    mode: STRICT
+---
+# DestinationRule – configure TLS settings for traffic originating from
+# services within the `billing` namespace to any destination.
+#
+# `ISTIO_MUTUAL` tells the Envoy sidecar to use Istio-issued SPIFFE certs
+# (from the local `/var/run/secrets/workload-spiffe-credentials/` socket)
+# for all outbound connections, completing the mTLS handshake.
+#
+# Reference: https://istio.io/latest/docs/reference/config/networking/destination-rule/
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: billing-mtls-destination
+  namespace: billing
+  labels:
+    app.kubernetes.io/part-of: iot-billing-service
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  host: "*.billing.svc.cluster.local"
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# AuthorizationPolicy – coarse-grained allow-list for billing namespace.
+#
+# Permits inbound requests only from service accounts in:
+#   - `billing` namespace  (same-namespace services)
+#   - `ingress`  namespace (API gateway / ingress controller)
+#
+# All other sources are denied, even if their mTLS cert validates correctly.
+# Fine-grained path-level policies should be stacked on top of this base rule.
+#
+# Reference: https://istio.io/latest/docs/reference/config/security/authorization-policy/
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: billing-allow-mesh-peers
+  namespace: billing
+  labels:
+    app.kubernetes.io/part-of: iot-billing-service
+    app.kubernetes.io/component: service-mesh
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - billing
+              - ingress
+      to:
+        - operation:
+            methods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
