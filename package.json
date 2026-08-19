@@ -5,6 +5,9 @@
     "compile": "hardhat compile",
     "test": "hardhat test",
     "test:ci": "node --test tests/ci/*.test.mjs",
+    "test:precommit": "node --test tests/ci/pre-commit.test.mjs",
+    "precommit:check": "node scripts/pre-commit.mjs",
+    "hooks:install": "node scripts/install-git-hooks.mjs",
     "test:pause": "hardhat test test/EmergencyPause.test.js",
     "deploy": "hardhat run scripts/deploy.js",
     "verify:emergency-pause": "hardhat run scripts/verify-emergency-pause.js"

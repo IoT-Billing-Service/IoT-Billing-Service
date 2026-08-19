@@ -45,10 +45,14 @@ jobs:
               - 'test/**'
             workflow:
               - '.github/workflows/**'
+              - '.githooks/**'
               - 'monitoring/**'
+              - 'scripts/install-git-hooks.mjs'
+              - 'scripts/pre-commit.mjs'
               - 'scripts/validate-ci-workflows.mjs'
               - 'scripts/verify-production.mjs'
               - 'tests/ci/**'
+              - 'docs/pre-commit-hooks.md'
               - 'docs/design/github-actions-optimization.md'
             node-dependencies:
               - 'package.json'
