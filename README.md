@@ -265,11 +265,14 @@ CI pipelines run automatically on every push via GitHub Actions (see `.github/wo
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feat/my-feature`
-3. Commit your changes: `git commit -m 'feat: add new feature'`
-4. Push to the branch: `git push origin feat/my-feature`
-5. Open a Pull Request
+3. Install the local pre-commit hooks: `npm run hooks:install`
+4. Commit your changes: `git commit -m 'feat: add new feature'`
+5. Push to the branch: `git push origin feat/my-feature`
+6. Open a Pull Request
 
 Please follow the [Conventional Commits](https://www.conventionalcommits.org) specification and ensure all tests pass before requesting review.
+
+The pre-commit suite blocks common quality and security mistakes such as live `.env` files, private key material, unresolved merge markers, and invalid JSON. See [Pre-Commit Hook Suite](./docs/pre-commit-hooks.md) for setup and manual verification.
 
 ---
 
