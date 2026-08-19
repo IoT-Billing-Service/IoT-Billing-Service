@@ -241,7 +241,14 @@ export class ServiceMeshPolicy {
       const reason = `Certificate parse error: ${err instanceof Error ? err.message : String(err)}`;
       this.metrics.connectionsDenied.inc({ reason: 'parse_error' });
       this.metrics.policyLatencyMs.observe(Date.now() - startMs);
-      return { allowed: false, commonName: '', serialNumber: '', reason, expiringSoon: false, daysUntilExpiry: 0 };
+      return {
+        allowed: false,
+        commonName: '',
+        serialNumber: '',
+        reason,
+        expiringSoon: false,
+        daysUntilExpiry: 0,
+      };
     }
 
     const cn = extractCN(cert);
@@ -256,14 +263,28 @@ export class ServiceMeshPolicy {
       const reason = `Certificate not yet valid (validFrom=${cert.validFrom})`;
       this.metrics.connectionsDenied.inc({ reason: 'not_yet_valid' });
       this.metrics.policyLatencyMs.observe(Date.now() - startMs);
-      return { allowed: false, commonName: cn, serialNumber: serial, reason, expiringSoon: false, daysUntilExpiry: 0 };
+      return {
+        allowed: false,
+        commonName: cn,
+        serialNumber: serial,
+        reason,
+        expiringSoon: false,
+        daysUntilExpiry: 0,
+      };
     }
 
     if (validTo < now) {
       const reason = `Certificate expired (validTo=${cert.validTo})`;
       this.metrics.connectionsDenied.inc({ reason: 'expired' });
       this.metrics.policyLatencyMs.observe(Date.now() - startMs);
-      return { allowed: false, commonName: cn, serialNumber: serial, reason, expiringSoon: false, daysUntilExpiry: 0 };
+      return {
+        allowed: false,
+        commonName: cn,
+        serialNumber: serial,
+        reason,
+        expiringSoon: false,
+        daysUntilExpiry: 0,
+      };
     }
 
     // Expiry warning window
@@ -281,21 +302,44 @@ export class ServiceMeshPolicy {
         const reason = 'No SPIFFE URI SAN found in certificate; access denied by policy';
         this.metrics.connectionsDenied.inc({ reason: 'no_spiffe_uri' });
         this.metrics.policyLatencyMs.observe(Date.now() - startMs);
-        return { allowed: false, commonName: cn, serialNumber: serial, reason, spiffeUri, expiringSoon, daysUntilExpiry };
+        return {
+          allowed: false,
+          commonName: cn,
+          serialNumber: serial,
+          reason,
+          spiffeUri,
+          expiringSoon,
+          daysUntilExpiry,
+        };
       }
 
       if (!allowedSpiffeUris.includes(spiffeUri)) {
         const reason = `SPIFFE URI '${spiffeUri}' is not in the allowed list`;
         this.metrics.connectionsDenied.inc({ reason: 'spiffe_uri_not_allowed' });
         this.metrics.policyLatencyMs.observe(Date.now() - startMs);
-        return { allowed: false, commonName: cn, serialNumber: serial, reason, spiffeUri, expiringSoon, daysUntilExpiry };
+        return {
+          allowed: false,
+          commonName: cn,
+          serialNumber: serial,
+          reason,
+          spiffeUri,
+          expiringSoon,
+          daysUntilExpiry,
+        };
       }
     }
 
     // All checks passed
     this.metrics.connectionsAllowed.inc({ spiffe_uri: spiffeUri ?? 'none' });
     this.metrics.policyLatencyMs.observe(Date.now() - startMs);
-    return { allowed: true, commonName: cn, serialNumber: serial, spiffeUri, expiringSoon, daysUntilExpiry };
+    return {
+      allowed: true,
+      commonName: cn,
+      serialNumber: serial,
+      spiffeUri,
+      expiringSoon,
+      daysUntilExpiry,
+    };
   }
 }
 
@@ -318,8 +362,7 @@ export function getServiceMeshPolicy(
     return new ServiceMeshPolicy(config, registry);
   }
   if (sharedPolicy == null) {
-    const mode: MtlsMode =
-      process.env['MTLS_MODE'] === 'PERMISSIVE' ? 'PERMISSIVE' : 'STRICT';
+    const mode: MtlsMode = process.env['MTLS_MODE'] === 'PERMISSIVE' ? 'PERMISSIVE' : 'STRICT';
     const rawUris = process.env['MTLS_ALLOWED_SPIFFE_URIS'] ?? '';
     const allowedSpiffeUris = rawUris
       .split(',')

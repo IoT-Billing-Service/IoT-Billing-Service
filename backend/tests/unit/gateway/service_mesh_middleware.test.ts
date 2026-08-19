@@ -68,7 +68,9 @@ function buildTestApp(options?: Parameters<typeof buildServiceMeshPreHandler>[0]
   return app;
 }
 
-function buildRegisteredApp(options?: Parameters<typeof registerServiceMeshMiddleware>[1]): FastifyInstance {
+function buildRegisteredApp(
+  options?: Parameters<typeof registerServiceMeshMiddleware>[1],
+): FastifyInstance {
   const app = Fastify({ logger: false });
   const reg = new Registry();
   registerServiceMeshMiddleware(app, { ...(options ?? {}), registry: reg });
@@ -110,7 +112,10 @@ describe('buildServiceMeshPreHandler', () => {
 
   describe('XFCC header (Envoy/Istio sidecar TLS termination)', () => {
     it('extracts cert from quoted XFCC Cert= field and allows valid cert', async () => {
-      const app = buildTestApp({ policy: { mode: 'STRICT', allowedSpiffeUris: [] }, trustXfccHeader: true });
+      const app = buildTestApp({
+        policy: { mode: 'STRICT', allowedSpiffeUris: [] },
+        trustXfccHeader: true,
+      });
       const xfcc = `By=spiffe://cluster.local/ns/billing/sa/billing-api,Hash=abc123,Cert="${VALID_CERT_XFCC_ENCODED}"`;
 
       const res = await app.inject({
@@ -126,7 +131,10 @@ describe('buildServiceMeshPreHandler', () => {
     });
 
     it('attaches SPIFFE URI to X-Mesh-Spiffe-Uri response header', async () => {
-      const app = buildTestApp({ policy: { mode: 'STRICT', allowedSpiffeUris: [] }, trustXfccHeader: true });
+      const app = buildTestApp({
+        policy: { mode: 'STRICT', allowedSpiffeUris: [] },
+        trustXfccHeader: true,
+      });
       const xfcc = `By=spiffe://cluster.local/ns/billing/sa/billing-api,Hash=abc123,Cert="${VALID_CERT_XFCC_ENCODED}"`;
 
       const res = await app.inject({
@@ -140,7 +148,10 @@ describe('buildServiceMeshPreHandler', () => {
     });
 
     it('ignores XFCC header when trustXfccHeader=false', async () => {
-      const app = buildTestApp({ policy: { mode: 'STRICT', allowedSpiffeUris: [] }, trustXfccHeader: false });
+      const app = buildTestApp({
+        policy: { mode: 'STRICT', allowedSpiffeUris: [] },
+        trustXfccHeader: false,
+      });
       const xfcc = `By=spiffe://...,Hash=abc123,Cert="${VALID_CERT_XFCC_ENCODED}"`;
 
       const res = await app.inject({
@@ -154,7 +165,10 @@ describe('buildServiceMeshPreHandler', () => {
     });
 
     it('denies when XFCC header is present but contains invalid cert data', async () => {
-      const app = buildTestApp({ policy: { mode: 'STRICT', allowedSpiffeUris: [] }, trustXfccHeader: true });
+      const app = buildTestApp({
+        policy: { mode: 'STRICT', allowedSpiffeUris: [] },
+        trustXfccHeader: true,
+      });
       const xfcc = `By=spiffe://...,Hash=abc123,Cert="JUNK_CERT_DATA"`;
 
       const res = await app.inject({
@@ -220,7 +234,10 @@ describe('buildServiceMeshPreHandler', () => {
     });
 
     it('populates commonName and serialNumber for cert-authenticated requests', async () => {
-      const app = buildTestApp({ policy: { mode: 'STRICT', allowedSpiffeUris: [] }, trustXfccHeader: true });
+      const app = buildTestApp({
+        policy: { mode: 'STRICT', allowedSpiffeUris: [] },
+        trustXfccHeader: true,
+      });
       const xfcc = `Cert="${VALID_CERT_XFCC_ENCODED}"`;
 
       const res = await app.inject({
@@ -265,7 +282,10 @@ describe('XFCC header parsing edge cases', () => {
   });
 
   it('handles XFCC with Cert field as first entry', async () => {
-    const app = buildTestApp({ policy: { mode: 'STRICT', allowedSpiffeUris: [] }, trustXfccHeader: true });
+    const app = buildTestApp({
+      policy: { mode: 'STRICT', allowedSpiffeUris: [] },
+      trustXfccHeader: true,
+    });
     const xfcc = `Cert="${VALID_CERT_XFCC_ENCODED}",By=spiffe://...`;
 
     const res = await app.inject({
@@ -278,7 +298,10 @@ describe('XFCC header parsing edge cases', () => {
   });
 
   it('handles XFCC with only Cert= field (minimal format)', async () => {
-    const app = buildTestApp({ policy: { mode: 'STRICT', allowedSpiffeUris: [] }, trustXfccHeader: true });
+    const app = buildTestApp({
+      policy: { mode: 'STRICT', allowedSpiffeUris: [] },
+      trustXfccHeader: true,
+    });
     const xfcc = `Cert="${VALID_CERT_XFCC_ENCODED}"`;
 
     const res = await app.inject({
@@ -291,7 +314,10 @@ describe('XFCC header parsing edge cases', () => {
   });
 
   it('falls back to deny when XFCC Cert= field is malformed', async () => {
-    const app = buildTestApp({ policy: { mode: 'STRICT', allowedSpiffeUris: [] }, trustXfccHeader: true });
+    const app = buildTestApp({
+      policy: { mode: 'STRICT', allowedSpiffeUris: [] },
+      trustXfccHeader: true,
+    });
     const xfcc = 'By=spiffe://...,Hash=abc123'; // No Cert= field
 
     const res = await app.inject({
