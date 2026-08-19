@@ -113,6 +113,22 @@ const envSchema = z.object({
   // will decrypt incoming encrypted fields and the billing/refund pipelines
   // will encrypt sensitive fields before persistence.
   E2E_ENCRYPTION_KEY: z.string().optional(),
+  // --- Service Mesh / Mutual TLS (issue #277) --------------------------------
+  // Enforcement level for the service-mesh mTLS policy middleware.
+  // STRICT (default): every inbound connection MUST present a valid client cert.
+  // PERMISSIVE: cert is verified when present; missing cert is allowed (use
+  //   only during mesh-wide canary rollout phases).
+  MTLS_MODE: z.enum(['STRICT', 'PERMISSIVE']).default('STRICT'),
+  // Comma-separated list of SPIFFE URIs allowed to connect.
+  // When empty, any valid certificate is accepted (CN-only mode).
+  // Example: spiffe://cluster.local/ns/billing/sa/billing-api,spiffe://...
+  MTLS_ALLOWED_SPIFFE_URIS: z.string().default(''),
+  // Days before cert expiry at which to emit a Prometheus warning metric.
+  MTLS_CERT_EXPIRY_WARN_DAYS: z.coerce.number().int().positive().default(30),
+  // When true, trust the X-Forwarded-Client-Cert (XFCC) header forwarded by
+  // Envoy / Istio sidecar proxies that have already terminated TLS upstream.
+  // Set to false only when the service is exposed directly (no sidecar).
+  MTLS_TRUST_XFCC_HEADER: z.coerce.boolean().default(true),
 });
 
 export type Env = z.infer<typeof envSchema>;
