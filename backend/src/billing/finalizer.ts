@@ -59,6 +59,12 @@ export interface FinalizeOptions {
    */
   idempotencyKey?: string;
   /**
+   * Optional audit logger for logging the finalization transaction.
+   */
+  auditLogger?: {
+    logTransaction(entityType: string, entityId: string, action: string, payload: unknown): Promise<void>;
+  };
+  /**
    * The actual billing computation, invoked at most once per cycle, strictly
    * after this caller has won the OPEN -> FINALIZING transition. Default: no-op.
    */
@@ -144,6 +150,13 @@ export async function finalizeBillingCycle(
     BillingCycleState.FINALIZED,
     cycle.lockVersion + 1,
   );
+
+  if (options.auditLogger !== undefined) {
+    await options.auditLogger.logTransaction('BillingCycle', cycleId, 'FINALIZE', {
+      idempotencyKey,
+      geo,
+    });
+  }
 
   return result(cycleId, 'finalized', BillingCycleState.FINALIZED, idempotencyKey, geo);
 }
