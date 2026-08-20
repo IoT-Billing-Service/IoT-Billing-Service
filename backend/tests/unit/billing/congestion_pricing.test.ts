@@ -1,12 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import type { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
 import {
   CongestionLevel,
   applyCongestionMultiplier,
-  congestionPricingDigest,
   congestionTableDigest,
-  getCongestionPricingTable,
-  getTierForCongestionLevel,
   normalizeCongestionScore,
   resolveCongestionLevel,
   verifyCongestionPricingIntegrity,
@@ -128,7 +126,7 @@ describe('Congestion Pricing Core Engine', () => {
       for (let i = 0; i < iterations; i++) {
         applyCongestionMultiplier(BigInt(i * 100), {
           score: (i % 100) / 100,
-          deviceId: `device-${i}`,
+          deviceId: `device-${String(i)}`,
         });
       }
 
@@ -142,7 +140,7 @@ describe('Congestion Pricing Core Engine', () => {
 });
 
 describe('Congestion Pricing API Endpoints', () => {
-  async function createTestApp() {
+  async function createTestApp(): Promise<FastifyInstance> {
     const app = Fastify();
     registerCongestionPricingRoutes(app);
     await app.ready();
@@ -158,7 +156,7 @@ describe('Congestion Pricing API Endpoints', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.body);
+    const body = response.json<{ tiers: unknown[]; digest: string }>();
     expect(body.tiers).toHaveLength(4);
     expect(body.digest).toMatch(/^[a-f0-9]{64}$/);
   });
@@ -177,7 +175,12 @@ describe('Congestion Pricing API Endpoints', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.body);
+    const body = response.json<{
+      level: string;
+      multiplier: number;
+      adjustedChargeMicros: string;
+      digest: string;
+    }>();
     expect(body.level).toBe(CongestionLevel.HIGH);
     expect(body.multiplier).toBe(1.25);
     expect(body.adjustedChargeMicros).toBe('12500');
@@ -197,7 +200,7 @@ describe('Congestion Pricing API Endpoints', () => {
       },
     });
 
-    const evalBody = JSON.parse(evalResponse.body);
+    const evalBody = evalResponse.json<Record<string, unknown>>();
 
     const verifyResponse = await app.inject({
       method: 'POST',
@@ -209,7 +212,7 @@ describe('Congestion Pricing API Endpoints', () => {
     });
 
     expect(verifyResponse.statusCode).toBe(200);
-    const verifyBody = JSON.parse(verifyResponse.body);
+    const verifyBody = verifyResponse.json<{ valid: boolean }>();
     expect(verifyBody.valid).toBe(true);
   });
 });
