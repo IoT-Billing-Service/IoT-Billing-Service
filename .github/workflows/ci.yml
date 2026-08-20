@@ -79,6 +79,7 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci --ignore-scripts
+      - run: npm run db:generate
       - run: npm run format
       - run: npm run lint
       - run: npm run typecheck
