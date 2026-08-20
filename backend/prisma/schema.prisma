@@ -198,3 +198,21 @@ model GeoPricingSnapshot {
 
   @@map("geo_pricing_snapshots")
 }
+
+/// Append-only immutable audit log for billing transactions.
+/// Provides cryptographic tamper-evidence satisfying PCI-DSS and SOC2.
+model AuditLog {
+  id           String   @id @default(cuid())
+  entityType   String   @map("entity_type") // e.g., 'BillingRecord', 'BillingCycle'
+  entityId     String   @map("entity_id")
+  action       String   // e.g., 'CREATE', 'FINALIZE', 'SETTLE', 'AUTOCORRECT'
+  payload      Json     // The state change or operation metadata
+  previousHash String   @map("previous_hash") // Hash of the immediately preceding AuditLog for this entity
+  hash         String   // Cryptographic SHA-256 hash of this entry
+  signature    String   // Ed25519 signature of the hash by the service private key
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
