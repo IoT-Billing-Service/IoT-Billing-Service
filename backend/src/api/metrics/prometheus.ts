@@ -194,6 +194,24 @@ export const billingSignatureFailuresTotal: promClient.Counter = new promClient.
   help: 'Total billing transactions rejected because cryptographic verification failed',
 });
 
+export const webhookDeliveriesTotal: promClient.Counter = new promClient.Counter({
+  name: 'webhook_deliveries_total',
+  help: 'Webhook delivery attempts by lifecycle event and outcome',
+  labelNames: ['event', 'outcome'],
+});
+
+export const webhookDeliveryDuration: promClient.Histogram = new promClient.Histogram({
+  name: 'webhook_delivery_duration_ms',
+  help: 'Webhook delivery attempt duration in milliseconds',
+  labelNames: ['event', 'outcome'],
+  buckets: [5, 10, 25, 50, 100, 200, 500, 1000, 5000, 10000],
+});
+
+export const webhookOutboxDepth: promClient.Gauge = new promClient.Gauge({
+  name: 'webhook_outbox_depth',
+  help: 'Number of webhook outbox records awaiting delivery',
+});
+
 export const backupVerificationSuccessTotal: promClient.Counter = new promClient.Counter({
   name: 'backup_verification_success_total',
   help: 'Successful scheduled database backup verifications',

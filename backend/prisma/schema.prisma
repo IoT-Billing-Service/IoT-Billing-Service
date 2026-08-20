@@ -36,6 +36,7 @@ model Account {
 
   billingRecords  BillingRecord[]
   webhookSecrets  WebhookSecret[]
+  webhookSubscriptions WebhookSubscription[]
   billingCycles   BillingCycle[]
   refunds         RefundRecord[]
 
@@ -131,6 +132,44 @@ model WebhookSecret {
   account Account @relation(fields: [accountId], references: [id])
 
   @@map("webhook_secrets")
+}
+
+model WebhookSubscription {
+  id         String   @id @default(cuid())
+  accountId  String   @map("account_id")
+  url        String
+  eventTypes String[] @map("event_types")
+  secretHash String   @map("secret_hash")
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  account   Account          @relation(fields: [accountId], references: [id])
+  deliveries WebhookDelivery[]
+
+  @@index([accountId, enabled])
+  @@map("webhook_subscriptions")
+}
+
+model WebhookDelivery {
+  id             String    @id @default(cuid())
+  subscriptionId String    @map("subscription_id")
+  eventType      String    @map("event_type")
+  eventId        String    @map("event_id")
+  payload        Json
+  status         String    @default("pending")
+  attemptCount   Int       @default(0) @map("attempt_count")
+  nextAttemptAt  DateTime  @default(now()) @map("next_attempt_at")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  lastError      String?   @map("last_error")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id])
+
+  @@unique([subscriptionId, eventId])
+  @@index([status, nextAttemptAt])
+  @@map("webhook_deliveries")
 }
 
 model HardwareCertificate {

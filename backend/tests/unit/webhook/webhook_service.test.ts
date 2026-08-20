@@ -364,6 +364,20 @@ describe('WebhookService', () => {
       expect(result.valid).toBe(false);
     });
 
+    it('rejects timestamps from the future', () => {
+      const payload = '{"event":"payment.confirmed"}';
+      const signature = WebhookService.computeSignature(payload, 'secret');
+      const result = WebhookService.verifySignature(
+        payload,
+        signature,
+        'secret',
+        String(Date.now() + 10 * 60 * 1000),
+      );
+
+      expect(result.valid).toBe(false);
+      expect(result.reason).toContain('future');
+    });
+
     it('validates timestamp freshness', () => {
       const payload = JSON.stringify({ event: 'test' });
       const secret = 'my-secret';

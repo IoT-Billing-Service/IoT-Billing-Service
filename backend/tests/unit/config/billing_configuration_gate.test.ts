@@ -63,6 +63,25 @@ describe('billing configuration integrity gate', () => {
     expect(computeFinalization).toHaveBeenCalledOnce();
   });
 
+  it('publishes the finalized lifecycle event after the state transition', async () => {
+    activateTrustedBillingConfig();
+    const store = new InMemoryBillingCycleStore();
+    store.seed('cycle-webhook');
+    const publishLifecycleEvent = vi.fn().mockResolvedValue(undefined);
+
+    const result = await finalizeBillingCycle(store, 'cycle-webhook', {
+      publishLifecycleEvent,
+    });
+
+    expect(result.finalized).toBe(true);
+    expect(publishLifecycleEvent).toHaveBeenCalledOnce();
+    expect(publishLifecycleEvent.mock.calls[0]![0]).toMatchObject({
+      event: 'billing.cycle.finalized',
+      cycleId: 'cycle-webhook',
+      idempotencyKey: result.idempotencyKey,
+    });
+  });
+
   it('blocks a tainted run before it reads or mutates billing state', async () => {
     activateTrustedBillingConfig();
     const readState = vi.fn();

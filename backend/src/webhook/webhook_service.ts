@@ -64,6 +64,11 @@ export const WEBHOOK_TIMESTAMP_HEADER = 'X-Webhook-Timestamp';
 
 /** Valid webhook event types for this IoT billing platform. */
 export type WebhookEventType =
+  | 'payment.created'
+  | 'payment.confirmed'
+  | 'payment.failed'
+  | 'payment.refunded'
+  | 'payment.settled'
   | 'billing.cycle.created'
   | 'billing.cycle.finalized'
   | 'billing.cycle.settled'
@@ -312,6 +317,9 @@ export class WebhookService {
         return { valid: false, reason: 'Invalid timestamp' };
       }
       const age = Date.now() - ts;
+      if (age < -maxAgeMs) {
+        return { valid: false, reason: `Timestamp is from the future (${String(-age)}ms)` };
+      }
       if (age > maxAgeMs) {
         return { valid: false, reason: `Timestamp too old (${String(age)}ms > ${String(maxAgeMs)}ms)` };
       }
