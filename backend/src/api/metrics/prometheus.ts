@@ -1116,6 +1116,39 @@ export function getMetrics(): Promise<string> {
   return promClient.register.metrics();
 }
 
+// --- Dynamic Pricing Network Congestion Metrics (issue #296) -----------------
+
+export const congestionMultiplierAppliedTotal: promClient.Counter = new promClient.Counter({
+  name: 'iot_billing_congestion_multiplier_applied_total',
+  help: 'Total dynamic pricing multipliers applied by congestion level',
+  labelNames: ['level'],
+});
+
+export const congestionScoreGauge: promClient.Gauge = new promClient.Gauge({
+  name: 'iot_billing_congestion_score_gauge',
+  help: 'Current normalized network congestion score (0.0 to 1.0)',
+});
+
+export const congestionEvalDurationSeconds: promClient.Histogram = new promClient.Histogram({
+  name: 'iot_billing_congestion_eval_duration_seconds',
+  help: 'Latency of congestion dynamic pricing evaluation in seconds',
+  buckets: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.2],
+});
+
+export function recordCongestionMultiplierApplied(level: string): void {
+  congestionMultiplierAppliedTotal.inc({ level });
+}
+
+export function setCongestionScoreGauge(score: number): void {
+  congestionScoreGauge.set(score);
+}
+
+export function observeCongestionEvalDuration(durationSeconds: number): void {
+  if (Number.isFinite(durationSeconds) && durationSeconds >= 0) {
+    congestionEvalDurationSeconds.observe(durationSeconds);
+  }
+}
+
 /**
  * Register the `GET /metrics` endpoint that returns Prometheus text format.
  *
@@ -1132,3 +1165,4 @@ export function registerMetricsRoute(app: FastifyInstance, path = '/metrics'): v
     return reply.send(body);
   });
 }
+

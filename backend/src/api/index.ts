@@ -16,6 +16,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerGeoPricingRoutes } from './routes/geo_pricing.js';
+import { registerCongestionPricingRoutes } from './routes/congestion_pricing.js';
 import { registerOpsRoutes } from './routes/ops.js';
 import { registerTracingHooks } from './middleware/tracing.js';
 import {
@@ -123,6 +124,7 @@ export async function buildApp(
   registerIngestionRoutes(app, tenantRateLimitMiddleware);
   registerCircuitHealth(app);
   registerGeoPricingRoutes(app);
+  registerCongestionPricingRoutes(app);
   registerSheddingStatusRoute(app);
   registerTelemetryStreamRoutes(app);
   await registerTelemetryWebSocketRoutes(app);
