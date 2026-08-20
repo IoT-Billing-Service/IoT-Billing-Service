@@ -128,10 +128,10 @@ const CONGESTION_TIERS: ReadonlyMap<CongestionLevel, CongestionPricingTier> = ne
 
 /**
  * Normalise a raw network congestion score. Accepts inputs in either decimal format (0.0 - 1.0)
- * or percentage format (0 - 100), clamping out-of-bounds values safely.
+ * or percentage format (0 - 100), clamping out-of-bounds numbers safely.
  */
 export function normalizeCongestionScore(rawScore: number): number {
-  if (typeof rawScore !== 'number' || !Number.isFinite(rawScore)) {
+  if (!Number.isFinite(rawScore)) {
     throw new RangeError('Congestion score must be a finite number');
   }
 
@@ -161,10 +161,15 @@ export function resolveCongestionLevel(score: number): CongestionLevel {
  * Retrieve the {@link CongestionPricingTier} definition for a congestion level.
  */
 export function getTierForCongestionLevel(level: CongestionLevel): CongestionPricingTier {
-  return (
-    CONGESTION_TIERS.get(level) ??
-    (CONGESTION_TIERS.get(CongestionLevel.NORMAL) as CongestionPricingTier)
-  );
+  const tier = CONGESTION_TIERS.get(level);
+  if (tier !== undefined) {
+    return tier;
+  }
+  const fallback = CONGESTION_TIERS.get(CongestionLevel.NORMAL);
+  if (fallback !== undefined) {
+    return fallback;
+  }
+  throw new Error('Default congestion pricing tier configuration missing');
 }
 
 /**
