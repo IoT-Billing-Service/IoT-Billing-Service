@@ -42,6 +42,7 @@ import {
   TELEMETRY_EVENT_NAME,
   type TelemetryStreamEvent,
 } from '../../core/ingestion/telemetry_stream.js';
+import { getTelemetryWebSocketHub } from './telemetry_websocket.js';
 
 // ── Bridge lifecycle ────────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@ export function registerTelemetryStreamRoutes(app: FastifyInstance): void {
     const sseManager = getSseManager();
     return reply.status(200).send({
       stream: counters,
+      websocket: getTelemetryWebSocketHub().getStats(),
       connections: sseManager.getConnectionCount(),
       timestamp: new Date().toISOString(),
     });

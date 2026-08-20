@@ -320,6 +320,37 @@ export class DistributedScheduler {
   }
 
   // -----------------------------------------------------------------------
+  // Public: DLQ Management
+  // -----------------------------------------------------------------------
+
+  /**
+   * Move a DLQ job back to PENDING state for retry.
+   */
+  async retryDeadLetterJob(jobId: string): Promise<boolean> {
+    const res = await this.pool.query(
+      `UPDATE ${JOBS_TABLE}
+       SET status = 'PENDING', retries = 0, worker_id = NULL, updated_at = now()
+       WHERE id = $1 AND status = 'DLQ'`,
+      [jobId],
+    );
+    return res.rowCount !== null && res.rowCount > 0;
+  }
+
+  /**
+   * Discard a DLQ job (moves it to FAILED or simply drops it).
+   * For this implementation, we will move it to FAILED so it is no longer DLQ.
+   */
+  async discardDeadLetterJob(jobId: string): Promise<boolean> {
+    const res = await this.pool.query(
+      `UPDATE ${JOBS_TABLE}
+       SET status = 'FAILED', updated_at = now()
+       WHERE id = $1 AND status = 'DLQ'`,
+      [jobId],
+    );
+    return res.rowCount !== null && res.rowCount > 0;
+  }
+
+  // -----------------------------------------------------------------------
   // Private: polling loop
   // -----------------------------------------------------------------------
 
