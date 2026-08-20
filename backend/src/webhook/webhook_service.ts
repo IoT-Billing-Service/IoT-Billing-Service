@@ -36,6 +36,7 @@
 
 import { createHmac, randomUUID } from 'node:crypto';
 import { BackoffCalculator } from '../core/blockchain/backoff.js';
+import type { DlqManager } from '../core/dlq_manager.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -148,6 +149,10 @@ export interface WebhookServiceOptions {
    * Defaults to global `fetch`.
    */
   fetchImpl?: typeof fetch;
+  /**
+   * Optional DLQ Manager for capturing permanently failed deliveries.
+   */
+  dlqManager?: DlqManager;
 }
 
 export interface DeliveryResult {
@@ -180,6 +185,7 @@ export class WebhookService {
   private readonly baseDelayMs: number;
   private readonly maxDelayMs: number;
   private readonly fetchImpl: typeof fetch;
+  private readonly dlqManager?: DlqManager;
 
   constructor(
     private readonly onDelivery: DeliveryCallback,
@@ -190,6 +196,7 @@ export class WebhookService {
     this.baseDelayMs = options.baseDelayMs ?? DEFAULT_BASE_DELAY_MS;
     this.maxDelayMs = options.maxDelayMs ?? DEFAULT_MAX_DELAY_MS;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.dlqManager = options.dlqManager;
   }
 
   // ── Subscription management ──────────────────────────────────────────────
@@ -448,6 +455,17 @@ export class WebhookService {
       if (attempt < this.maxAttempts) {
         const delay = backoff.nextDelay();
         await this.sleep(delay);
+      } else if (this.dlqManager !== undefined) {
+        // We've exhausted all attempts. Push to Dead Letter Queue.
+        try {
+          await this.dlqManager.push(
+            'webhook_delivery',
+            { subscriptionId: sub.id, eventType, data },
+            lastError ?? 'Unknown error'
+          );
+        } catch (dlqErr) {
+          console.error('Failed to push webhook to DLQ:', dlqErr);
+        }
       }
     }
 

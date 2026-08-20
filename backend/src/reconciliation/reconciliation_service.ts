@@ -40,6 +40,7 @@
 import { createHash } from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
+import { getAuditLogger } from '../security/audit_logger.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -561,6 +562,12 @@ export class ReconciliationService {
       WHERE id = ${recordId}
         AND usage_amount != ${correctedAmount}
     `;
+    
+    try {
+      await getAuditLogger(this.prisma).logTransaction('BillingRecord', recordId, 'AUTOCORRECT', { correctedAmount: correctedAmount.toString() });
+    } catch (err) {
+      console.error(`Failed to write audit log for autocorrect of record ${recordId}:`, err);
+    }
   }
 }
 

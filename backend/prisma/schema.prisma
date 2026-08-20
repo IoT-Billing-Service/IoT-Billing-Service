@@ -237,3 +237,37 @@ model GeoPricingSnapshot {
 
   @@map("geo_pricing_snapshots")
 }
+
+/// Append-only immutable audit log for billing transactions.
+/// Provides cryptographic tamper-evidence satisfying PCI-DSS and SOC2.
+model AuditLog {
+  id           String   @id @default(cuid())
+  entityType   String   @map("entity_type") // e.g., 'BillingRecord', 'BillingCycle'
+  entityId     String   @map("entity_id")
+  action       String   // e.g., 'CREATE', 'FINALIZE', 'SETTLE', 'AUTOCORRECT'
+  payload      Json     // The state change or operation metadata
+  previousHash String   @map("previous_hash") // Hash of the immediately preceding AuditLog for this entity
+  hash         String   // Cryptographic SHA-256 hash of this entry
+  signature    String   // Ed25519 signature of the hash by the service private key
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+/// Dead Letter Queue for messages that failed all processing attempts.
+/// Provides a durable mechanism for manual inspection and replay, preventing data loss.
+model DeadLetterMessage {
+  id          String   @id @default(cuid())
+  queueName   String   @map("queue_name")     // e.g., 'webhook_delivery', 'billing_job'
+  payload     Json                              // The original message payload
+  errorReason String   @map("error_reason")
+  status      String   @default("pending")    // 'pending', 'resolved', 'ignored'
+  retryCount  Int      @default(0) @map("retry_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([queueName, status])
+  @@map("dead_letter_messages")
+}

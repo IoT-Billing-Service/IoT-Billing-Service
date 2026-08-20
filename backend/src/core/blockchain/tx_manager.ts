@@ -1,5 +1,6 @@
 import { SorobanRpcClient } from './rpc_client.js';
 import { NoncePool } from './nonce_pool.js';
+import nacl from 'tweetnacl';
 
 export interface TransactionRecord {
   id: string;
@@ -15,10 +16,15 @@ export interface TransactionRecord {
 export class TransactionManager {
   private transactions = new Map<string, TransactionRecord>();
 
+  private keyPair: nacl.SignKeyPair;
+
   constructor(
     private rpcClient: SorobanRpcClient,
     private noncePool: NoncePool,
-  ) {}
+    privateKey?: Uint8Array,
+  ) {
+    this.keyPair = privateKey ? nacl.sign.keyPair.fromSecretKey(privateKey) : nacl.sign.keyPair();
+  }
 
   async submitChargeUsage(
     workerId: string,
@@ -85,11 +91,22 @@ export class TransactionManager {
     usageAmount: bigint,
     sequenceNumber: number,
   ): string {
-    return JSON.stringify({
+    const payload = JSON.stringify({
       contractId,
       method: 'charge_usage',
       args: [deviceId, usageAmount.toString()],
       sequenceNumber,
+    });
+
+    const payloadBytes = new TextEncoder().encode(payload);
+    const signatureBytes = nacl.sign.detached(payloadBytes, this.keyPair.secretKey);
+    const signatureHex = Buffer.from(signatureBytes).toString('hex');
+    const publicKeyHex = Buffer.from(this.keyPair.publicKey).toString('hex');
+
+    return JSON.stringify({
+      payload,
+      signature: signatureHex,
+      publicKey: publicKeyHex,
     });
   }
 }
