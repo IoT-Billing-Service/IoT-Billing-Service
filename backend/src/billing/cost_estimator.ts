@@ -36,7 +36,34 @@ export interface PrepaidPlan {
   readonly overageRateMicros: bigint;
   /** Prepaid balance currently available for overage billing, in platform micro-units. */
   readonly prepaidBalanceMicros: bigint;
+  /** Fixed recurring charge for a complete cycle, in platform micro-units. */
+  readonly baseChargeMicros?: bigint;
   readonly currency: string;
+}
+
+export type BillingCycleUnit = 'daily' | 'weekly' | 'monthly' | 'annual' | 'custom';
+
+export interface BillingCycleConfig {
+  readonly unit: BillingCycleUnit;
+  /** Required only for custom cycles. */
+  readonly customDurationMs?: number;
+}
+
+export interface BillingCycleWindow {
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+}
+
+function assertNonNegativeSafeInteger(value: number, name: string): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError(`${name} must be a non-negative safe integer`);
+  }
+}
+
+function assertNonNegativeBigInt(value: bigint, name: string): void {
+  if (value < 0n) {
+    throw new RangeError(`${name} must be non-negative`);
+  }
 }
 
 export interface UsageSnapshot {
@@ -60,6 +87,10 @@ export interface CostEstimate {
   overageChargeMicros: bigint;
   /** Overage charge after applying the device's regional multiplier, if a country code was given. */
   adjustedOverageChargeMicros: bigint;
+  /** Fixed plan charge accrued for the elapsed portion of this cycle. */
+  proratedBaseChargeMicros: bigint;
+  /** Pro-rata base charge plus the projected, geo-adjusted overage charge. */
+  totalChargeMicros: bigint;
   geo: GeoMultiplierResult | null;
   /** True if projectedTotalUnits exceeds the plan's prepaid balance capacity for overage. */
   willExceedPrepaidBalance: boolean;
@@ -67,6 +98,84 @@ export interface CostEstimate {
   generatedAt: string;
   /** SHA-256 hex digest over the estimate's inputs and outputs (see {@link estimateDigest}). */
   digest: string;
+}
+
+/** Resolve a UTC billing window without database or timezone-dependent work. */
+export function resolveBillingCycleWindow(
+  startsAt: Date,
+  config: BillingCycleConfig,
+): BillingCycleWindow {
+  if (Number.isNaN(startsAt.getTime())) {
+    throw new RangeError('startsAt must be a valid date');
+  }
+
+  const end = new Date(startsAt.getTime());
+  switch (config.unit) {
+    case 'daily':
+      end.setUTCDate(end.getUTCDate() + 1);
+      break;
+    case 'weekly':
+      end.setUTCDate(end.getUTCDate() + 7);
+      break;
+    case 'monthly':
+      end.setUTCMonth(end.getUTCMonth() + 1);
+      break;
+    case 'annual':
+      end.setUTCFullYear(end.getUTCFullYear() + 1);
+      break;
+    case 'custom':
+      const customDurationMs = config.customDurationMs;
+      if (
+        typeof customDurationMs !== 'number' ||
+        !Number.isSafeInteger(customDurationMs) ||
+        customDurationMs <= 0
+      ) {
+        throw new RangeError('customDurationMs must be a positive integer');
+      }
+      end.setTime(end.getTime() + customDurationMs);
+      break;
+    default:
+      throw new RangeError(`Unsupported billing cycle unit: ${String(config.unit)}`);
+  }
+
+  if (Number.isNaN(end.getTime())) {
+    throw new RangeError('billing cycle window exceeds the supported date range');
+  }
+
+  return { startsAt: new Date(startsAt.getTime()), endsAt: end };
+}
+
+/** Calculate elapsed-cycle charge using integer micro-units and floor rounding. */
+export function calculateProratedCharge(
+  fullChargeMicros: bigint,
+  elapsedMs: number,
+  cycleDurationMs: number,
+): bigint {
+  assertNonNegativeBigInt(fullChargeMicros, 'fullChargeMicros');
+  assertNonNegativeSafeInteger(elapsedMs, 'elapsedMs');
+  if (!Number.isSafeInteger(cycleDurationMs) || cycleDurationMs <= 0) {
+    throw new RangeError('Charge and cycle values must be non-negative and the cycle must be positive');
+  }
+  const billableMs = Math.min(elapsedMs, cycleDurationMs);
+  return (fullChargeMicros * BigInt(billableMs)) / BigInt(cycleDurationMs);
+}
+
+/** Calculate pro-rata charge directly from the configured billing window. */
+export function calculateProratedChargeAt(
+  fullChargeMicros: bigint,
+  startsAt: Date,
+  config: BillingCycleConfig,
+  asOf: Date,
+): bigint {
+  if (Number.isNaN(asOf.getTime())) {
+    throw new RangeError('asOf must be a valid date');
+  }
+  const window = resolveBillingCycleWindow(startsAt, config);
+  return calculateProratedCharge(
+    fullChargeMicros,
+    asOf.getTime() - window.startsAt.getTime(),
+    window.endsAt.getTime() - window.startsAt.getTime(),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -82,6 +191,12 @@ export interface CostEstimate {
  */
 export function projectCycleUsage(usage: UsageSnapshot): bigint {
   const { unitsConsumed, elapsedMs, cycleDurationMs } = usage;
+
+  assertNonNegativeBigInt(unitsConsumed, 'unitsConsumed');
+  assertNonNegativeSafeInteger(elapsedMs, 'elapsedMs');
+  if (!Number.isSafeInteger(cycleDurationMs)) {
+    throw new RangeError('cycleDurationMs must be a safe integer');
+  }
 
   if (elapsedMs <= 0 || cycleDurationMs <= 0 || elapsedMs >= cycleDurationMs) {
     return unitsConsumed;
@@ -112,6 +227,15 @@ export function estimateCost(
   usage: UsageSnapshot,
   countryCode?: string | null,
 ): CostEstimate {
+  if (plan.id.trim() === '' || plan.currency.trim() === '') {
+    throw new RangeError('plan id and currency must be non-empty');
+  }
+  assertNonNegativeBigInt(plan.includedUnits, 'includedUnits');
+  assertNonNegativeBigInt(plan.overageRateMicros, 'overageRateMicros');
+  assertNonNegativeBigInt(plan.prepaidBalanceMicros, 'prepaidBalanceMicros');
+  if (plan.baseChargeMicros !== undefined) {
+    assertNonNegativeBigInt(plan.baseChargeMicros, 'baseChargeMicros');
+  }
   const projectedTotalUnits = projectCycleUsage(usage);
 
   const includedUnitsUsed =
@@ -125,8 +249,14 @@ export function estimateCost(
     ? applyGeoMultiplier(overageChargeMicros, countryCode)
     : null;
   const adjustedOverageChargeMicros = geo !== null ? geo.adjustedCharge : overageChargeMicros;
+  const proratedBaseChargeMicros = calculateProratedCharge(
+    plan.baseChargeMicros ?? 0n,
+    usage.elapsedMs,
+    usage.cycleDurationMs,
+  );
+  const totalChargeMicros = proratedBaseChargeMicros + adjustedOverageChargeMicros;
 
-  const willExceedPrepaidBalance = adjustedOverageChargeMicros > plan.prepaidBalanceMicros;
+  const willExceedPrepaidBalance = totalChargeMicros > plan.prepaidBalanceMicros;
 
   const generatedAt = new Date().toISOString();
 
@@ -137,6 +267,8 @@ export function estimateCost(
     projectedTotalUnits,
     overageChargeMicros,
     adjustedOverageChargeMicros,
+    proratedBaseChargeMicros,
+    totalChargeMicros,
     geo,
     willExceedPrepaidBalance,
     currency: plan.currency,
@@ -163,6 +295,8 @@ export function estimateDigest(estimate: Omit<CostEstimate, 'digest'>): string {
     projectedTotalUnits: estimate.projectedTotalUnits.toString(),
     overageChargeMicros: estimate.overageChargeMicros.toString(),
     adjustedOverageChargeMicros: estimate.adjustedOverageChargeMicros.toString(),
+    proratedBaseChargeMicros: estimate.proratedBaseChargeMicros.toString(),
+    totalChargeMicros: estimate.totalChargeMicros.toString(),
     region: estimate.geo?.region ?? null,
     willExceedPrepaidBalance: estimate.willExceedPrepaidBalance,
     currency: estimate.currency,
