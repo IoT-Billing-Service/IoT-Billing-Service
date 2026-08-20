@@ -38,7 +38,8 @@ const runSimulation = async (mode: string, ratePerSec: number, durationSec: numb
         submitted++;
         const txStart = Date.now();
         batchPromises.push(
-          txManager.submitChargeUsage('worker-1', `device-${submitted}`, 100n, 'contract_xyz')
+          txManager
+            .submitChargeUsage('worker-1', `device-${submitted}`, 100n, 'contract_xyz')
             .then((res) => {
               latencies.push(Date.now() - txStart);
               if (res.status !== 'submitted') {
@@ -47,7 +48,7 @@ const runSimulation = async (mode: string, ratePerSec: number, durationSec: numb
             })
             .catch((e) => {
               console.error(`Submission error: ${e.message}`);
-            })
+            }),
         );
       }
 
@@ -60,8 +61,8 @@ const runSimulation = async (mode: string, ratePerSec: number, durationSec: numb
         console.log(`Simulation finished in ${end - start}ms`);
 
         if (latencies.length === 0) {
-          console.error("No transactions succeeded.");
-          return reject(new Error("No transactions succeeded"));
+          console.error('No transactions succeeded.');
+          return reject(new Error('No transactions succeeded'));
         }
 
         latencies.sort((a, b) => a - b);
@@ -96,9 +97,11 @@ const mode = args[0] || 'steady_state';
 const rate = parseInt(args[1] || '100', 10);
 const duration = parseInt(args[2] || '10', 10);
 
-runSimulation(mode, rate, duration).then(() => {
-  process.exit(0);
-}).catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+runSimulation(mode, rate, duration)
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });

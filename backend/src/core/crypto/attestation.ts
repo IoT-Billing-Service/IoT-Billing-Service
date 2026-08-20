@@ -407,7 +407,10 @@ export class AttestationService {
     if (typeof req.deviceId !== 'string' || req.deviceId.trim() === '') {
       return 'Missing or empty deviceId';
     }
-    if (typeof req.publicKey !== 'string' || req.publicKey.length !== ED25519_PUBLIC_KEY_BYTES * 2) {
+    if (
+      typeof req.publicKey !== 'string' ||
+      req.publicKey.length !== ED25519_PUBLIC_KEY_BYTES * 2
+    ) {
       return `publicKey must be ${String(ED25519_PUBLIC_KEY_BYTES * 2)} hex chars`;
     }
     if (typeof req.nonce !== 'string' || req.nonce.trim() === '') {

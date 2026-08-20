@@ -17,7 +17,7 @@ describe('AuditLogger', () => {
         create: vi.fn(),
       },
     };
-    
+
     // Reset singleton instance if needed, but since it's module-scoped we just instantiate a new one for testing
     auditLogger = new AuditLogger(prismaMock);
   });
@@ -35,7 +35,7 @@ describe('AuditLogger', () => {
 
     expect(prismaMock.auditLog.create).toHaveBeenCalled();
     const createCall = prismaMock.auditLog.create.mock.calls[0][0].data;
-    
+
     expect(createCall.previousHash).toBe('GENESIS');
     expect(createCall.entityType).toBe('BillingCycle');
     expect(createCall.entityId).toBe('cycle-123');
@@ -48,7 +48,9 @@ describe('AuditLogger', () => {
   it('chains hashes correctly when previous log exists', async () => {
     prismaMock.auditLog.findFirst.mockResolvedValue({ hash: 'prev-hash-123' });
 
-    await auditLogger.logTransaction('BillingRecord', 'record-456', 'AUTOCORRECT', { corrected: 100 });
+    await auditLogger.logTransaction('BillingRecord', 'record-456', 'AUTOCORRECT', {
+      corrected: 100,
+    });
 
     const createCall = prismaMock.auditLog.create.mock.calls[0][0].data;
     expect(createCall.previousHash).toBe('prev-hash-123');
@@ -58,7 +60,7 @@ describe('AuditLogger', () => {
   it('signs the hash successfully', async () => {
     prismaMock.auditLog.findFirst.mockResolvedValue(null);
     await auditLogger.logTransaction('Test', 'test-1', 'ACT', {});
-    
+
     const createCall = prismaMock.auditLog.create.mock.calls[0][0].data;
     expect(createCall.signature).not.toBeNull();
     // length of base64 encoded ed25519 signature (64 bytes) is usually 88 chars

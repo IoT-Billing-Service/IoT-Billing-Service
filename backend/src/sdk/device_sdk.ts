@@ -122,10 +122,12 @@ export class DeviceSdk {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
     this.signer = options.signer;
     const host = globalThis as typeof globalThis & HostRuntime;
-    this.request = options.fetch ?? ((input, init) => {
-      if (host.fetch === undefined) throw new Error('A fetch implementation is required');
-      return host.fetch(input, init);
-    });
+    this.request =
+      options.fetch ??
+      ((input, init) => {
+        if (host.fetch === undefined) throw new Error('A fetch implementation is required');
+        return host.fetch(input, init);
+      });
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   }
@@ -149,7 +151,13 @@ export class DeviceSdk {
   async attest(input: AttestationInput): Promise<ApiResult> {
     const timestamp = input.timestamp ?? Date.now();
     const nonce = input.nonce ?? randomNonce();
-    const message = [input.deviceId, this.signer.publicKeyHex, nonce, timestamp, input.certSerial].join('|');
+    const message = [
+      input.deviceId,
+      this.signer.publicKeyHex,
+      nonce,
+      timestamp,
+      input.certSerial,
+    ].join('|');
     const signature = bytesToHex(await this.signMessage(encodeUtf8(message)));
     return this.post('/attestation', {
       deviceId: input.deviceId,
@@ -178,7 +186,8 @@ export class DeviceSdk {
   private async post(path: string, body: object): Promise<ApiResult> {
     for (let attempt = 0; ; attempt++) {
       const host = globalThis as typeof globalThis & HostRuntime;
-      const controller = host.AbortController === undefined ? undefined : new host.AbortController();
+      const controller =
+        host.AbortController === undefined ? undefined : new host.AbortController();
       const timer = setTimeout(() => controller?.abort(), this.timeoutMs);
       try {
         const response = await this.request(`${this.baseUrl}${path}`, {

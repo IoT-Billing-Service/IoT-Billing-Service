@@ -43,13 +43,15 @@ function createMockRedis(overrides: Partial<MockRedis> = {}): MockRedis {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function createMonitor(opts: {
-  redis?: MockRedis;
-  warnEntries?: number;
-  criticalEntries?: number;
-  pollIntervalMs?: number;
-  targets?: Array<{ streamKey: string; groupName: string }>;
-} = {}) {
+function createMonitor(
+  opts: {
+    redis?: MockRedis;
+    warnEntries?: number;
+    criticalEntries?: number;
+    pollIntervalMs?: number;
+    targets?: Array<{ streamKey: string; groupName: string }>;
+  } = {},
+) {
   return new ConsumerGroupLagMonitor({
     redis: opts.redis as any,
     warnEntries: opts.warnEntries ?? 100,
@@ -262,11 +264,13 @@ describe('ConsumerGroupLagMonitor', () => {
 
   describe('multiple targets', () => {
     it('should monitor multiple consumer groups', async () => {
-      const xpending = vi.fn()
+      const xpending = vi
+        .fn()
         .mockResolvedValueOnce([5, null, null, [['consumer-a', '5']]])
         .mockResolvedValueOnce([10, null, null, [['consumer-b', '10']]]);
 
-      const xinfo = vi.fn()
+      const xinfo = vi
+        .fn()
         .mockResolvedValueOnce([[['name', 'consumer-a', 'idle', '500']]])
         .mockResolvedValueOnce([[['name', 'consumer-b', 'idle', '800']]]);
 
@@ -332,7 +336,10 @@ describe('ConsumerGroupLagMonitor', () => {
           5,
           '1234567890-0',
           '1234567890-4',
-          [['consumer-1', '3'], ['consumer-2', '2']],
+          [
+            ['consumer-1', '3'],
+            ['consumer-2', '2'],
+          ],
         ]),
         xinfo: vi.fn().mockResolvedValue([
           ['name', 'consumer-1', 'idle', '1200', 'pending', '3'],
@@ -355,12 +362,7 @@ describe('ConsumerGroupLagMonitor', () => {
 
     it('should handle missing XINFO CONSUMERS gracefully', async () => {
       const redis = createMockRedis({
-        xpending: vi.fn().mockResolvedValue([
-          1,
-          null,
-          null,
-          [['consumer-x', '1']],
-        ]),
+        xpending: vi.fn().mockResolvedValue([1, null, null, [['consumer-x', '1']]]),
         xinfo: vi.fn().mockRejectedValue(new Error('XINFO not supported')),
       });
 

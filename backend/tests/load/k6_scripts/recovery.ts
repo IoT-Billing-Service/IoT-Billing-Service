@@ -3,12 +3,12 @@ import { check, sleep } from 'k6';
 
 export const options = {
   stages: [
-    { duration: '5s', target: 50 },  // Normal load
+    { duration: '5s', target: 50 }, // Normal load
     { duration: '10s', target: 300 }, // Huge spike simulating an outage recovery queue flush
     { duration: '10s', target: 50 }, // Return to normal
   ],
   thresholds: {
-    http_req_duration: ['p(99)<200'], 
+    http_req_duration: ['p(99)<200'],
   },
 };
 

@@ -117,23 +117,16 @@ export function isFaultActive(type: FaultConfig['type']): boolean {
  * or `redis_latency` or `billing_compute_delay` fault, or 0.
  */
 export function getActiveLatencyMs(
-  type:
-    | 'network_latency'
-    | 'db_slow_query'
-    | 'redis_latency'
-    | 'billing_compute_delay',
+  type: 'network_latency' | 'db_slow_query' | 'redis_latency' | 'billing_compute_delay',
 ): number {
   const fault = _active.get(type);
   if (fault === undefined) return 0;
-  const ms = fault.config.params['addedLatencyMs']
-    ?? fault.config.params['delayMs'];
+  const ms = fault.config.params['addedLatencyMs'] ?? fault.config.params['delayMs'];
   return typeof ms === 'number' ? ms : 0;
 }
 
 /** Returns true if an active `network_partition` or `redis_unavailable` fault is live. */
-export function isBlockingFaultActive(
-  type: 'network_partition' | 'redis_unavailable',
-): boolean {
+export function isBlockingFaultActive(type: 'network_partition' | 'redis_unavailable'): boolean {
   return _active.has(type);
 }
 

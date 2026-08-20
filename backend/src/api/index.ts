@@ -25,10 +25,7 @@ import {
   stopTelemetryBridge,
 } from './routes/telemetry_stream.js';
 import { registerIngestionRoutes } from './routes/ingestion.js';
-import {
-  registerAttestationRoutes,
-  initAttestationService,
-} from './routes/attestation.js';
+import { registerAttestationRoutes, initAttestationService } from './routes/attestation.js';
 import {
   TelemetryNotificationListener,
   closeTimescalePool,

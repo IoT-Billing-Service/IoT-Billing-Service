@@ -60,7 +60,7 @@ export class TenantCache {
     }
 
     const tenantId = device.ownerId;
-    
+
     // For now, we assume all tenants are on the 'standard' tier
     // and have a base compliance of 1.0 until historical compliance is tracked per-tenant.
     const profile: TenantProfile = {
@@ -71,7 +71,7 @@ export class TenantCache {
 
     // Populate L2 Cache
     await this.redis.set(redisKey, JSON.stringify(profile), 'EX', L2_CACHE_TTL_S);
-    
+
     // Populate L1 Cache
     this.setL1Cache(deviceId, profile);
 

@@ -177,10 +177,7 @@ async function syncOverridesFromRedis(redis: Redis): Promise<void> {
   }
 }
 
-export async function isFlagEnabled(
-  flag: FeatureFlag,
-  redis?: Redis,
-): Promise<boolean> {
+export async function isFlagEnabled(flag: FeatureFlag, redis?: Redis): Promise<boolean> {
   incrementFeatureFlagEvaluations(flag);
 
   const cached = flagCache.get(flag);

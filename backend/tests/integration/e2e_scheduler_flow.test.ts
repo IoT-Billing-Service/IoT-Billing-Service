@@ -76,17 +76,15 @@ function createE2eRedis() {
   const store = new Map<string, { value: string; px?: number }>();
 
   return {
-    set: vi.fn().mockImplementation(
-      async (key: string, value: string, ...args: string[]) => {
-        const pxIdx = args.indexOf('PX');
-        const px = pxIdx >= 0 ? Number(args[pxIdx + 1]) : undefined;
-        if (args.includes('NX') && store.has(key)) {
-          return null;
-        }
-        store.set(key, { value, px });
-        return 'OK';
-      },
-    ),
+    set: vi.fn().mockImplementation(async (key: string, value: string, ...args: string[]) => {
+      const pxIdx = args.indexOf('PX');
+      const px = pxIdx >= 0 ? Number(args[pxIdx + 1]) : undefined;
+      if (args.includes('NX') && store.has(key)) {
+        return null;
+      }
+      store.set(key, { value, px });
+      return 'OK';
+    }),
     del: vi.fn().mockImplementation(async (_key: string) => {
       store.delete(_key);
       return 1;

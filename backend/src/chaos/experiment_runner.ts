@@ -131,19 +131,10 @@ export async function runExperiment(
   const baselineStart = new Date();
   const baselineSamples = await driver(baselineDurationMs);
   const baselineEnd = new Date();
-  const baselineMetrics = buildMetrics(
-    'baseline',
-    baselineSamples,
-    [],
-    baselineStart,
-    baselineEnd,
-  );
+  const baselineMetrics = buildMetrics('baseline', baselineSamples, [], baselineStart, baselineEnd);
 
   // Safety check: even the baseline must not have billing correctness bugs.
-  if (
-    baselineMetrics.doubleFinalizationCount > 0 ||
-    baselineMetrics.spuriousComputations > 0
-  ) {
+  if (baselineMetrics.doubleFinalizationCount > 0 || baselineMetrics.spuriousComputations > 0) {
     return {
       experiment: experiment.name,
       passed: false,
@@ -153,7 +144,7 @@ export async function runExperiment(
         `spurious=${String(baselineMetrics.spuriousComputations)}`,
       baseline: baselineMetrics,
       faultInjection: baselineMetrics, // placeholder
-      recovery: baselineMetrics,       // placeholder
+      recovery: baselineMetrics, // placeholder
     };
   }
 
@@ -162,11 +153,11 @@ export async function runExperiment(
   const faultStart = new Date();
   let faultSamples: WorkloadSample[];
   try {
-    faultSamples = await driver(
-      Math.max(...experiment.faults.map((f) => f.durationMs)),
-    );
+    faultSamples = await driver(Math.max(...experiment.faults.map((f) => f.durationMs)));
   } finally {
-    handles.forEach((h) => { h.stop(); });
+    handles.forEach((h) => {
+      h.stop();
+    });
     clearAllFaults();
   }
   const faultEnd = new Date();
@@ -179,10 +170,7 @@ export async function runExperiment(
   );
 
   // Billing correctness is a hard invariant — fail fast.
-  if (
-    faultMetrics.doubleFinalizationCount > 0 ||
-    faultMetrics.spuriousComputations > 0
-  ) {
+  if (faultMetrics.doubleFinalizationCount > 0 || faultMetrics.spuriousComputations > 0) {
     return {
       experiment: experiment.name,
       passed: false,
@@ -200,13 +188,7 @@ export async function runExperiment(
   const recoveryStart = new Date();
   const recoverySamples = await driver(recoveryDurationMs);
   const recoveryEnd = new Date();
-  const recoveryMetrics = buildMetrics(
-    'recovery',
-    recoverySamples,
-    [],
-    recoveryStart,
-    recoveryEnd,
-  );
+  const recoveryMetrics = buildMetrics('recovery', recoverySamples, [], recoveryStart, recoveryEnd);
 
   // ── Steady-state hypothesis ───────────────────────────────────────────────
   const passed = experiment.steadyStateHypothesis(recoveryMetrics);

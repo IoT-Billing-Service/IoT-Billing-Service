@@ -92,15 +92,11 @@ describe('E2E Encryption', () => {
     it('throws on decrypt with wrong key', () => {
       const encrypted = encryptField('secret', key.raw);
       const wrongKey = generateEncryptionKey();
-      expect(() => decryptField(encrypted, wrongKey.raw)).toThrow(
-        'ERR_E2E_DECRYPTION_FAILED',
-      );
+      expect(() => decryptField(encrypted, wrongKey.raw)).toThrow('ERR_E2E_DECRYPTION_FAILED');
     });
 
     it('throws on encrypt with invalid key length', () => {
-      expect(() => encryptField('test', new Uint8Array(16))).toThrow(
-        'ERR_E2E_INVALID_KEY_LENGTH',
-      );
+      expect(() => encryptField('test', new Uint8Array(16))).toThrow('ERR_E2E_INVALID_KEY_LENGTH');
     });
 
     it('throws on decrypt with invalid key length', () => {
@@ -111,9 +107,9 @@ describe('E2E Encryption', () => {
     });
 
     it('throws on decrypt with unsupported version', () => {
-      expect(() =>
-        decryptField({ v: 'e2e:v0', d: 'AAAA' }, key.raw),
-      ).toThrow('ERR_E2E_INVALID_CIPHERTEXT_FORMAT');
+      expect(() => decryptField({ v: 'e2e:v0', d: 'AAAA' }, key.raw)).toThrow(
+        'ERR_E2E_INVALID_CIPHERTEXT_FORMAT',
+      );
     });
 
     it('throws on decrypt with truncated bundle', () => {
@@ -127,10 +123,11 @@ describe('E2E Encryption', () => {
       const bundle = Buffer.from(encrypted.d, 'base64');
       const byte = bundle[NONCE_LENGTH];
       if (byte !== undefined) bundle[NONCE_LENGTH] = byte ^ 0xff;
-      const tampered: typeof encrypted = { v: encrypted.v, d: Buffer.from(bundle).toString('base64') };
-      expect(() => decryptField(tampered, key.raw)).toThrow(
-        'ERR_E2E_DECRYPTION_FAILED',
-      );
+      const tampered: typeof encrypted = {
+        v: encrypted.v,
+        d: Buffer.from(bundle).toString('base64'),
+      };
+      expect(() => decryptField(tampered, key.raw)).toThrow('ERR_E2E_DECRYPTION_FAILED');
     });
 
     it('throws on decrypt with tampered nonce', () => {
@@ -138,10 +135,11 @@ describe('E2E Encryption', () => {
       const bundle = Buffer.from(encrypted.d, 'base64');
       const byte = bundle[0];
       if (byte !== undefined) bundle[0] = byte ^ 0xff;
-      const tampered: typeof encrypted = { v: encrypted.v, d: Buffer.from(bundle).toString('base64') };
-      expect(() => decryptField(tampered, key.raw)).toThrow(
-        'ERR_E2E_DECRYPTION_FAILED',
-      );
+      const tampered: typeof encrypted = {
+        v: encrypted.v,
+        d: Buffer.from(bundle).toString('base64'),
+      };
+      expect(() => decryptField(tampered, key.raw)).toThrow('ERR_E2E_DECRYPTION_FAILED');
     });
   });
 
@@ -182,7 +180,13 @@ describe('E2E Encryption', () => {
         bad: { v: 'e2e:v1', d: 'invalid-base64!!!' },
       };
 
-      const result = decryptSensitiveFields(broken as Record<string, import('../../../src/core/crypto/e2e_encryption.js').EncryptedField>, key.raw);
+      const result = decryptSensitiveFields(
+        broken as Record<
+          string,
+          import('../../../src/core/crypto/e2e_encryption.js').EncryptedField
+        >,
+        key.raw,
+      );
       expect(result.count).toBe(1);
       expect(result.decrypted['good']).toBe('value');
       expect(Object.keys(result.failures)).toContain('bad');

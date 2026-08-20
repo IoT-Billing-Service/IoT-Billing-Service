@@ -160,15 +160,22 @@ describe('estimateCost', () => {
   });
 
   it('rejects negative plan and usage values before calculating a charge', () => {
-    expect(() => estimateCost({ ...plan, overageRateMicros: -1n }, {
-      unitsConsumed: 0n,
-      elapsedMs: 0,
-      cycleDurationMs: 1,
-    })).toThrow(RangeError);
-    expect(() => estimateCost(plan, {
-      unitsConsumed: -1n,
-      elapsedMs: 0,
-      cycleDurationMs: 1,
-    })).toThrow(RangeError);
+    expect(() =>
+      estimateCost(
+        { ...plan, overageRateMicros: -1n },
+        {
+          unitsConsumed: 0n,
+          elapsedMs: 0,
+          cycleDurationMs: 1,
+        },
+      ),
+    ).toThrow(RangeError);
+    expect(() =>
+      estimateCost(plan, {
+        unitsConsumed: -1n,
+        elapsedMs: 0,
+        cycleDurationMs: 1,
+      }),
+    ).toThrow(RangeError);
   });
 });

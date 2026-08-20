@@ -267,9 +267,7 @@ describe('ReconciliationService', () => {
 describe('DiscrepancySeverity helpers', () => {
   describe('ReconciliationService.classifyDiscrepancy', () => {
     it('classifies zero as NONE', () => {
-      expect(ReconciliationService.classifyDiscrepancy(0n, 1000n)).toBe(
-        DiscrepancySeverity.NONE,
-      );
+      expect(ReconciliationService.classifyDiscrepancy(0n, 1000n)).toBe(DiscrepancySeverity.NONE);
     });
 
     it('classifies within threshold as MINOR', () => {

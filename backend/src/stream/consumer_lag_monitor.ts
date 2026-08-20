@@ -87,14 +87,9 @@ export interface ConsumerLagMonitorOptions {
 // Default targets
 // ---------------------------------------------------------------------------
 
-import {
-  LEDGER_STREAM_KEY,
-  LEDGER_CONSUMER_GROUP,
-} from '../core/blockchain/ledger_event_bus.js';
+import { LEDGER_STREAM_KEY, LEDGER_CONSUMER_GROUP } from '../core/blockchain/ledger_event_bus.js';
 
-const DEFAULT_TARGETS = [
-  { streamKey: LEDGER_STREAM_KEY, groupName: LEDGER_CONSUMER_GROUP },
-];
+const DEFAULT_TARGETS = [{ streamKey: LEDGER_STREAM_KEY, groupName: LEDGER_CONSUMER_GROUP }];
 
 // ---------------------------------------------------------------------------
 // Monitor class
@@ -180,29 +175,13 @@ export class ConsumerGroupLagMonitor {
         this._lastState.set(key, state);
 
         // Push to Prometheus.
-        setConsumerGroupPendingEntries(
-          target.streamKey,
-          target.groupName,
-          state.pendingEntries,
-        );
-        setConsumerGroupConsumers(
-          target.streamKey,
-          target.groupName,
-          state.consumerCount,
-        );
-        setConsumerGroupIdleTimeMs(
-          target.streamKey,
-          target.groupName,
-          state.maxIdleMs,
-        );
+        setConsumerGroupPendingEntries(target.streamKey, target.groupName, state.pendingEntries);
+        setConsumerGroupConsumers(target.streamKey, target.groupName, state.consumerCount);
+        setConsumerGroupIdleTimeMs(target.streamKey, target.groupName, state.maxIdleMs);
 
         // Classify health and push.
         const lagHealth = this._classifyLag(state.pendingEntries);
-        setConsumerGroupLagHealth(
-          target.streamKey,
-          target.groupName,
-          lagHealth,
-        );
+        setConsumerGroupLagHealth(target.streamKey, target.groupName, lagHealth);
 
         // Log warnings for degraded/unhealthy states.
         if (lagHealth !== 'healthy') {
@@ -233,10 +212,7 @@ export class ConsumerGroupLagMonitor {
   }
 
   /** Probe a single consumer group and return its state. */
-  private async _probeGroup(
-    streamKey: string,
-    groupName: string,
-  ): Promise<ConsumerGroupState> {
+  private async _probeGroup(streamKey: string, groupName: string): Promise<ConsumerGroupState> {
     let pendingEntries = 0;
     let consumerCount = 0;
     let maxIdleMs = -1;
@@ -316,9 +292,7 @@ export class ConsumerGroupLagMonitor {
   }
 
   /** Classify lag size into health status. */
-  private _classifyLag(
-    pendingEntries: number,
-  ): 'healthy' | 'degraded' | 'unhealthy' {
+  private _classifyLag(pendingEntries: number): 'healthy' | 'degraded' | 'unhealthy' {
     if (pendingEntries < 0) return 'unhealthy';
     if (pendingEntries >= this.criticalEntries) return 'unhealthy';
     if (pendingEntries >= this.warnEntries) return 'degraded';
@@ -333,9 +307,7 @@ export class ConsumerGroupLagMonitor {
 let _instance: ConsumerGroupLagMonitor | null = null;
 
 /** Return (and lazily create) the process-level singleton monitor. */
-export function getConsumerLagMonitor(
-  opts?: ConsumerLagMonitorOptions,
-): ConsumerGroupLagMonitor {
+export function getConsumerLagMonitor(opts?: ConsumerLagMonitorOptions): ConsumerGroupLagMonitor {
   if (_instance === null) {
     _instance = new ConsumerGroupLagMonitor(opts);
   }

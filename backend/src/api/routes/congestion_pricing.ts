@@ -63,7 +63,12 @@ export function registerCongestionPricingRoutes(app: FastifyInstance): void {
     };
   }>(
     '/api/v1/pricing/congestion/evaluate',
-    async (request: FastifyRequest<{ Body: { baseChargeMicros: number | string; score: number; deviceId?: string } }>, reply: FastifyReply) => {
+    async (
+      request: FastifyRequest<{
+        Body: { baseChargeMicros: number | string; score: number; deviceId?: string };
+      }>,
+      reply: FastifyReply,
+    ) => {
       const startTime = process.hrtime.bigint();
       const body = request.body || {};
       const { baseChargeMicros, score, deviceId } = body;
@@ -130,7 +135,10 @@ export function registerCongestionPricingRoutes(app: FastifyInstance): void {
     };
   }>(
     '/api/v1/pricing/congestion/verify',
-    async (request: FastifyRequest<{ Body: { result: any; deviceId?: string } }>, reply: FastifyReply) => {
+    async (
+      request: FastifyRequest<{ Body: { result: any; deviceId?: string } }>,
+      reply: FastifyReply,
+    ) => {
       const body = request.body || {};
       const { result, deviceId } = body;
 

@@ -138,9 +138,10 @@ export class PowVerifier {
     if (Math.abs(now_ms - timestamp) > MAX_AGE_MS) {
       return {
         valid: false,
-        reason: timestamp > now_ms
-          ? `${POW_ERROR_CODES.TIMESTAMP_FUTURE}: timestamp is ${String(timestamp - now_ms)}ms in the future`
-          : `${POW_ERROR_CODES.TIMESTAMP_EXPIRED}: timestamp is ${String(now_ms - timestamp)}ms old (max ${String(MAX_AGE_MS)}ms)`,
+        reason:
+          timestamp > now_ms
+            ? `${POW_ERROR_CODES.TIMESTAMP_FUTURE}: timestamp is ${String(timestamp - now_ms)}ms in the future`
+            : `${POW_ERROR_CODES.TIMESTAMP_EXPIRED}: timestamp is ${String(now_ms - timestamp)}ms old (max ${String(MAX_AGE_MS)}ms)`,
       };
     }
 

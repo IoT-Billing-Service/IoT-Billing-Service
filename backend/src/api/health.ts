@@ -176,10 +176,7 @@ export function registerReadinessHealthCheck(app: FastifyInstance): void {
  * `getStatus` callback lets callers inject the live {@link BackupStatus}
  * object from the running {@link BackupVerificationService}.
  */
-export function registerBackupHealth(
-  app: FastifyInstance,
-  getStatus: () => BackupStatus,
-): void {
+export function registerBackupHealth(app: FastifyInstance, getStatus: () => BackupStatus): void {
   app.get('/backup-health', async (_request, reply) => {
     const s = getStatus();
     const healthy = s.lastVerificationOk && s.lastVerificationTime !== null;

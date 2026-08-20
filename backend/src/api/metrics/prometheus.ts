@@ -904,7 +904,10 @@ export const secretManagerActiveSecrets: promClient.Gauge = new promClient.Gauge
   help: 'Current number of active secret payloads loaded',
 });
 
-export function recordSecretRotationEvent(outcome: 'success' | 'failure', durationMs: number): void {
+export function recordSecretRotationEvent(
+  outcome: 'success' | 'failure',
+  durationMs: number,
+): void {
   secretRotationEventsTotal.inc({ outcome });
   if (Number.isFinite(durationMs) && durationMs > 0) {
     secretRotationDurationMs.observe(durationMs);
@@ -1009,27 +1012,15 @@ export const consumerGroupLagHealth: promClient.Gauge = new promClient.Gauge({
 
 // Setters --------------------------------------------------------------------
 
-export function setConsumerGroupPendingEntries(
-  stream: string,
-  group: string,
-  count: number,
-): void {
+export function setConsumerGroupPendingEntries(stream: string, group: string, count: number): void {
   consumerGroupPendingEntries.set({ stream, group }, count);
 }
 
-export function setConsumerGroupConsumers(
-  stream: string,
-  group: string,
-  count: number,
-): void {
+export function setConsumerGroupConsumers(stream: string, group: string, count: number): void {
   consumerGroupConsumers.set({ stream, group }, count);
 }
 
-export function setConsumerGroupIdleTimeMs(
-  stream: string,
-  group: string,
-  maxIdleMs: number,
-): void {
+export function setConsumerGroupIdleTimeMs(stream: string, group: string, maxIdleMs: number): void {
   consumerGroupIdleTimeMs.set({ stream, group }, maxIdleMs);
 }
 
@@ -1165,4 +1156,3 @@ export function registerMetricsRoute(app: FastifyInstance, path = '/metrics'): v
     return reply.send(body);
   });
 }
-

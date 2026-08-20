@@ -27,7 +27,9 @@ export const buildMockServer = () => {
 
       const isValid = nacl.sign.detached.verify(payloadBytes, signatureBytes, publicKeyBytes);
       if (!isValid) {
-        return reply.status(401).send({ error: 'Cryptographic verification failed: invalid signature' });
+        return reply
+          .status(401)
+          .send({ error: 'Cryptographic verification failed: invalid signature' });
       }
 
       // Parse payload to grab seq num (for simulation realism)
@@ -43,7 +45,7 @@ export const buildMockServer = () => {
       }
 
       const txHash = Buffer.from(nacl.randomBytes(32)).toString('hex');
-      
+
       return reply.send({
         hash: txHash,
         status: 'SUCCESS',
@@ -60,7 +62,7 @@ export const buildMockServer = () => {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const port = parseInt(process.env.PORT || '8080', 10);
   const app = buildMockServer();
-  
+
   app.listen({ port, host: '0.0.0.0' }, (err, address) => {
     if (err) {
       console.error(err);

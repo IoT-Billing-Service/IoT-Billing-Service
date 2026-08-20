@@ -5,12 +5,12 @@ export const options = {
   stages: [
     { duration: '10s', target: 50 }, // Ramp up to 50 virtual users
     { duration: '30s', target: 50 }, // Maintain 50 VU steady state
-    { duration: '10s', target: 0 },  // Ramp down
+    { duration: '10s', target: 0 }, // Ramp down
   ],
   thresholds: {
     // Assert P99 < 200ms
-    http_req_duration: ['p(99)<200'], 
-    http_req_failed: ['rate<0.01'],   // Error rate < 1%
+    http_req_duration: ['p(99)<200'],
+    http_req_failed: ['rate<0.01'], // Error rate < 1%
   },
 };
 

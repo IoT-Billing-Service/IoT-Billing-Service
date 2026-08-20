@@ -1,6 +1,10 @@
 import pg from 'pg';
 import { getEnv } from '../config/env.js';
-import { ElasticPoolManager, GLOBAL_MIN_CONNECTIONS, GLOBAL_MAX_CONNECTIONS } from './pool_manager.js';
+import {
+  ElasticPoolManager,
+  GLOBAL_MIN_CONNECTIONS,
+  GLOBAL_MAX_CONNECTIONS,
+} from './pool_manager.js';
 
 export interface PoolHealthProbeConfig {
   checkIntervalMs: number;
@@ -47,7 +51,7 @@ const DEFAULT_CONFIG: PoolHealthProbeConfig = {
   maxErrorRate: 0.05,
   targetUtilization: 0.75,
   scaleUpThreshold: 0.85,
-  scaleDownThreshold: 0.40,
+  scaleDownThreshold: 0.4,
   minPoolSize: GLOBAL_MIN_CONNECTIONS,
   maxPoolSize: GLOBAL_MAX_CONNECTIONS,
   scaleStep: 5,
@@ -115,7 +119,9 @@ export class PoolHealthProbe {
 
   start(): void {
     if (this.probeTimer) return;
-    console.log(`[PoolHealthProbe] Starting health probe for pool "${this.poolName}" (interval: ${this.config.checkIntervalMs}ms)`);
+    console.log(
+      `[PoolHealthProbe] Starting health probe for pool "${this.poolName}" (interval: ${this.config.checkIntervalMs}ms)`,
+    );
     this.probeTimer = setInterval(() => {
       void this.probe();
     }, this.config.checkIntervalMs);
@@ -179,10 +185,16 @@ export class PoolHealthProbe {
   ): { min: number; max: number } {
     let { min, max } = { min: this.currentMin, max: this.currentMax };
 
-    if (utilization > this.config.scaleUpThreshold || waitingClients > 5 || avgLatencyMs > this.config.degradedLatencyMs) {
+    if (
+      utilization > this.config.scaleUpThreshold ||
+      waitingClients > 5 ||
+      avgLatencyMs > this.config.degradedLatencyMs
+    ) {
       max = Math.min(max + this.config.scaleStep, this.config.maxPoolSize);
       min = Math.min(min + Math.ceil(this.config.scaleStep / 2), max);
-      console.log(`[PoolHealthProbe] Scaling UP pool "${this.poolName}" to min=${min} max=${max} (util=${(utilization * 100).toFixed(0)}%, wait=${waitingClients}, latency=${avgLatencyMs.toFixed(0)}ms)`);
+      console.log(
+        `[PoolHealthProbe] Scaling UP pool "${this.poolName}" to min=${min} max=${max} (util=${(utilization * 100).toFixed(0)}%, wait=${waitingClients}, latency=${avgLatencyMs.toFixed(0)}ms)`,
+      );
     } else if (
       utilization < this.config.scaleDownThreshold &&
       waitingClients === 0 &&
@@ -190,7 +202,9 @@ export class PoolHealthProbe {
     ) {
       max = Math.max(max - this.config.scaleStep, this.config.minPoolSize);
       min = Math.max(min - Math.ceil(this.config.scaleStep / 2), this.config.minPoolSize);
-      console.log(`[PoolHealthProbe] Scaling DOWN pool "${this.poolName}" to min=${min} max=${max} (util=${(utilization * 100).toFixed(0)}%)`);
+      console.log(
+        `[PoolHealthProbe] Scaling DOWN pool "${this.poolName}" to min=${min} max=${max} (util=${(utilization * 100).toFixed(0)}%)`,
+      );
     }
 
     const now = Date.now();

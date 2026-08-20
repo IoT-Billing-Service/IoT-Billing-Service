@@ -82,11 +82,13 @@ export class RunbookEngine {
   private executionHistory: RunbookExecutionResult[] = [];
   private readonly maxHistoryRecords: number;
 
-  constructor(options: {
-    pagerDutyClient?: PagerDutyClient;
-    maxConcurrentExecutions?: number;
-    maxHistoryRecords?: number;
-  } = {}) {
+  constructor(
+    options: {
+      pagerDutyClient?: PagerDutyClient;
+      maxConcurrentExecutions?: number;
+      maxHistoryRecords?: number;
+    } = {},
+  ) {
     this.pagerDutyClient = options.pagerDutyClient ?? null;
     this.maxConcurrentExecutions = options.maxConcurrentExecutions ?? 10;
     this.maxHistoryRecords = options.maxHistoryRecords ?? 1000;
@@ -178,7 +180,11 @@ export class RunbookEngine {
       }
 
       // Step 3: Resolve PagerDuty incident on success.
-      if (overallStatus === 'completed' && runbook.autoResolve !== false && this.pagerDutyClient !== null) {
+      if (
+        overallStatus === 'completed' &&
+        runbook.autoResolve !== false &&
+        this.pagerDutyClient !== null
+      ) {
         const resolveResponse = await this.pagerDutyClient.resolve(incident.dedupKey);
         pagerDutyEvents.push({
           action: 'resolve',
@@ -688,10 +694,14 @@ export class RunbookEngine {
       const expectedValue = Number(strValue);
 
       switch (operator) {
-        case '>=': return actualValue >= expectedValue;
-        case '<=': return actualValue <= expectedValue;
-        case '>': return actualValue > expectedValue;
-        case '<': return actualValue < expectedValue;
+        case '>=':
+          return actualValue >= expectedValue;
+        case '<=':
+          return actualValue <= expectedValue;
+        case '>':
+          return actualValue > expectedValue;
+        case '<':
+          return actualValue < expectedValue;
       }
     }
 

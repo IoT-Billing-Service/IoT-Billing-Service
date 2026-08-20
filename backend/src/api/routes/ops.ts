@@ -214,9 +214,11 @@ export function registerOpsRoutes(app: FastifyInstance): void {
             0,
           );
           const pendingRecords =
-            billingAggregates.find((g: { status: string }) => g.status === 'pending')?._count.id ?? 0;
+            billingAggregates.find((g: { status: string }) => g.status === 'pending')?._count.id ??
+            0;
           const settledRecords =
-            billingAggregates.find((g: { status: string }) => g.status === 'settled')?._count.id ?? 0;
+            billingAggregates.find((g: { status: string }) => g.status === 'settled')?._count.id ??
+            0;
           const totalUsageAmount = billingAggregates.reduce(
             (sum: bigint, g: { _sum: { usageAmount: bigint | null } }) =>
               sum + (g._sum.usageAmount ?? 0n),
@@ -261,17 +263,19 @@ export function registerOpsRoutes(app: FastifyInstance): void {
 
           const response: DashboardResponse = {
             summary,
-            recentRecords: recentRecords.map((r: {
-              id: string;
-              deviceId: string;
-              usageAmount: bigint;
-              txHash: string | null;
-              status: string;
-              createdAt: Date;
-            }) => ({
-              ...r,
-              createdAt: (r.createdAt as Date).toISOString(),
-            })),
+            recentRecords: recentRecords.map(
+              (r: {
+                id: string;
+                deviceId: string;
+                usageAmount: bigint;
+                txHash: string | null;
+                status: string;
+                createdAt: Date;
+              }) => ({
+                ...r,
+                createdAt: (r.createdAt as Date).toISOString(),
+              }),
+            ),
             systemHealth,
             generatedAt: Date.now(),
           };
@@ -330,31 +334,42 @@ interface MetricEntry {
  * All reads are in-memory (no network/DB I/O).
  */
 export async function gatherSystemHealth(): Promise<SystemHealthSnapshot> {
-  const [elLag, cbState, cbQueue, gcHist, pgTotal, pgActive, pgIdle, pgWaiting, lag, lastSeq, latestSeq, iqDepth] =
-    await Promise.all([
-      eventLoopLag.get(),
-      circuitBreakerState.get(),
-      circuitBreakerQueueDepth.get(),
-      gcPauseDuration.get(),
-      pgPoolConnectionsTotal.get(),
-      pgPoolConnectionsActive.get(),
-      pgPoolConnectionsIdle.get(),
-      pgPoolConnectionsWaiting.get(),
-      ledgerSyncLag.get(),
-      ledgerLastSyncedSequence.get(),
-      ledgerLatestPolledSequence.get(),
-      ingestionQueueDepth.get(),
-    ]);
+  const [
+    elLag,
+    cbState,
+    cbQueue,
+    gcHist,
+    pgTotal,
+    pgActive,
+    pgIdle,
+    pgWaiting,
+    lag,
+    lastSeq,
+    latestSeq,
+    iqDepth,
+  ] = await Promise.all([
+    eventLoopLag.get(),
+    circuitBreakerState.get(),
+    circuitBreakerQueueDepth.get(),
+    gcPauseDuration.get(),
+    pgPoolConnectionsTotal.get(),
+    pgPoolConnectionsActive.get(),
+    pgPoolConnectionsIdle.get(),
+    pgPoolConnectionsWaiting.get(),
+    ledgerSyncLag.get(),
+    ledgerLastSyncedSequence.get(),
+    ledgerLatestPolledSequence.get(),
+    ingestionQueueDepth.get(),
+  ]);
 
   // Extract scalar values from metric results.
-  const getFirstValue = (metric: { values: MetricEntry[] }): number =>
-    metric.values[0]?.value ?? 0;
+  const getFirstValue = (metric: { values: MetricEntry[] }): number => metric.values[0]?.value ?? 0;
 
   // Compute GC percentile from histogram buckets.
   const gcValues = gcHist.values.map((v: MetricEntry) => v.value);
   const gcCount = gcValues.reduce((a: number, b: number) => a + b, 0);
-  const gcP50 = gcValues.length > 0 ? gcValues[Math.floor(gcValues.length * 0.5)] ?? 0 : 0;
-  const gcP99 = gcValues.length > 0 ? gcValues[Math.floor(gcValues.length * 0.99)] ?? 0 : 0;
+  const gcP50 = gcValues.length > 0 ? (gcValues[Math.floor(gcValues.length * 0.5)] ?? 0) : 0;
+  const gcP99 = gcValues.length > 0 ? (gcValues[Math.floor(gcValues.length * 0.99)] ?? 0) : 0;
 
   return {
     eventLoopLagMs: getFirstValue(elLag),

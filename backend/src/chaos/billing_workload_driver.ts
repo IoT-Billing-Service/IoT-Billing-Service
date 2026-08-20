@@ -44,15 +44,12 @@ export interface BillingWorkloadOptions {
  * The driver repeats until `durationMs` elapses so the experiment runner
  * gets representative samples across the full phase window.
  */
-export function createBillingWorkloadDriver(
-  options: BillingWorkloadOptions = {},
-): WorkloadDriver {
+export function createBillingWorkloadDriver(options: BillingWorkloadOptions = {}): WorkloadDriver {
   const concurrency = options.concurrency ?? 10;
   const cyclesPerRun = options.cyclesPerRun ?? 50;
 
   return async (durationMs: number): Promise<WorkloadSample[]> => {
-    const store: BillingCycleStore =
-      options.store ?? new InMemoryBillingCycleStore();
+    const store: BillingCycleStore = options.store ?? new InMemoryBillingCycleStore();
 
     // Track compute calls per cycle to detect double-finalization.
     const computeCallsPerCycle = new Map<string, number>();
@@ -92,10 +89,7 @@ export function createBillingWorkloadDriver(
                   if (delayMs > 0) {
                     await new Promise<void>((r) => setTimeout(r, delayMs));
                   }
-                  computeCallsPerCycle.set(
-                    cycleId,
-                    (computeCallsPerCycle.get(cycleId) ?? 0) + 1,
-                  );
+                  computeCallsPerCycle.set(cycleId, (computeCallsPerCycle.get(cycleId) ?? 0) + 1);
                 },
               });
               completed = result.finalized;

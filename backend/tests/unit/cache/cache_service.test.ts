@@ -18,11 +18,7 @@ function createMockRedis() {
       return entry.value;
     }),
     set: vi.fn(
-      async (
-        key: string,
-        value: string,
-        ...args: (string | number)[]
-      ): Promise<'OK' | null> => {
+      async (key: string, value: string, ...args: (string | number)[]): Promise<'OK' | null> => {
         let ttl = -1;
         let nx = false;
 

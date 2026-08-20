@@ -83,10 +83,7 @@ export const chaosSurplusComputationsTotal = tryRegister(
 // Setters called by the experiment runner
 // ---------------------------------------------------------------------------
 
-export function recordExperimentResult(
-  experimentName: string,
-  passed: boolean,
-): void {
+export function recordExperimentResult(experimentName: string, passed: boolean): void {
   chaosExperimentsTotal?.inc({
     experiment: experimentName,
     result: passed ? 'passed' : 'failed',
@@ -102,10 +99,7 @@ export function setPhase(phase: 'none' | 'baseline' | 'fault_injection' | 'recov
   chaosPhaseActive?.set(val);
 }
 
-export function recordPhaseLatencies(
-  phase: string,
-  p99Ms: number,
-): void {
+export function recordPhaseLatencies(phase: string, p99Ms: number): void {
   chaosP99BillingLatencyMs?.set({ phase }, p99Ms);
 }
 

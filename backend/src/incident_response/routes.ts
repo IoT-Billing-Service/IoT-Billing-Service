@@ -288,9 +288,7 @@ export function registerIncidentResponseRoutes(
       } else {
         // Auto-select: find the first runbook that matches the source and severity.
         runbook = BUILTIN_RUNBOOKS.find(
-          (r) =>
-            r.appliesTo.includes(incident.source) &&
-            r.severities.includes(incident.severity),
+          (r) => r.appliesTo.includes(incident.source) && r.severities.includes(incident.severity),
         );
       }
 

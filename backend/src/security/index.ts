@@ -12,11 +12,11 @@ export async function initSecretManager(): Promise<SecretManager> {
   if (sharedSecretManager) {
     return sharedSecretManager;
   }
-  
+
   // For local development or environments without a public key, we omit the key.
   // In a real production deployment, this might be loaded from an env var.
   const provider = new VerifiedRemoteProvider();
-  
+
   // Rotate every 15 minutes, keep previous secrets active for 2 minutes
   sharedSecretManager = new SecretManager(provider, {
     rotationIntervalMs: 15 * 60 * 1000,
