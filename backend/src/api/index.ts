@@ -65,6 +65,7 @@ import { getConsumerLagMonitor } from '../stream/consumer_lag_monitor.js';
 import { createIncidentResponseModule } from '../incident_response/index.js';
 import { registerIncidentResponseRoutes } from '../incident_response/routes.js';
 import { RenewalCron } from '../billing/renewal_cron.js';
+import { registerTelemetryWebSocketRoutes } from './routes/telemetry_websocket.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -124,6 +125,7 @@ export async function buildApp(
   registerGeoPricingRoutes(app);
   registerSheddingStatusRoute(app);
   registerTelemetryStreamRoutes(app);
+  await registerTelemetryWebSocketRoutes(app);
 
   // Issue #3: register hardware attestation endpoints.
   // Initialize a default in-memory attestation service for local/dev usage;
