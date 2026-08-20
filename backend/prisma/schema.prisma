@@ -61,6 +61,29 @@ model BillingRecord {
   @@map("billing_records")
 }
 
+model RefundRecord {
+  id              String   @id @default(cuid())
+  billingRecordId String   @map("billing_record_id")
+  accountId       String   @map("account_id")
+  amount          BigInt
+  state           String   @default("INITIATED")
+  lockVersion     Int      @default(1) @map("lock_version")
+  txHash          String?  @map("tx_hash")
+  retryCount      Int      @default(0) @map("retry_count")
+  reason          String?
+  idempotencyKey  String   @unique @map("idempotency_key")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  billingRecord   BillingRecord @relation(fields: [billingRecordId], references: [id])
+  account         Account       @relation(fields: [accountId], references: [id])
+
+  @@index([accountId])
+  @@index([billingRecordId])
+  @@index([state])
+  @@map("refund_records")
+}
+
 /// A billing cycle transitions OPEN -> FINALIZING -> FINALIZED -> SETTLED.
 /// `lockVersion` is an optimistic-concurrency token: every state write does
 /// `WHERE id = ? AND lock_version = ?` and bumps the version, so two callers
@@ -271,3 +294,68 @@ model DeadLetterMessage {
   @@index([queueName, status])
   @@map("dead_letter_messages")
 }
+
+/// P2P Payment Channel for high-frequency IoT microtransactions (#295)
+/// Allows off-chain signed microtransaction vouchers with on-chain settlement guarantees.
+model PaymentChannel {
+  id                   String   @id @default(cuid())
+  channelId            String   @unique @map("channel_id")
+  senderAddress        String   @map("sender_address")
+  recipientAddress      String   @map("recipient_address")
+  totalDeposit         BigInt   @map("total_deposit")
+  settledAmount        BigInt   @default(0) @map("settled_amount")
+  sequence             Int      @default(0)
+  status               String   @default("OPEN")
+  disputePeriodSeconds Int      @default(86400) @map("dispute_period_seconds")
+  disputeExpiresAt     DateTime? @map("dispute_expires_at")
+  expiresAt            DateTime @map("expires_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  vouchers             PaymentChannelVoucher[]
+  disputes             PaymentChannelDispute[]
+
+  @@index([senderAddress])
+  @@index([recipientAddress])
+  @@index([status])
+  @@map("payment_channels")
+}
+
+/// Cryptographically signed payment voucher exchanged off-chain.
+model PaymentChannelVoucher {
+  id               String   @id @default(cuid())
+  channelId        String   @map("channel_id")
+  sequence         Int
+  cumulativeAmount BigInt   @map("cumulative_amount")
+  nonce            String
+  expiresAt        DateTime @map("expires_at")
+  signature        String
+  signerPublicKey  String   @map("signer_public_key")
+  digest           String
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  channel          PaymentChannel @relation(fields: [channelId], references: [channelId])
+
+  @@unique([channelId, sequence])
+  @@index([channelId])
+  @@map("payment_channel_vouchers")
+}
+
+/// Unilateral dispute record for peer-to-peer payment channels.
+model PaymentChannelDispute {
+  id                String   @id @default(cuid())
+  channelId         String   @map("channel_id")
+  initiatedBy       String   @map("initiated_by")
+  claimedSequence   Int      @map("claimed_sequence")
+  claimedAmount     BigInt   @map("claimed_amount")
+  challengeDeadline DateTime @map("challenge_deadline")
+  status            String   @default("ACTIVE")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  channel           PaymentChannel @relation(fields: [channelId], references: [channelId])
+
+  @@index([channelId, status])
+  @@map("payment_channel_disputes")
+}
+

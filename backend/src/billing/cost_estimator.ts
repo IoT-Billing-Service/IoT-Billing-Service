@@ -123,7 +123,7 @@ export function resolveBillingCycleWindow(
     case 'annual':
       end.setUTCFullYear(end.getUTCFullYear() + 1);
       break;
-    case 'custom':
+    case 'custom': {
       const customDurationMs = config.customDurationMs;
       if (
         typeof customDurationMs !== 'number' ||
@@ -134,6 +134,7 @@ export function resolveBillingCycleWindow(
       }
       end.setTime(end.getTime() + customDurationMs);
       break;
+    }
     default:
       throw new RangeError(`Unsupported billing cycle unit: ${String(config.unit)}`);
   }

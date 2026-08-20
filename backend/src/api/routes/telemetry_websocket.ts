@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { WebSocket } from 'ws';
+import type { WebSocket } from '@fastify/websocket';
 import { verifySessionToken } from '../auth/session.js';
 import {
   TelemetryStreamBus,
@@ -128,7 +128,9 @@ export async function registerTelemetryWebSocketRoutes(app: FastifyInstance): Pr
       const deviceId = request.query.deviceId?.trim() || '*';
       const removeClient = streamHub.addClient(socket, deviceId, payload.exp);
       socket.send(JSON.stringify({ type: 'connected', deviceFilter: deviceId }));
-      socket.on('message', (raw) => streamHub.handleMessage(socket, raw.toString()));
+      socket.on('message', (raw: { toString(): string }) =>
+        streamHub.handleMessage(socket, raw.toString()),
+      );
       socket.on('close', removeClient);
       socket.on('error', removeClient);
     },

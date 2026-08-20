@@ -732,6 +732,21 @@ export function recordRedisPubsubMessagesLost(stream: string, count: number): vo
   }
 }
 
+export const e2eEncryptionOperations: promClient.Counter = new promClient.Counter({
+  name: 'e2e_encryption_operations_total',
+  help: 'Total number of end-to-end encryption operations',
+  labelNames: ['operation', 'result'],
+  registers: [promClient.register],
+});
+
+export const e2eEncryptionDuration: promClient.Histogram = new promClient.Histogram({
+  name: 'e2e_encryption_duration_us',
+  help: 'Duration of end-to-end encryption operations in microseconds',
+  labelNames: ['operation'],
+  buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000],
+  registers: [promClient.register],
+});
+
 export function recordE2eEncryptionOperation(
   operation: 'encrypt' | 'decrypt' | 'batch_encrypt' | 'batch_decrypt',
   result: 'success' | 'failure',
@@ -1138,6 +1153,62 @@ export function observeCongestionEvalDuration(durationSeconds: number): void {
   if (Number.isFinite(durationSeconds) && durationSeconds >= 0) {
     congestionEvalDurationSeconds.observe(durationSeconds);
   }
+}
+
+// --- Peer-to-Peer Payment Channels Metrics (issue #295) ----------------------
+
+export const paymentChannelOperationsTotal: promClient.Counter = new promClient.Counter({
+  name: 'iot_billing_payment_channel_operations_total',
+  help: 'Total peer-to-peer payment channel operations partitioned by operation and status',
+  labelNames: ['operation', 'status'],
+});
+
+export const paymentChannelActiveCount: promClient.Gauge = new promClient.Gauge({
+  name: 'iot_billing_payment_channel_active_count',
+  help: 'Current number of active OPEN peer-to-peer payment channels',
+});
+
+export const paymentChannelOperationDurationSeconds: promClient.Histogram =
+  new promClient.Histogram({
+    name: 'iot_billing_payment_channel_operation_duration_seconds',
+    help: 'Latency of payment channel operations in seconds',
+    labelNames: ['operation'],
+    buckets: [0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.5],
+  });
+
+export const paymentChannelTransactedAmountTotal: promClient.Counter = new promClient.Counter({
+  name: 'iot_billing_payment_channel_transacted_amount_total',
+  help: 'Total cumulative microtransaction value transferred via payment channels',
+  labelNames: ['channel_id'],
+});
+
+export const paymentChannelDisputesTotal: promClient.Counter = new promClient.Counter({
+  name: 'iot_billing_payment_channel_disputes_total',
+  help: 'Total number of payment channel dispute challenges initiated',
+});
+
+export function recordPaymentChannelOperation(operation: string, status: string): void {
+  paymentChannelOperationsTotal.inc({ operation, status });
+}
+
+export function setPaymentChannelActiveCount(count: number): void {
+  paymentChannelActiveCount.set(count);
+}
+
+export function recordPaymentChannelDuration(operation: string, durationSeconds: number): void {
+  if (Number.isFinite(durationSeconds) && durationSeconds >= 0) {
+    paymentChannelOperationDurationSeconds.observe({ operation }, durationSeconds);
+  }
+}
+
+export function recordPaymentChannelTransactedAmount(channelId: string, amount: number): void {
+  if (Number.isFinite(amount) && amount > 0) {
+    paymentChannelTransactedAmountTotal.inc({ channel_id: channelId }, amount);
+  }
+}
+
+export function recordPaymentChannelDispute(): void {
+  paymentChannelDisputesTotal.inc();
 }
 
 /**

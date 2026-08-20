@@ -135,7 +135,7 @@ export function computeS256Challenge(verifier: string): string {
 // ---------------------------------------------------------------------------
 
 export class OAuth2Service {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: any) {}
 
   // -------------------------------------------------------------------------
   // Client management
@@ -296,7 +296,7 @@ export class OAuth2Service {
     const codeHash = sha256Hex(code);
 
     // Atomic read-and-mark-used inside a transaction
-    const authCode = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const authCode = await this.prisma.$transaction(async (tx: any) => {
       const record = await tx.oAuth2AuthCode.findUnique({ where: { codeHash } });
 
       if (!record) throw new OAuth2Error('invalid_grant', 'Unknown authorisation code');

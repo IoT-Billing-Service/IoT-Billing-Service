@@ -117,7 +117,7 @@ export async function finalizeBillingCycle(
   assertBillingConfigurationTrusted();
   const cycle = await store.getCycle(cycleId);
   if (cycle === null) {
-    return result(cycleId, 'not_found', null, null, null, startTime);
+    return result(cycleId, 'not_found', null, null, startTime);
   }
   if (cycle.state !== BillingCycleState.OPEN) {
     return result(cycleId, 'not_open', cycle.state, null, startTime);

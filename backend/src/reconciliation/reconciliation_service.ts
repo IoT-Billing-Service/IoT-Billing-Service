@@ -391,7 +391,7 @@ export class ReconciliationService {
 
     const rows = await this.prisma.billingRecord.findMany({
       where: {
-        updatedAt: { gte: cutoff },
+        createdAt: { gte: cutoff },
       },
       select: {
         id: true,
@@ -403,7 +403,7 @@ export class ReconciliationService {
         createdAt: true,
       },
       take: this.batchSize,
-      orderBy: { updatedAt: 'asc' },
+      orderBy: { createdAt: 'asc' },
     });
 
     return (
