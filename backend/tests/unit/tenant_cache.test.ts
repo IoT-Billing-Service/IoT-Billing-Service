@@ -52,11 +52,13 @@ describe('TenantCache', () => {
   });
 
   it('fetches from Redis L2 and populates L1', async () => {
-    mockRedis.get.mockResolvedValueOnce(JSON.stringify({
-      tenantId: 'tenant-2',
-      billingTier: 'enterprise',
-      historicalCompliance: 0.99,
-    }));
+    mockRedis.get.mockResolvedValueOnce(
+      JSON.stringify({
+        tenantId: 'tenant-2',
+        billingTier: 'enterprise',
+        historicalCompliance: 0.99,
+      }),
+    );
 
     const profile = await cache.getTenantProfile('device-2');
 
@@ -66,7 +68,7 @@ describe('TenantCache', () => {
       historicalCompliance: 0.99,
     });
     expect(mockPrisma.device.findUnique).not.toHaveBeenCalled();
-    
+
     // Call again to test L1 Cache
     mockRedis.get.mockClear();
     const l1Profile = await cache.getTenantProfile('device-2');
@@ -75,14 +77,16 @@ describe('TenantCache', () => {
   });
 
   it('invalidates L1 and L2 cache', async () => {
-    mockRedis.get.mockResolvedValueOnce(JSON.stringify({
-      tenantId: 'tenant-2',
-      billingTier: 'enterprise',
-      historicalCompliance: 0.99,
-    }));
+    mockRedis.get.mockResolvedValueOnce(
+      JSON.stringify({
+        tenantId: 'tenant-2',
+        billingTier: 'enterprise',
+        historicalCompliance: 0.99,
+      }),
+    );
 
     await cache.getTenantProfile('device-3'); // populate caches
-    
+
     await cache.invalidate('device-3');
 
     expect(mockRedis.del).toHaveBeenCalledWith('device_tenant:device-3');

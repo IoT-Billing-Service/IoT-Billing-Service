@@ -154,7 +154,9 @@ export function calculateProratedCharge(
   assertNonNegativeBigInt(fullChargeMicros, 'fullChargeMicros');
   assertNonNegativeSafeInteger(elapsedMs, 'elapsedMs');
   if (!Number.isSafeInteger(cycleDurationMs) || cycleDurationMs <= 0) {
-    throw new RangeError('Charge and cycle values must be non-negative and the cycle must be positive');
+    throw new RangeError(
+      'Charge and cycle values must be non-negative and the cycle must be positive',
+    );
   }
   const billableMs = Math.min(elapsedMs, cycleDurationMs);
   return (fullChargeMicros * BigInt(billableMs)) / BigInt(cycleDurationMs);
@@ -245,9 +247,10 @@ export function estimateCost(
 
   const overageChargeMicros = overageUnits * plan.overageRateMicros;
 
-  const geo = countryCode !== undefined && countryCode !== null
-    ? applyGeoMultiplier(overageChargeMicros, countryCode)
-    : null;
+  const geo =
+    countryCode !== undefined && countryCode !== null
+      ? applyGeoMultiplier(overageChargeMicros, countryCode)
+      : null;
   const adjustedOverageChargeMicros = geo !== null ? geo.adjustedCharge : overageChargeMicros;
   const proratedBaseChargeMicros = calculateProratedCharge(
     plan.baseChargeMicros ?? 0n,

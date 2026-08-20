@@ -203,9 +203,7 @@ describe('WebhookService', () => {
       // Extract the body and signature
       const fetchCall = mockFetch.mock.calls[0] as [string, RequestInit];
       const body = fetchCall[1].body as string;
-      const signature = (fetchCall[1].headers as Record<string, string>)[
-        WEBHOOK_SIGNATURE_HEADER
-      ];
+      const signature = (fetchCall[1].headers as Record<string, string>)[WEBHOOK_SIGNATURE_HEADER];
 
       // Verify the signature
       const verification = WebhookService.verifySignature(body, signature!, 'test-secret');
@@ -408,12 +406,7 @@ describe('WebhookService', () => {
     });
 
     it('rejects invalid timestamp values', () => {
-      const result = WebhookService.verifySignature(
-        '{}',
-        'somesig',
-        'secret',
-        'not-a-number',
-      );
+      const result = WebhookService.verifySignature('{}', 'somesig', 'secret', 'not-a-number');
       expect(result.valid).toBe(false);
       expect(result.reason).toBe('Invalid timestamp');
     });

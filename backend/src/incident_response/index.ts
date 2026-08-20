@@ -40,7 +40,14 @@
  */
 
 import { PagerDutyClient } from './pagerduty_client.js';
-import { IncidentDetector, createSloBurnRateRule, createCircuitBreakerRule, createReplicationLagRule, createBillingAnomalyRule, createConsumerGroupLagRule } from './incident_detector.js';
+import {
+  IncidentDetector,
+  createSloBurnRateRule,
+  createCircuitBreakerRule,
+  createReplicationLagRule,
+  createBillingAnomalyRule,
+  createConsumerGroupLagRule,
+} from './incident_detector.js';
 import { RunbookEngine } from './runbook_engine.js';
 import { BUILTIN_RUNBOOKS_BY_NAME } from './runbook_definitions.js';
 import {

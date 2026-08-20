@@ -26,9 +26,10 @@ function makeKeyPair(): nacl.SignKeyPair {
   return nacl.sign.keyPair();
 }
 
-function makePayload(
-  overrides: Partial<SignedPayload> & { keyPair?: nacl.SignKeyPair } = {},
-): { payload: SignedPayload; publicKey: string } {
+function makePayload(overrides: Partial<SignedPayload> & { keyPair?: nacl.SignKeyPair } = {}): {
+  payload: SignedPayload;
+  publicKey: string;
+} {
   const kp = overrides.keyPair ?? makeKeyPair();
   const deviceId = 'MTR-001';
   const timestamp = Date.now();
@@ -99,7 +100,13 @@ describe('IngestionService with E2E Encryption', () => {
       const encrypted = { temperature: encryptedMetric };
 
       const kp = nacl.sign.keyPair();
-      const message = { deviceId: 'MTR-001', timestamp, nonce: 'test-nonce-xxx', metrics, encrypted };
+      const message = {
+        deviceId: 'MTR-001',
+        timestamp,
+        nonce: 'test-nonce-xxx',
+        metrics,
+        encrypted,
+      };
       const signature = Buffer.from(
         nacl.sign.detached(Buffer.from(JSON.stringify(message)), kp.secretKey),
       ).toString('hex');

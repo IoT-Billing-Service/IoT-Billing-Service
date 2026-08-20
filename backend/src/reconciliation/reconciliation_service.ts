@@ -289,8 +289,7 @@ export class ReconciliationService {
       const autoCorrected = entries.filter((e) => e.autoCorrected).length;
       const requiresReview = entries.filter(
         (e) =>
-          e.severity === DiscrepancySeverity.MAJOR ||
-          e.severity === DiscrepancySeverity.CRITICAL,
+          e.severity === DiscrepancySeverity.MAJOR || e.severity === DiscrepancySeverity.CRITICAL,
       ).length;
 
       const report: ReconciliationReport = {
@@ -407,15 +406,17 @@ export class ReconciliationService {
       orderBy: { updatedAt: 'asc' },
     });
 
-    return (rows as unknown as {
-      id: string;
-      cycleId: string;
-      accountId: string;
-      usageAmount: bigint;
-      status: string;
-      txHash: string | null;
-      createdAt: Date;
-    }[]).map((row) => ({
+    return (
+      rows as unknown as {
+        id: string;
+        cycleId: string;
+        accountId: string;
+        usageAmount: bigint;
+        status: string;
+        txHash: string | null;
+        createdAt: Date;
+      }[]
+    ).map((row) => ({
       id: row.id,
       cycleId: row.cycleId,
       accountId: row.accountId,
@@ -434,7 +435,10 @@ export class ReconciliationService {
     let onChainTxHash: string | null = null;
 
     // If there's a tx hash, try to look up the on-chain transaction
-    if (record.txHash !== null && (this.sorobanRpcUrl !== undefined || this.customFetchOnChainTx !== null)) {
+    if (
+      record.txHash !== null &&
+      (this.sorobanRpcUrl !== undefined || this.customFetchOnChainTx !== null)
+    ) {
       try {
         const txData = await this.fetchOnChainTransaction(record.txHash);
         if (txData !== null) {
@@ -562,9 +566,11 @@ export class ReconciliationService {
       WHERE id = ${recordId}
         AND usage_amount != ${correctedAmount}
     `;
-    
+
     try {
-      await getAuditLogger(this.prisma).logTransaction('BillingRecord', recordId, 'AUTOCORRECT', { correctedAmount: correctedAmount.toString() });
+      await getAuditLogger(this.prisma).logTransaction('BillingRecord', recordId, 'AUTOCORRECT', {
+        correctedAmount: correctedAmount.toString(),
+      });
     } catch (err) {
       console.error(`Failed to write audit log for autocorrect of record ${recordId}:`, err);
     }

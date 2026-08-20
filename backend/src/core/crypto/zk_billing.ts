@@ -33,9 +33,7 @@ export class ZkBillingEngine {
     upperBound: bigint,
   ): CommitmentPair {
     const opening = randomBytes(32).toString('hex');
-    const commitment = createHash('sha256')
-      .update(`${amount.toString()}:${opening}`)
-      .digest('hex');
+    const commitment = createHash('sha256').update(`${amount.toString()}:${opening}`).digest('hex');
 
     return { commitment, opening };
   }
@@ -78,23 +76,14 @@ export class ZkBillingEngine {
     return result.valid;
   }
 
-  revealBillingAmount(
-    commitment: string,
-    opening: string,
-    claimedAmount: bigint,
-  ): boolean {
+  revealBillingAmount(commitment: string, opening: string, claimedAmount: bigint): boolean {
     const computed = createHash('sha256')
       .update(`${claimedAmount.toString()}:${opening}`)
       .digest('hex');
     return computed === commitment;
   }
 
-  hashBillData(
-    txId: string,
-    deviceId: string,
-    commitment: string,
-    timestamp: number,
-  ): string {
+  hashBillData(txId: string, deviceId: string, commitment: string, timestamp: number): string {
     return createHash('sha256')
       .update(`${txId}:${deviceId}:${commitment}:${timestamp.toString()}`)
       .digest('hex');
@@ -118,9 +107,10 @@ export class ZkBillingEngine {
     };
   }
 
-  batchVerifyPrivateBillings(
-    billings: PrivateBillingData[],
-  ): { valid: boolean[]; allValid: boolean } {
+  batchVerifyPrivateBillings(billings: PrivateBillingData[]): {
+    valid: boolean[];
+    allValid: boolean;
+  } {
     const results = billings.map((b) =>
       this.verifyPrivateBilling(
         b.encryptedAmount,
@@ -134,7 +124,11 @@ export class ZkBillingEngine {
   }
 }
 
-export function generateBillingRangeTiers(): Array<{ label: string; lower: bigint; upper: bigint }> {
+export function generateBillingRangeTiers(): Array<{
+  label: string;
+  lower: bigint;
+  upper: bigint;
+}> {
   return [
     { label: 'micro', lower: 0n, upper: 100n },
     { label: 'small', lower: 101n, upper: 1000n },

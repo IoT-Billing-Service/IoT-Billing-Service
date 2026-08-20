@@ -70,7 +70,12 @@ export interface FinalizeOptions {
    * Optional audit logger for logging the finalization transaction.
    */
   auditLogger?: {
-    logTransaction(entityType: string, entityId: string, action: string, payload: unknown): Promise<void>;
+    logTransaction(
+      entityType: string,
+      entityId: string,
+      action: string,
+      payload: unknown,
+    ): Promise<void>;
   };
   /**
    * The actual billing computation, invoked at most once per cycle, strictly
@@ -138,7 +143,13 @@ export async function finalizeBillingCycle(
   const idempotencyKey = options.idempotencyKey ?? uuidv7();
   const fresh = await store.recordFinalization(cycleId, idempotencyKey);
   if (!fresh) {
-    return result(cycleId, 'duplicate_replay', BillingCycleState.FINALIZING, idempotencyKey, startTime);
+    return result(
+      cycleId,
+      'duplicate_replay',
+      BillingCycleState.FINALIZING,
+      idempotencyKey,
+      startTime,
+    );
   }
 
   // Resolve geographic pricing tier (issue #54). This is a pure in-memory

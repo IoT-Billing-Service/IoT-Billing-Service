@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { IncidentDetector, createSloBurnRateRule, createCircuitBreakerRule, createReplicationLagRule, createBillingAnomalyRule } from '../../../src/incident_response/incident_detector.js';
-import type { IncidentResponseConfig, DetectedIncident } from '../../../src/incident_response/types.js';
+import {
+  IncidentDetector,
+  createSloBurnRateRule,
+  createCircuitBreakerRule,
+  createReplicationLagRule,
+  createBillingAnomalyRule,
+} from '../../../src/incident_response/incident_detector.js';
+import type {
+  IncidentResponseConfig,
+  DetectedIncident,
+} from '../../../src/incident_response/types.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -51,7 +60,10 @@ describe('IncidentDetector', () => {
 
   describe('addRule', () => {
     it('should register and evaluate rules', async () => {
-      const detector = new IncidentDetector(createConfig({ detectionIntervalMs: 5000 }), onIncident);
+      const detector = new IncidentDetector(
+        createConfig({ detectionIntervalMs: 5000 }),
+        onIncident,
+      );
 
       detector.addRule({
         name: 'test_rule',

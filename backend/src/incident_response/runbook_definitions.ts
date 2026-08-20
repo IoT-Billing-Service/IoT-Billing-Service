@@ -15,20 +15,13 @@
  * - consumer_group_lag_response: Responds to consumer group lag incidents (issue #66)
  */
 
-import type {
-  RunbookDefinition,
-  RunbookStepConfig,
-} from './types.js';
+import type { RunbookDefinition, RunbookStepConfig } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Helper: Create a Slack notification step
 // ---------------------------------------------------------------------------
 
-function slackNotification(
-  name: string,
-  message: string,
-  channel: string,
-): RunbookStepConfig {
+function slackNotification(name: string, message: string, channel: string): RunbookStepConfig {
   return {
     name,
     type: 'notification',
@@ -618,5 +611,6 @@ export const BUILTIN_RUNBOOKS: RunbookDefinition[] = [
 /**
  * Map of runbook name to definition for quick lookup.
  */
-export const BUILTIN_RUNBOOKS_BY_NAME: Record<string, RunbookDefinition> =
-  Object.fromEntries(BUILTIN_RUNBOOKS.map((r) => [r.name, r]));
+export const BUILTIN_RUNBOOKS_BY_NAME: Record<string, RunbookDefinition> = Object.fromEntries(
+  BUILTIN_RUNBOOKS.map((r) => [r.name, r]),
+);

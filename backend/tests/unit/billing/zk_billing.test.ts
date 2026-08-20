@@ -22,7 +22,13 @@ describe('ZkBillingEngine', () => {
   });
 
   it('verifies a valid proof', () => {
-    const result = engine.verifyPrivateBilling('500', engine.createRangeProof(500n, deviceId, lower, upper), deviceId, lower, upper);
+    const result = engine.verifyPrivateBilling(
+      '500',
+      engine.createRangeProof(500n, deviceId, lower, upper),
+      deviceId,
+      lower,
+      upper,
+    );
     expect(result).toBe(true);
   });
 
@@ -35,7 +41,13 @@ describe('ZkBillingEngine', () => {
     const proof = engine.createRangeProof(500n, deviceId, lower, upper);
     const tampered = Buffer.from(proof, 'base64');
     tampered[0] ^= 0xff;
-    const result = engine.verifyPrivateBilling('500', tampered.toString('base64'), deviceId, lower, upper);
+    const result = engine.verifyPrivateBilling(
+      '500',
+      tampered.toString('base64'),
+      deviceId,
+      lower,
+      upper,
+    );
     expect(result).toBe(false);
   });
 
@@ -80,7 +92,14 @@ describe('ZkBillingEngine', () => {
   it('batch detects invalid billing', () => {
     const billings = [
       engine.generateBillingProof(100n, deviceId, lower, upper),
-      { encryptedAmount: '99999', proof: 'aW52YWxpZAA=', commitment: 'x', deviceId, rangeLower: '0', rangeUpper: '10000' },
+      {
+        encryptedAmount: '99999',
+        proof: 'aW52YWxpZAA=',
+        commitment: 'x',
+        deviceId,
+        rangeLower: '0',
+        rangeUpper: '10000',
+      },
     ];
     const result = engine.batchVerifyPrivateBillings(billings);
     expect(result.allValid).toBe(false);

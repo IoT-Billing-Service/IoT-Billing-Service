@@ -1,9 +1,12 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { isFlagEnabledSync, FeatureFlag, FlagPriority, computeDegradationProfile, type DegradationProfile } from '../feature_flags/index.js';
 import {
-  observeSheddedRequests,
-  setCapacitySheddingLevel,
-} from '../../api/metrics/prometheus.js';
+  isFlagEnabledSync,
+  FeatureFlag,
+  FlagPriority,
+  computeDegradationProfile,
+  type DegradationProfile,
+} from '../feature_flags/index.js';
+import { observeSheddedRequests, setCapacitySheddingLevel } from '../../api/metrics/prometheus.js';
 
 export enum RequestPriority {
   CRITICAL = 0,
@@ -140,9 +143,7 @@ export function getSheddingStatus(): {
   };
 }
 
-export function computeSheddingDecision(
-  request: FastifyRequest,
-): SheddingDecision {
+export function computeSheddingDecision(request: FastifyRequest): SheddingDecision {
   const priority = getRequestPriority(request);
   const now = Date.now();
 
@@ -155,10 +156,13 @@ export function computeSheddingDecision(
       currentConfig.maxQueueDepth,
     );
     setCapacitySheddingLevel(
-      currentDegradationProfile.shedNonCritical ? 3
-        : currentDegradationProfile.disabledFlags.length > 5 ? 2
-        : currentDegradationProfile.disabledFlags.length > 0 ? 1
-        : 0,
+      currentDegradationProfile.shedNonCritical
+        ? 3
+        : currentDegradationProfile.disabledFlags.length > 5
+          ? 2
+          : currentDegradationProfile.disabledFlags.length > 0
+            ? 1
+            : 0,
     );
     lastMetricsUpdate = now;
   }
@@ -211,21 +215,16 @@ function processQueue(): void {
     }
   }
 
-  while (
-    requestQueue.length > 0 &&
-    activeRequests.size < currentConfig.maxConcurrency
-  ) {
+  while (requestQueue.length > 0 && activeRequests.size < currentConfig.maxConcurrency) {
     const next = requestQueue.shift();
     if (next === undefined) break;
     if (staleIds.has(next.id)) continue;
 
     activeRequests.add(next.id);
-    void next
-      .handler()
-      .finally(() => {
-        activeRequests.delete(next.id);
-        processQueue();
-      });
+    void next.handler().finally(() => {
+      activeRequests.delete(next.id);
+      processQueue();
+    });
   }
 }
 

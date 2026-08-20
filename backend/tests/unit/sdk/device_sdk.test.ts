@@ -18,7 +18,11 @@ describe('DeviceSdk', () => {
       return response(200, { success: true, deviceId: 'meter-1', recordsWritten: 1 });
     };
 
-    const result = await new DeviceSdk({ baseUrl: 'https://billing.test/', signer, fetch }).submitTelemetry({
+    const result = await new DeviceSdk({
+      baseUrl: 'https://billing.test/',
+      signer,
+      fetch,
+    }).submitTelemetry({
       deviceId: 'meter-1',
       timestamp: 1_700_000_000_000,
       nonce: 'nonce-1',
@@ -47,10 +51,17 @@ describe('DeviceSdk', () => {
     const fetch = vi
       .fn<FetchLike>()
       .mockResolvedValueOnce(response(503, { success: false }))
-      .mockResolvedValueOnce(response(401, { success: false, errorCode: 'ERR_SIGNATURE_MISMATCH' }));
+      .mockResolvedValueOnce(
+        response(401, { success: false, errorCode: 'ERR_SIGNATURE_MISMATCH' }),
+      );
     const sdk = new DeviceSdk({ baseUrl: 'https://billing.test', signer, fetch, maxRetries: 1 });
 
-    const result = await sdk.attest({ deviceId: 'meter-1', certSerial: 'cert-1', timestamp: 1, nonce: 'n' });
+    const result = await sdk.attest({
+      deviceId: 'meter-1',
+      certSerial: 'cert-1',
+      timestamp: 1,
+      nonce: 'n',
+    });
 
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(result.errorCode).toBe('ERR_SIGNATURE_MISMATCH');

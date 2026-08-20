@@ -18,7 +18,13 @@ describe('attestation routes', () => {
     registerAttestationRoutes(app);
 
     const service = getAttestationService();
-    const registry = (service as unknown as { certRegistry: { add: (cert: { serial: string; model: string; batch: string; revoked: boolean }) => void } }).certRegistry;
+    const registry = (
+      service as unknown as {
+        certRegistry: {
+          add: (cert: { serial: string; model: string; batch: string; revoked: boolean }) => void;
+        };
+      }
+    ).certRegistry;
     registry.add({ serial: 'CERT-TEST-1', model: 'MTR-1', batch: 'BATCH-1', revoked: false });
 
     const keyPair = nacl.sign.keyPair();
@@ -33,7 +39,9 @@ describe('attestation routes', () => {
       timestamp,
       certSerial,
     });
-    const signature = Buffer.from(nacl.sign.detached(Buffer.from(message), keyPair.secretKey)).toString('hex');
+    const signature = Buffer.from(
+      nacl.sign.detached(Buffer.from(message), keyPair.secretKey),
+    ).toString('hex');
 
     const response = await app.inject({
       method: 'POST',

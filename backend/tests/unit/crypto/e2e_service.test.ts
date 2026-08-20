@@ -111,7 +111,12 @@ describe('E2eEncryptionService', () => {
         bad: { v: 'e2e:v1', d: 'AAAA' },
       };
 
-      const result = svc.decryptTelemetryMetrics(corrupted as Record<string, import('../../../src/core/crypto/e2e_encryption.js').EncryptedField>);
+      const result = svc.decryptTelemetryMetrics(
+        corrupted as Record<
+          string,
+          import('../../../src/core/crypto/e2e_encryption.js').EncryptedField
+        >,
+      );
       expect(result.count).toBe(1);
       expect(result.metrics['good']).toBe('123');
       expect(Object.keys(result.failures)).toContain('bad');

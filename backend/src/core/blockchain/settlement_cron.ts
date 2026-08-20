@@ -229,9 +229,14 @@ export class SettlementCron {
     }
 
     try {
-      await getAuditLogger(this.prisma).logTransaction('BillingCycle', cycleId, 'SETTLE', { txHash, usageAmount: totalUsage.toString() });
+      await getAuditLogger(this.prisma).logTransaction('BillingCycle', cycleId, 'SETTLE', {
+        txHash,
+        usageAmount: totalUsage.toString(),
+      });
     } catch (err) {
-      this.onError(new Error(`Failed to write audit log for settlement of cycle ${cycleId}: ${String(err)}`));
+      this.onError(
+        new Error(`Failed to write audit log for settlement of cycle ${cycleId}: ${String(err)}`),
+      );
     }
 
     this.settledCount++;

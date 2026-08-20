@@ -194,8 +194,7 @@ export function computeTrend(points: UsagePoint[]): TrendResult {
  */
 export function projectCapacity(trend: TrendResult, horizonDays: number): CapacityProjection {
   const projectedUsage = trend.avgUsage + trend.slopePerDay * horizonDays;
-  const growthRate =
-    trend.avgUsage === 0 ? 0 : (projectedUsage - trend.avgUsage) / trend.avgUsage;
+  const growthRate = trend.avgUsage === 0 ? 0 : (projectedUsage - trend.avgUsage) / trend.avgUsage;
   return { horizonDays, projectedUsage, growthRate };
 }
 
@@ -349,8 +348,7 @@ export function registerCapacityPlanningRoutes(app: FastifyInstance): void {
         const trend = computeTrend(rows);
         const projection = projectCapacity(trend, horizonDays);
 
-        const lastDataPoint =
-          rows.length > 0 ? (rows[rows.length - 1]!.bucket.toISOString()) : null;
+        const lastDataPoint = rows.length > 0 ? rows[rows.length - 1]!.bucket.toISOString() : null;
 
         // Update Prometheus gauges (tenant + device labels kept off to cap cardinality)
         const dimensionLabel = deviceId ?? accountId ?? 'unknown';

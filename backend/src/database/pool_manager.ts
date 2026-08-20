@@ -75,7 +75,7 @@ export class ElasticPoolManager {
     const oldPool = this.pools.get(name);
     const newPool = this.createPool(name, config);
     if (oldPool) {
-      oldPool.end().catch(err => console.error(`Error draining old pool "${name}":`, err));
+      oldPool.end().catch((err) => console.error(`Error draining old pool "${name}":`, err));
     }
     return newPool;
   }
@@ -372,7 +372,7 @@ function getPoolManager(): ElasticPoolManager {
   try {
     const sm = getSecretManager();
     dbUrl = sm.getSecrets().TIMESCALEDB_URL || env.TIMESCALEDB_URL;
-    
+
     // Subscribe to rotation events to gracefully roll the connection pool
     sm.on('rotated', () => {
       console.log('Database credentials rotated. Rebuilding connection pool...');

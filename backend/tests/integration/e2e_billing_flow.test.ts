@@ -77,7 +77,10 @@ describe('E2E: Billing Cycle Lifecycle', () => {
 
   describe('Invalid State Transitions', () => {
     it('should throw InvalidStateTransitionError for illegal transitions', () => {
-      const err = new InvalidStateTransitionError(BillingCycleState.OPEN, BillingCycleState.SETTLED);
+      const err = new InvalidStateTransitionError(
+        BillingCycleState.OPEN,
+        BillingCycleState.SETTLED,
+      );
       expect(err).toBeInstanceOf(Error);
       expect(err.from).toBe(BillingCycleState.OPEN);
       expect(err.to).toBe(BillingCycleState.SETTLED);

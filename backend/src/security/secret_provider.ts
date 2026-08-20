@@ -25,7 +25,7 @@ export class VerifiedRemoteProvider implements SecretProvider {
   async fetchSecrets(): Promise<SecretPayload> {
     // In a real implementation, this would make an HTTPS call to a KMS or Vault.
     // For this demonstration, we mock the network fetch and cryptographic verification.
-    
+
     // Simulate network delay
     await new Promise((resolve) => setTimeout(resolve, 50));
 
@@ -53,12 +53,15 @@ export class VerifiedRemoteProvider implements SecretProvider {
       verify.end();
       // Only verifying if signature matches what we expect from mock, or throwing in real system
       try {
-        const isValid = verify.verify(this.publicKey, Buffer.from(remoteResponse.signature, 'base64'));
+        const isValid = verify.verify(
+          this.publicKey,
+          Buffer.from(remoteResponse.signature, 'base64'),
+        );
         if (!isValid) {
           throw new Error('Cryptographic verification of secrets failed');
         }
       } catch (e) {
-         // for mock, we might ignore this or let it throw if testing proper verification
+        // for mock, we might ignore this or let it throw if testing proper verification
       }
     }
 

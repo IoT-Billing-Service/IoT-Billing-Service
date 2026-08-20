@@ -41,12 +41,7 @@ describe('PagerDutyClient', () => {
       });
 
       const client = createClient();
-      const result = await client.trigger(
-        'Test incident',
-        'critical',
-        'dedup-123',
-        { test: true },
-      );
+      const result = await client.trigger('Test incident', 'critical', 'dedup-123', { test: true });
 
       expect(result.status).toBe('success');
       expect(result.dedup_key).toBe('test-dedup-key');
@@ -57,12 +52,13 @@ describe('PagerDutyClient', () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 400,
-        json: () => Promise.resolve({
-          status: 'failure',
-          dedup_key: 'dedup-123',
-          message: 'Invalid routing key',
-          errors: ['routing_key is invalid'],
-        }),
+        json: () =>
+          Promise.resolve({
+            status: 'failure',
+            dedup_key: 'dedup-123',
+            message: 'Invalid routing key',
+            errors: ['routing_key is invalid'],
+          }),
       });
 
       const client = createClient();
@@ -84,7 +80,8 @@ describe('PagerDutyClient', () => {
         .mockResolvedValueOnce({
           ok: false,
           status: 500,
-          json: () => Promise.resolve({ status: 'failure', dedup_key: 'dedup-123', message: 'Server error' }),
+          json: () =>
+            Promise.resolve({ status: 'failure', dedup_key: 'dedup-123', message: 'Server error' }),
         })
         .mockResolvedValueOnce({
           ok: true,
@@ -117,11 +114,12 @@ describe('PagerDutyClient', () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 202,
-        json: () => Promise.resolve({
-          status: 'success',
-          dedup_key: 'dedup-123',
-          message: 'Event acknowledged',
-        }),
+        json: () =>
+          Promise.resolve({
+            status: 'success',
+            dedup_key: 'dedup-123',
+            message: 'Event acknowledged',
+          }),
       });
 
       const client = createClient();
@@ -136,11 +134,12 @@ describe('PagerDutyClient', () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 202,
-        json: () => Promise.resolve({
-          status: 'success',
-          dedup_key: 'dedup-123',
-          message: 'Event resolved',
-        }),
+        json: () =>
+          Promise.resolve({
+            status: 'success',
+            dedup_key: 'dedup-123',
+            message: 'Event resolved',
+          }),
       });
 
       const client = createClient();

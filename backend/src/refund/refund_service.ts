@@ -47,8 +47,7 @@ export const REFUND_ERROR_CODES = {
   INTERNAL_ERROR: 'ERR_INTERNAL',
 } as const;
 
-export type RefundErrorCode =
-  (typeof REFUND_ERROR_CODES)[keyof typeof REFUND_ERROR_CODES];
+export type RefundErrorCode = (typeof REFUND_ERROR_CODES)[keyof typeof REFUND_ERROR_CODES];
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -144,13 +143,9 @@ export class RefundService {
       }
 
       // Check for existing refund on this billing record.
-      const existingRefunds = await this.store.findByBillingRecordId(
-        request.billingRecordId,
-      );
+      const existingRefunds = await this.store.findByBillingRecordId(request.billingRecordId);
       const activeRefund = existingRefunds.find(
-        (r) =>
-          r.state !== RefundState.COMPLETED &&
-          r.state !== RefundState.FAILED,
+        (r) => r.state !== RefundState.COMPLETED && r.state !== RefundState.FAILED,
       );
       if (activeRefund !== undefined) {
         return {
@@ -219,10 +214,7 @@ export class RefundService {
       }
 
       // Only process refunds in REQUESTED or RETRYING state.
-      if (
-        refund.state !== RefundState.REQUESTED &&
-        refund.state !== RefundState.RETRYING
-      ) {
+      if (refund.state !== RefundState.REQUESTED && refund.state !== RefundState.RETRYING) {
         return {
           success: false,
           refund,

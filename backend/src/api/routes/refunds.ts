@@ -232,10 +232,7 @@ export function registerRefundRoutes(app: FastifyInstance): void {
         },
       },
     },
-    async (
-      request: FastifyRequest<{ Params: AccountRefundsParams }>,
-      reply: FastifyReply,
-    ) => {
+    async (request: FastifyRequest<{ Params: AccountRefundsParams }>, reply: FastifyReply) => {
       const { accountId } = request.params;
 
       const svc = getRefundService();

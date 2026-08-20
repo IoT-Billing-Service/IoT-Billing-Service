@@ -54,10 +54,7 @@ import {
   type AttestationRequest,
   type AttestationServiceOptions,
 } from '../../core/crypto/attestation.js';
-import {
-  recordAttestationSuccess,
-  recordAttestationFailure,
-} from '../metrics/prometheus.js';
+import { recordAttestationSuccess, recordAttestationFailure } from '../metrics/prometheus.js';
 
 // ── HTTP status mapping ────────────────────────────────────────────────────────
 
@@ -199,10 +196,7 @@ export function registerAttestationRoutes(app: FastifyInstance): void {
         },
       },
     },
-    async (
-      req: FastifyRequest<{ Params: { deviceId: string } }>,
-      reply: FastifyReply,
-    ) => {
+    async (req: FastifyRequest<{ Params: { deviceId: string } }>, reply: FastifyReply) => {
       const { deviceId } = req.params;
       if (!deviceId || deviceId.trim() === '') {
         return reply.status(400).send({ error: 'deviceId is required' });
@@ -211,9 +205,8 @@ export function registerAttestationRoutes(app: FastifyInstance): void {
       // Access the underlying store via the service's store accessor.
       // We query Prisma directly when available for a proper sorted query.
       // For in-memory, scan the records array.
-      const prismaClient: PrismaClient | undefined = (
-        app as unknown as { prisma?: PrismaClient }
-      ).prisma;
+      const prismaClient: PrismaClient | undefined = (app as unknown as { prisma?: PrismaClient })
+        .prisma;
 
       if (prismaClient !== undefined) {
         const record = await prismaClient.attestationRecord.findFirst({
@@ -230,7 +223,9 @@ export function registerAttestationRoutes(app: FastifyInstance): void {
         });
 
         if (record === null) {
-          return reply.status(404).send({ error: `No attestation record found for device: ${deviceId}` });
+          return reply
+            .status(404)
+            .send({ error: `No attestation record found for device: ${deviceId}` });
         }
 
         return reply.status(200).send({

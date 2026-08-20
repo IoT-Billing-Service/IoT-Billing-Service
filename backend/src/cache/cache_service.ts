@@ -200,12 +200,7 @@ export class CacheService<T = unknown> {
    * @param ttlMs      — L1 TTL in milliseconds
    * @param redisTtlS  — L2 TTL in seconds
    */
-  async set(
-    key: string,
-    value: T,
-    ttlMs?: number,
-    redisTtlS?: number,
-  ): Promise<void> {
+  async set(key: string, value: T, ttlMs?: number, redisTtlS?: number): Promise<void> {
     const effectiveTtlMs = ttlMs ?? this.l1DefaultTtlMs;
     const effectiveRedisTtlS = redisTtlS ?? this.redisDefaultTtlS;
     const redisKey = this.redisKeyPrefix + key;

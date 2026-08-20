@@ -22,17 +22,15 @@ interface MockPool {
 function createMockRedis(): MockRedis {
   const storage = new Map<string, { value: string; ttl?: number }>();
   return {
-    set: vi.fn().mockImplementation(
-      (key: string, value: string, ...args: string[]) => {
-        const pxIdx = args.indexOf('PX');
-        const ttl = pxIdx >= 0 ? Number(args[pxIdx + 1]) : undefined;
-        if (args.includes('NX') && storage.has(key)) {
-          return Promise.resolve(null);
-        }
-        storage.set(key, { value, ttl });
-        return Promise.resolve('OK');
-      },
-    ),
+    set: vi.fn().mockImplementation((key: string, value: string, ...args: string[]) => {
+      const pxIdx = args.indexOf('PX');
+      const ttl = pxIdx >= 0 ? Number(args[pxIdx + 1]) : undefined;
+      if (args.includes('NX') && storage.has(key)) {
+        return Promise.resolve(null);
+      }
+      storage.set(key, { value, ttl });
+      return Promise.resolve('OK');
+    }),
     del: vi.fn().mockImplementation((_key: string) => {
       storage.delete(_key);
       return Promise.resolve(1);
@@ -60,16 +58,23 @@ describe('DistributedScheduler', () => {
     vi.restoreAllMocks();
     mockRedis = createMockRedis();
     mockPool = createMockPool();
-    scheduler = new DistributedScheduler(mockRedis as unknown as Redis, mockPool as unknown as pg.Pool, {
-      pollIntervalMs: 100,
-      leaseMs: 500,
-      concurrency: 2,
-    });
+    scheduler = new DistributedScheduler(
+      mockRedis as unknown as Redis,
+      mockPool as unknown as pg.Pool,
+      {
+        pollIntervalMs: 100,
+        leaseMs: 500,
+        concurrency: 2,
+      },
+    );
   });
 
   describe('constructor', () => {
     it('should create a scheduler with default options', () => {
-      const s = new DistributedScheduler(mockRedis as unknown as Redis, mockPool as unknown as pg.Pool);
+      const s = new DistributedScheduler(
+        mockRedis as unknown as Redis,
+        mockPool as unknown as pg.Pool,
+      );
       expect(s).toBeDefined();
     });
   });
@@ -97,7 +102,11 @@ describe('DistributedScheduler', () => {
 
     it('should accept priority and maxRetries options', async () => {
       mockPool.query.mockResolvedValue({ rows: [] });
-      const id = await scheduler.enqueue('test-type', { key: 'value' }, { priority: 5, maxRetries: 10 });
+      const id = await scheduler.enqueue(
+        'test-type',
+        { key: 'value' },
+        { priority: 5, maxRetries: 10 },
+      );
       expect(id).toBeDefined();
     });
   });
@@ -216,7 +225,8 @@ describe('DistributedScheduler', () => {
       await internal.executeJob(job as Job);
 
       const retryUpdate = mockPool.query.mock.calls.find(
-        ([sql]: [string]) => typeof sql === 'string' && sql.includes("status = 'PENDING'") && sql.includes('retries'),
+        ([sql]: [string]) =>
+          typeof sql === 'string' && sql.includes("status = 'PENDING'") && sql.includes('retries'),
       );
       expect(retryUpdate).toBeDefined();
       expect(retryUpdate?.[1]).toEqual([1, 'boom', 'job-1']);

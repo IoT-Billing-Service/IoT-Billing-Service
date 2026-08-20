@@ -209,11 +209,7 @@ export class WebhookService {
    * @param secret     — optional HMAC secret (auto-generated if omitted)
    * @returns the created subscription
    */
-  register(
-    url: string,
-    eventTypes: WebhookEventType[],
-    secret?: string,
-  ): WebhookSubscription {
+  register(url: string, eventTypes: WebhookEventType[], secret?: string): WebhookSubscription {
     const id = this.generateId('whsub');
     const sub: WebhookSubscription = {
       id,
@@ -328,7 +324,10 @@ export class WebhookService {
         return { valid: false, reason: `Timestamp is from the future (${String(-age)}ms)` };
       }
       if (age > maxAgeMs) {
-        return { valid: false, reason: `Timestamp too old (${String(age)}ms > ${String(maxAgeMs)}ms)` };
+        return {
+          valid: false,
+          reason: `Timestamp too old (${String(age)}ms > ${String(maxAgeMs)}ms)`,
+        };
       }
     }
 
@@ -461,7 +460,7 @@ export class WebhookService {
           await this.dlqManager.push(
             'webhook_delivery',
             { subscriptionId: sub.id, eventType, data },
-            lastError ?? 'Unknown error'
+            lastError ?? 'Unknown error',
           );
         } catch (dlqErr) {
           console.error('Failed to push webhook to DLQ:', dlqErr);

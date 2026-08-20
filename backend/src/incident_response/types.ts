@@ -123,15 +123,15 @@ export interface DetectedIncident {
 
 /** Types of runbook steps. */
 export type StepType =
-  | 'http_request'       // Make an HTTP request
-  | 'database_query'     // Execute a database query
-  | 'blockchain_tx'      // Submit a blockchain transaction
-  | 'notification'       // Send a notification (Slack, email, etc.)
-  | 'script'             // Execute a script or command
-  | 'sleep'              // Wait for a duration
-  | 'conditional'        // Conditional branching
-  | 'parallel'           // Execute steps in parallel
-  | 'rollback';          // Rollback previous steps
+  | 'http_request' // Make an HTTP request
+  | 'database_query' // Execute a database query
+  | 'blockchain_tx' // Submit a blockchain transaction
+  | 'notification' // Send a notification (Slack, email, etc.)
+  | 'script' // Execute a script or command
+  | 'sleep' // Wait for a duration
+  | 'conditional' // Conditional branching
+  | 'parallel' // Execute steps in parallel
+  | 'rollback'; // Rollback previous steps
 
 /** Base interface for all step configurations. */
 export interface BaseStepConfig {

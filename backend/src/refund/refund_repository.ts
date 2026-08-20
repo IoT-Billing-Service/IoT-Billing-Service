@@ -138,9 +138,7 @@ export class InMemoryRefundStore implements RefundStore {
   async findPendingVerification(maxAge?: number): Promise<RefundRecord[]> {
     const cutoff = maxAge !== undefined ? Date.now() - maxAge : 0;
     return [...this.records.values()].filter(
-      (r) =>
-        r.state === RefundState.ON_CHAIN_SUBMITTED &&
-        r.createdAt.getTime() >= cutoff,
+      (r) => r.state === RefundState.ON_CHAIN_SUBMITTED && r.createdAt.getTime() >= cutoff,
     );
   }
 
@@ -151,9 +149,7 @@ export class InMemoryRefundStore implements RefundStore {
 
   // eslint-disable-next-line @typescript-eslint/require-await -- implements async RefundStore interface
   async findByBillingRecordId(billingRecordId: string): Promise<RefundRecord[]> {
-    return [...this.records.values()].filter(
-      (r) => r.billingRecordId === billingRecordId,
-    );
+    return [...this.records.values()].filter((r) => r.billingRecordId === billingRecordId);
   }
 }
 

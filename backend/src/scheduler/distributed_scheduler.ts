@@ -176,11 +176,7 @@ export class DistributedScheduler {
   private heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>();
   private tableEnsured: Promise<void> | null = null;
 
-  constructor(
-    redis: Redis,
-    pool: pg.Pool,
-    options: DistributedSchedulerOptions = {},
-  ) {
+  constructor(redis: Redis, pool: pg.Pool, options: DistributedSchedulerOptions = {}) {
     this.redis = redis;
     this.pool = pool;
     this.leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS;
@@ -217,17 +213,18 @@ export class DistributedScheduler {
     await this.ensureJobsTable();
     if (this.timer !== null) return;
     this.timer = setInterval(() => {
-      this.poll().catch(() => { /* intentionally fire-and-forget */ });
+      this.poll().catch(() => {
+        /* intentionally fire-and-forget */
+      });
     }, this.pollIntervalMs);
     this.timer.unref();
 
     // Recovery poller runs at double the lease interval.
-    this.recoveryTimer = setInterval(
-      () => {
-        this.recoverAbandonedJobs().catch(() => { /* intentionally fire-and-forget */ });
-      },
-      this.leaseMs * 2,
-    );
+    this.recoveryTimer = setInterval(() => {
+      this.recoverAbandonedJobs().catch(() => {
+        /* intentionally fire-and-forget */
+      });
+    }, this.leaseMs * 2);
     this.recoveryTimer.unref();
   }
 
@@ -253,11 +250,7 @@ export class DistributedScheduler {
   /**
    * Enqueue a new job. Returns the created job's id.
    */
-  async enqueue(
-    type: string,
-    payload: unknown,
-    options: EnqueueOptions = {},
-  ): Promise<string> {
+  async enqueue(type: string, payload: unknown, options: EnqueueOptions = {}): Promise<string> {
     const id = randomBytes(16).toString('hex');
     const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
     const priority = options.priority ?? 0;
@@ -279,9 +272,7 @@ export class DistributedScheduler {
     const res = await this.pool.query<{
       status: JobStatus;
       count: number;
-    }>(
-      `SELECT status, COUNT(*)::int AS count FROM ${JOBS_TABLE} GROUP BY status`,
-    );
+    }>(`SELECT status, COUNT(*)::int AS count FROM ${JOBS_TABLE} GROUP BY status`);
 
     const counts: Partial<Record<JobStatus, number>> = {};
     for (const row of res.rows) {
@@ -363,9 +354,13 @@ export class DistributedScheduler {
         if (job === null) break;
         this.activeJobs++;
         // Fire-and-forget but chain error handling.
-        this.executeJob(job).finally(() => {
-          this.activeJobs = Math.max(0, this.activeJobs - 1);
-        }).catch(() => { /* fire-and-forget with error handled in executeJob */ });
+        this.executeJob(job)
+          .finally(() => {
+            this.activeJobs = Math.max(0, this.activeJobs - 1);
+          })
+          .catch(() => {
+            /* fire-and-forget with error handled in executeJob */
+          });
       }
     } catch (err) {
       this.onError(err);
@@ -395,13 +390,7 @@ export class DistributedScheduler {
 
     for (const row of candidates.rows) {
       const leaseKey = `${LEASE_KEY_PREFIX}${row.id}`;
-      const acquired = await this.redis.set(
-        leaseKey,
-        this.workerId,
-        'PX',
-        this.leaseMs,
-        'NX',
-      );
+      const acquired = await this.redis.set(leaseKey, this.workerId, 'PX', this.leaseMs, 'NX');
       if (acquired !== 'OK') continue;
 
       // We won the lease — flip DB state.
@@ -447,7 +436,7 @@ export class DistributedScheduler {
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      const newRetries = (job.retries) + 1;
+      const newRetries = job.retries + 1;
 
       if (newRetries <= job.maxRetries) {
         // Retryable.

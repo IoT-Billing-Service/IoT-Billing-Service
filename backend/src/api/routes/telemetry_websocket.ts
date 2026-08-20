@@ -41,9 +41,12 @@ export class TelemetryWebSocketHub {
   addClient(socket: WebSocket, deviceId: string, expiresAt: number): () => void {
     const client: Client = {
       socket,
-      expiryTimer: setTimeout(() => {
-        this.sendControl(client, { type: 'token_expiring', expires_in: 0 });
-      }, Math.max(0, (expiresAt - Math.floor(Date.now() / 1000) - TOKEN_HINT_SECONDS) * 1000)),
+      expiryTimer: setTimeout(
+        () => {
+          this.sendControl(client, { type: 'token_expiring', expires_in: 0 });
+        },
+        Math.max(0, (expiresAt - Math.floor(Date.now() / 1000) - TOKEN_HINT_SECONDS) * 1000),
+      ),
       unsubscribe: () => {},
     };
 

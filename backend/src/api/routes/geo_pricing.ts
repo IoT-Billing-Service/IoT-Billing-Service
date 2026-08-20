@@ -45,7 +45,9 @@ function verifyAdminKey(request: FastifyRequest, reply: FastifyReply): boolean {
     return false;
   }
   if (!key || key !== env.ADMIN_SECRET_KEY) {
-    void reply.status(401).send({ error: 'Unauthorized', message: 'Invalid or missing X-Admin-Key' });
+    void reply
+      .status(401)
+      .send({ error: 'Unauthorized', message: 'Invalid or missing X-Admin-Key' });
     return false;
   }
   return true;

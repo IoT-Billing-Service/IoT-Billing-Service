@@ -5,10 +5,10 @@ export const options = {
   stages: [
     { duration: '5s', target: 200 }, // Sudden burst
     { duration: '10s', target: 200 }, // Sustain burst
-    { duration: '5s', target: 0 },   // Cool down
+    { duration: '5s', target: 0 }, // Cool down
   ],
   thresholds: {
-    http_req_duration: ['p(99)<200'], 
+    http_req_duration: ['p(99)<200'],
   },
 };
 

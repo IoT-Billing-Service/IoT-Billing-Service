@@ -1,6 +1,9 @@
 import { EventEmitter } from 'events';
 import type { SecretProvider, SecretPayload } from './secret_provider.js';
-import { recordSecretRotationEvent, setSecretManagerActiveSecrets } from '../api/metrics/prometheus.js';
+import {
+  recordSecretRotationEvent,
+  setSecretManagerActiveSecrets,
+} from '../api/metrics/prometheus.js';
 
 export interface SecretManagerConfig {
   rotationIntervalMs: number;
@@ -10,13 +13,13 @@ export interface SecretManagerConfig {
 export class SecretManager extends EventEmitter {
   private activePayload: SecretPayload | null = null;
   private previousPayload: SecretPayload | null = null;
-  
+
   private rotationTimer: NodeJS.Timeout | null = null;
   private gracePeriodTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private provider: SecretProvider,
-    private config: SecretManagerConfig
+    private config: SecretManagerConfig,
   ) {
     super();
   }
@@ -56,7 +59,7 @@ export class SecretManager extends EventEmitter {
 
   private startRotation(): void {
     if (this.rotationTimer) clearInterval(this.rotationTimer);
-    
+
     this.rotationTimer = setInterval(() => {
       this.rotate().catch((err) => {
         console.error('Background secret rotation failed:', err);
@@ -71,11 +74,11 @@ export class SecretManager extends EventEmitter {
     const startTime = Date.now();
     try {
       const newPayload = await this.provider.fetchSecrets();
-      
+
       // Keep old secrets for the grace period
       this.previousPayload = this.activePayload;
       this.activePayload = newPayload;
-      
+
       if (this.gracePeriodTimer) clearTimeout(this.gracePeriodTimer);
       this.gracePeriodTimer = setTimeout(() => {
         this.previousPayload = null;
@@ -85,26 +88,25 @@ export class SecretManager extends EventEmitter {
       }, this.config.gracePeriodMs);
 
       const durationMs = Date.now() - startTime;
-      
+
       this.logAudit('SecretRotation', 'success', 'Secrets rotated successfully');
       recordSecretRotationEvent('success', durationMs);
       setSecretManagerActiveSecrets(2); // active and previous
-      
+
       this.emit('rotated', {
         version: newPayload.version,
-        durationMs
+        durationMs,
       });
-      
     } catch (error) {
       const durationMs = Date.now() - startTime;
       this.logAudit('SecretRotation', 'failure', String(error));
       recordSecretRotationEvent('failure', durationMs);
-      
+
       this.emit('rotationFailed', {
         error,
-        durationMs
+        durationMs,
       });
-      
+
       throw error;
     }
   }
@@ -120,14 +122,16 @@ export class SecretManager extends EventEmitter {
   private logAudit(event: string, outcome: 'success' | 'failure', detail: string): void {
     // PCI-DSS requires capturing: event type, timestamp, success/failure status
     // It should explicitly NOT log the secrets themselves.
-    console.log(JSON.stringify({
-      level: outcome === 'success' ? 'info' : 'error',
-      event,
-      outcome,
-      detail,
-      timestamp: new Date().toISOString(),
-      activeVersion: this.activePayload?.version ?? null,
-      previousVersion: this.previousPayload?.version ?? null
-    }));
+    console.log(
+      JSON.stringify({
+        level: outcome === 'success' ? 'info' : 'error',
+        event,
+        outcome,
+        detail,
+        timestamp: new Date().toISOString(),
+        activeVersion: this.activePayload?.version ?? null,
+        previousVersion: this.previousPayload?.version ?? null,
+      }),
+    );
   }
 }

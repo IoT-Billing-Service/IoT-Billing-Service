@@ -44,9 +44,7 @@ describe('FeatureFlag definitions', () => {
   });
 
   it('CRITICAL flags use FAIL_CLOSED degradation', () => {
-    const defs = getAllFlagDefinitions().filter(
-      (d) => d.priority === FlagPriority.CRITICAL,
-    );
+    const defs = getAllFlagDefinitions().filter((d) => d.priority === FlagPriority.CRITICAL);
     for (const def of defs) {
       expect(def.degradationBehavior).toBe(DegradationBehavior.FAIL_CLOSED);
     }

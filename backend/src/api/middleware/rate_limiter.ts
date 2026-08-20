@@ -201,7 +201,10 @@ export class TenantRateLimiter {
   }
 }
 
-export function buildTenantRateLimitMiddleware(tenantCache: TenantCache, limiter: TenantRateLimiter) {
+export function buildTenantRateLimitMiddleware(
+  tenantCache: TenantCache,
+  limiter: TenantRateLimiter,
+) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     // Basic extraction from ingestion payload: request.body.payload.deviceId
     const body = request.body as any;

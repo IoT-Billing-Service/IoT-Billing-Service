@@ -44,10 +44,18 @@ export interface BackupMetricCallbacks {
 }
 
 const noopMetrics: BackupMetricCallbacks = {
-  onVerificationSuccess: () => { /* noop */ },
-  onVerificationFailure: () => { /* noop */ },
-  onRestoreTestSuccess: () => { /* noop */ },
-  onRestoreTestFailure: () => { /* noop */ },
+  onVerificationSuccess: () => {
+    /* noop */
+  },
+  onVerificationFailure: () => {
+    /* noop */
+  },
+  onRestoreTestSuccess: () => {
+    /* noop */
+  },
+  onRestoreTestFailure: () => {
+    /* noop */
+  },
 };
 
 export interface BackupVerificationOptions {
@@ -106,7 +114,9 @@ export function computeFileSha256(filePath: string): Promise<string> {
     const hash = createHash('sha256');
     const stream = createReadStream(filePath);
     stream.on('data', (chunk: string | Buffer) => hash.update(chunk));
-    stream.on('end', () => { res(hash.digest('hex')); });
+    stream.on('end', () => {
+      res(hash.digest('hex'));
+    });
     stream.on('error', rej);
   });
 }
@@ -311,9 +321,7 @@ export class BackupVerificationService {
       if (entry !== undefined) {
         const actual = await computeFileSha256(latest.path);
         if (actual !== entry.sha256) {
-          throw new Error(
-            `Checksum mismatch for ${name}: expected ${entry.sha256}, got ${actual}`,
-          );
+          throw new Error(`Checksum mismatch for ${name}: expected ${entry.sha256}, got ${actual}`);
         }
       }
 
@@ -471,7 +479,7 @@ export class BackupVerificationService {
     const { stdout } = await execFileAsync('psql', [
       tempUrl,
       '-tAc',
-      "SELECT COUNT(*) FROM information_schema.tables " +
+      'SELECT COUNT(*) FROM information_schema.tables ' +
         "WHERE table_schema NOT IN ('information_schema','pg_catalog');",
     ]);
     const count = parseInt(stdout.trim(), 10);

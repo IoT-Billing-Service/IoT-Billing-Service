@@ -31,7 +31,7 @@ export class AuditLogger {
     payload: unknown,
   ): Promise<void> {
     const payloadJson = JSON.stringify(payload);
-    
+
     // We do this in a transaction to ensure we get the latest previousHash
     // and insert the new one atomically, but only scoped to this entityId.
     // If Prisma is used outside of this, it guarantees isolation.

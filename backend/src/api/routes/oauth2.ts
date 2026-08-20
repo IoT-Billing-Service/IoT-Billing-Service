@@ -78,7 +78,9 @@ function verifyAdminKey(request: FastifyRequest, reply: FastifyReply): boolean {
   const env = getEnv();
   const key = request.headers['x-admin-key'] as string | undefined;
   if (!env.ADMIN_SECRET_KEY || key !== env.ADMIN_SECRET_KEY) {
-    void reply.status(401).send({ error: 'Unauthorized', message: 'Invalid or missing X-Admin-Key' });
+    void reply
+      .status(401)
+      .send({ error: 'Unauthorized', message: 'Invalid or missing X-Admin-Key' });
     return false;
   }
   return true;
@@ -140,7 +142,9 @@ export function registerOAuth2Routes(app: FastifyInstance): void {
           return reply.status(err.httpStatus).send(err.toJSON());
         }
         request.log.error(err);
-        return reply.status(500).send({ error: 'server_error', error_description: 'Internal error' });
+        return reply
+          .status(500)
+          .send({ error: 'server_error', error_description: 'Internal error' });
       }
     },
   );
@@ -179,10 +183,7 @@ export function registerOAuth2Routes(app: FastifyInstance): void {
         },
       },
     },
-    async (
-      request: FastifyRequest<{ Querystring: AuthorizeQuery }>,
-      reply: FastifyReply,
-    ) => {
+    async (request: FastifyRequest<{ Querystring: AuthorizeQuery }>, reply: FastifyReply) => {
       noStoreHeaders(reply);
 
       const {
@@ -204,7 +205,9 @@ export function registerOAuth2Routes(app: FastifyInstance): void {
 
       const walletAddress = request.session?.wallet;
       if (!walletAddress) {
-        return reply.status(401).send({ error: 'access_denied', error_description: 'Not authenticated' });
+        return reply
+          .status(401)
+          .send({ error: 'access_denied', error_description: 'Not authenticated' });
       }
 
       try {
@@ -237,7 +240,9 @@ export function registerOAuth2Routes(app: FastifyInstance): void {
           }
         }
         request.log.error(err);
-        return reply.status(500).send({ error: 'server_error', error_description: 'Internal error' });
+        return reply
+          .status(500)
+          .send({ error: 'server_error', error_description: 'Internal error' });
       }
     },
   );
@@ -268,8 +273,15 @@ export function registerOAuth2Routes(app: FastifyInstance): void {
     async (request: FastifyRequest<{ Body: TokenBody }>, reply: FastifyReply) => {
       noStoreHeaders(reply);
 
-      const { grant_type, client_id, client_secret, code, redirect_uri, code_verifier, refresh_token } =
-        request.body;
+      const {
+        grant_type,
+        client_id,
+        client_secret,
+        code,
+        redirect_uri,
+        code_verifier,
+        refresh_token,
+      } = request.body;
 
       try {
         if (grant_type === 'authorization_code') {
@@ -329,7 +341,9 @@ export function registerOAuth2Routes(app: FastifyInstance): void {
           return reply.status(err.httpStatus).send(err.toJSON());
         }
         request.log.error(err);
-        return reply.status(500).send({ error: 'server_error', error_description: 'Internal error' });
+        return reply
+          .status(500)
+          .send({ error: 'server_error', error_description: 'Internal error' });
       }
     },
   );
@@ -366,7 +380,9 @@ export function registerOAuth2Routes(app: FastifyInstance): void {
           return reply.status(err.httpStatus).send(err.toJSON());
         }
         request.log.error(err);
-        return reply.status(500).send({ error: 'server_error', error_description: 'Internal error' });
+        return reply
+          .status(500)
+          .send({ error: 'server_error', error_description: 'Internal error' });
       }
     },
   );
@@ -398,7 +414,9 @@ export function registerOAuth2Routes(app: FastifyInstance): void {
         return reply.send(result);
       } catch (err) {
         request.log.error(err);
-        return reply.status(500).send({ error: 'server_error', error_description: 'Internal error' });
+        return reply
+          .status(500)
+          .send({ error: 'server_error', error_description: 'Internal error' });
       }
     },
   );

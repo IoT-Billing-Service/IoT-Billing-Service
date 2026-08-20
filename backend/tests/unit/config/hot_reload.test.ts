@@ -37,7 +37,10 @@ import * as prometheus from '../../../src/api/metrics/prometheus.js';
 // ---------------------------------------------------------------------------
 
 /** Minimal valid MetricRangesConfig as a plain object (for JSON serialisation). */
-function makeConfig(versionId: string, extraTiers: Record<string, { min: number; max: number | null }> = {}): object {
+function makeConfig(
+  versionId: string,
+  extraTiers: Record<string, { min: number; max: number | null }> = {},
+): object {
   return {
     version_id: versionId,
     tiers: {
@@ -89,10 +92,7 @@ describe('initializeConfigWatcher – bootstrap', () => {
 
     await initializeConfigWatcher(redis as never, 50);
 
-    expect(redis.set).toHaveBeenCalledWith(
-      'config:active',
-      expect.stringContaining('"TIER_1"'),
-    );
+    expect(redis.set).toHaveBeenCalledWith('config:active', expect.stringContaining('"TIER_1"'));
   });
 
   it('loads config from Redis when config:active already exists', async () => {

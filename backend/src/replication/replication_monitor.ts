@@ -132,7 +132,9 @@ export class ReplicationMonitor {
     this.secondaryRegions =
       opts.secondaryRegions ??
       (env.SECONDARY_REGIONS.trim().length > 0
-        ? env.SECONDARY_REGIONS.split(',').map((r) => r.trim()).filter(Boolean)
+        ? env.SECONDARY_REGIONS.split(',')
+            .map((r) => r.trim())
+            .filter(Boolean)
         : []);
     this.pollIntervalMs = opts.pollIntervalMs ?? env.REPLICATION_POLL_INTERVAL_MS;
     this.lagWarnMs = opts.lagWarnMs ?? env.REPLICATION_LAG_WARN_MS;
@@ -203,8 +205,7 @@ export class ReplicationMonitor {
     // Probe each configured replica. In a single-replica setup, SECONDARY_REGIONS
     // typically has one entry that matches the host behind REPLICA_DATABASE_URL /
     // REPLICA_REDIS_URL.
-    const targets =
-      this.secondaryRegions.length > 0 ? this.secondaryRegions : ['replica'];
+    const targets = this.secondaryRegions.length > 0 ? this.secondaryRegions : ['replica'];
 
     for (const targetRegion of targets) {
       const health = await this._probeReplica(targetRegion, replicaDbUrl, replicaRedisUrl);

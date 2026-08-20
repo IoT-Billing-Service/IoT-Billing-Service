@@ -196,10 +196,7 @@ export class MigrationManager {
       await client.query('BEGIN');
       const sql = await readFile(downFile.path, 'utf8');
       await client.query(sql);
-      await client.query(
-        `DELETE FROM ${MIGRATIONS_TABLE} WHERE version = $1`,
-        [highest.version],
-      );
+      await client.query(`DELETE FROM ${MIGRATIONS_TABLE} WHERE version = $1`, [highest.version]);
       await client.query('COMMIT');
 
       return {
@@ -306,10 +303,7 @@ export class MigrationManager {
     return files.sort((a, b) => a.version - b.version);
   }
 
-  private async findDownFile(
-    version: number,
-    name: string,
-  ): Promise<MigrationFile | null> {
+  private async findDownFile(version: number, name: string): Promise<MigrationFile | null> {
     const padded = String(version).padStart(3, '0');
     const downName = `${padded}_${name}.down.sql`;
     const downPath = join(this.migrationsDir, downName);

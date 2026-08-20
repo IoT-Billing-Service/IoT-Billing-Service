@@ -17,16 +17,16 @@
 // ---------------------------------------------------------------------------
 
 export type FaultType =
-  | 'network_latency'        // inject artificial RTT on a dependency call
-  | 'network_partition'      // block all traffic to a dependency for N ms
-  | 'db_connection_exhaust'  // hold all pool connections so callers queue
-  | 'db_slow_query'          // delay every query response by N ms
-  | 'redis_latency'          // inject latency into every Redis command
-  | 'redis_unavailable'      // make every Redis call throw ECONNREFUSED
-  | 'process_cpu_spike'      // busy-loop to saturate one CPU for N ms
-  | 'billing_compute_delay'  // delay the computeFinalization callback
-  | 'billing_state_flip'     // force an unexpected state on a cycle row
-  | 'payload_corruption';    // corrupt a fraction of inbound telemetry bytes
+  | 'network_latency' // inject artificial RTT on a dependency call
+  | 'network_partition' // block all traffic to a dependency for N ms
+  | 'db_connection_exhaust' // hold all pool connections so callers queue
+  | 'db_slow_query' // delay every query response by N ms
+  | 'redis_latency' // inject latency into every Redis command
+  | 'redis_unavailable' // make every Redis call throw ECONNREFUSED
+  | 'process_cpu_spike' // busy-loop to saturate one CPU for N ms
+  | 'billing_compute_delay' // delay the computeFinalization callback
+  | 'billing_state_flip' // force an unexpected state on a cycle row
+  | 'payload_corruption'; // corrupt a fraction of inbound telemetry bytes
 
 export type ExperimentPhase = 'baseline' | 'fault_injection' | 'recovery';
 

@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PoolHealthProbe } from '../../../src/database/pool_health_probe.js';
-import type { PoolHealthProbeConfig, PoolHealthSnapshot } from '../../../src/database/pool_health_probe.js';
+import type {
+  PoolHealthProbeConfig,
+  PoolHealthSnapshot,
+} from '../../../src/database/pool_health_probe.js';
 
 function createMockManager() {
   const pools = new Map<string, any>();
@@ -15,7 +18,9 @@ function createMockManager() {
   };
 }
 
-function createMockPool(overrides?: Partial<{ totalCount: number; idleCount: number; waitingCount: number }>) {
+function createMockPool(
+  overrides?: Partial<{ totalCount: number; idleCount: number; waitingCount: number }>,
+) {
   return {
     totalCount: overrides?.totalCount ?? 20,
     idleCount: overrides?.idleCount ?? 15,

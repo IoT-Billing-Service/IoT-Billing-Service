@@ -142,9 +142,7 @@ export class E2eEncryptionService {
    * @param encrypted — map of metric names to encrypted values
    * @returns the decrypted metric values as strings
    */
-  decryptTelemetryMetrics(
-    encrypted: Record<string, EncryptedField>,
-  ): DecryptTelemetryResult {
+  decryptTelemetryMetrics(encrypted: Record<string, EncryptedField>): DecryptTelemetryResult {
     const result = decryptSensitiveFields(encrypted, this.key.raw);
     return {
       metrics: result.decrypted,

@@ -38,13 +38,7 @@ export interface OnChainVerificationResult {
   /** Unix timestamp of the ledger close (if confirmed). */
   ledgerCloseTime?: number;
   /** Human-readable verification outcome. */
-  outcome:
-    | 'confirmed'
-    | 'pending'
-    | 'rejected'
-    | 'not_found'
-    | 'simulated'
-    | 'error';
+  outcome: 'confirmed' | 'pending' | 'rejected' | 'not_found' | 'simulated' | 'error';
   /** Error or rejection details (if any). */
   detail?: string;
 }
@@ -156,9 +150,7 @@ export class OnChainVerifier {
    * Uses the `getTransaction` JSON-RPC method. Returns null if the
    * transaction has not yet been found in a ledger.
    */
-  private async fetchTransactionStatus(
-    txHash: string,
-  ): Promise<OnChainVerificationResult | null> {
+  private async fetchTransactionStatus(txHash: string): Promise<OnChainVerificationResult | null> {
     const url = this.sorobanRpcUrl;
     if (url === undefined || url === '') return null;
 

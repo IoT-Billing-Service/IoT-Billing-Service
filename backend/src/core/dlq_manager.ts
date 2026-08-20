@@ -88,7 +88,7 @@ export class DlqManager {
 
     try {
       await handler(msg.payload);
-      
+
       // On success, mark as resolved
       await this.prisma.deadLetterMessage.update({
         where: { id: dlqId },
@@ -98,7 +98,7 @@ export class DlqManager {
       return { success: true };
     } catch (err) {
       const errorStr = err instanceof Error ? err.message : String(err);
-      
+
       // On failure, increment retry count and update error reason
       await this.prisma.deadLetterMessage.update({
         where: { id: dlqId },
