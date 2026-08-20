@@ -9,6 +9,14 @@ import { recordBillingOperationDuration } from '../api/metrics/prometheus.js';
 import { applyGeoMultiplier, pricingTableDigest } from './geo_pricing.js';
 import { assertBillingConfigurationTrusted } from '../config/index.js';
 
+export interface BillingLifecycleEvent {
+  event: 'billing.cycle.finalized';
+  cycleId: string;
+  idempotencyKey: string;
+  occurredAt: string;
+  geo: NonNullable<FinalizationResult['geo']>;
+}
+
 /**
  * Concurrency-safe billing-cycle finalization (issue #42).
  *
@@ -76,6 +84,12 @@ export interface FinalizeOptions {
    * Absent or unknown codes fall back to the ROW (1.0×) tier.
    */
   countryCode?: string | null;
+  /**
+   * Non-blocking lifecycle notification. The callback is invoked only after
+   * finalization is durably transitioned to FINALIZED. Delivery failures must
+   * be handled by the publisher's durable retry mechanism.
+   */
+  publishLifecycleEvent?: (event: BillingLifecycleEvent) => Promise<void> | void;
 }
 
 /**
@@ -151,14 +165,25 @@ export async function finalizeBillingCycle(
     cycle.lockVersion + 1,
   );
 
-  if (options.auditLogger !== undefined) {
-    await options.auditLogger.logTransaction('BillingCycle', cycleId, 'FINALIZE', {
+  const finalizationResult = result(
+    cycleId,
+    'finalized',
+    BillingCycleState.FINALIZED,
+    idempotencyKey,
+    geo,
+  );
+  if (options.publishLifecycleEvent !== undefined) {
+    const event: BillingLifecycleEvent = {
+      event: 'billing.cycle.finalized',
+      cycleId,
       idempotencyKey,
+      occurredAt: new Date().toISOString(),
       geo,
-    });
+    };
+    void Promise.resolve(options.publishLifecycleEvent(event)).catch(() => undefined);
   }
 
-  return result(cycleId, 'finalized', BillingCycleState.FINALIZED, idempotencyKey, geo);
+  return finalizationResult;
 }
 
 function result(
