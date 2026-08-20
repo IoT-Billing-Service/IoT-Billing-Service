@@ -100,6 +100,25 @@ groups:
           summary: "Dynamic congestion pricing P99 latency exceeds 200ms target"
           description: "Congestion pricing evaluation P99 latency is {{ $value }}s, exceeding 200ms bound."
 
+      - alert: PaymentChannelOperationLatencyP99Exceeded
+        expr: histogram_quantile(0.99, sum(rate(iot_billing_payment_channel_operation_duration_seconds_bucket[5m])) by (le)) > 0.2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Payment channel operation P99 latency exceeds 200ms target"
+          description: "Payment channel evaluation P99 latency is {{ $value }}s, exceeding 200ms bound."
+
+      - alert: PaymentChannelDisputeSurge
+        expr: increase(iot_billing_payment_channel_disputes_total[15m]) > 10
+        for: 0s
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of payment channel dispute challenges detected"
+          description: "{{ $value }} payment channel disputes initiated in the last 15 minutes."
+
+
 
   - name: iot_billing_consumer_lag
     rules:
