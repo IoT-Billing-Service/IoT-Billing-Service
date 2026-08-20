@@ -1,0 +1,43 @@
+import { prisma } from '../db';
+// import { queue } from '../lib/redis'; // Za mu yi shi da gaske daga baya
+
+export async function queueBulkInvoice(jobId: string) {
+  // Na yanzu: za mu gudu kai tsaye. Daga baya za mu saka Redis
+  await processBulkInvoiceJob(jobId);
+}
+
+export async function processBulkInvoiceJob(jobId: string) {
+  try {
+    await prisma.bulkJob.update({ where: { id: jobId }, data: { status: 'running' } });
+
+    const job = await prisma.bulkJob.findUnique({ 
+      where: { id: jobId }, 
+      include: { group: { include: { members: true } } } 
+    });
+    if (!job) throw new Error('Job not found');
+
+    // Logic: ga kowane device a group, ƙirƙiri BillingRecord
+    for (const member of job.group.members) {
+      // TODO: Lissafin usage daga TelemetryData anan
+      await prisma.billingRecord.create({
+        data: {
+          deviceId: member.deviceId,
+          accountId: job.group.ownerId, // Za mu gyara wannan daga baya
+          usageAmount: BigInt(100), // na gwaji ne
+          status: 'pending'
+        }
+      });
+    }
+
+    await prisma.bulkJob.update({ 
+      where: { id: jobId }, 
+      data: { status: 'done', completedAt: new Date(), result: { count: job.group.members.length } 
+    });
+
+  } catch (e) {
+    await prisma.bulkJob.update({ 
+      where: { id: jobId }, 
+      data: { status: 'failed', result: { error: String(e) } 
+    });
+  }
+}
