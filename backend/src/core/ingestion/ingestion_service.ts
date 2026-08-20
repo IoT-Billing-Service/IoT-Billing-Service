@@ -226,7 +226,7 @@ export class IngestionService {
       // tampered with), we decrypt any sensitive fields that were encrypted
       // by the device. This happens before ZK verification so the proofs
       // are checked against the decrypted plaintext values.
-      let metrics = request.payload.metrics as Record<string, number>;
+      const metrics = request.payload.metrics as Record<string, number>;
 
       if (this.encryptionKeyRaw !== null && request.payload.encrypted !== undefined) {
         const encryptedFields = request.payload.encrypted;

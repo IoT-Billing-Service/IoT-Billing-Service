@@ -19,7 +19,7 @@ vi.mock('../../../src/core/feature_flags/index.js', async (importOriginal) => {
       disabledFlags: [],
       activePriority: 'low',
     }),
-    FlagPriority: actual.FlagPriority,
+    FlagPriority: (actual as any).FlagPriority,
   };
 });
 

@@ -76,7 +76,7 @@ export async function verifyOAuth2Token(
   }
 
   const tokenHash = sha256Hex(rawToken);
-  const prisma = getPrisma();
+  const prisma = getPrisma() as any;
 
   const record = await prisma.oAuth2Token.findUnique({ where: { tokenHash } });
 

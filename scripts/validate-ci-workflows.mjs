@@ -18,7 +18,7 @@ const [ci, deploy, alerts] = await Promise.all([
 ]);
 
 assert(ci.includes('cancel-in-progress: true'), 'CI must cancel superseded runs.');
-assert(ci.includes('dorny/paths-filter@v3'), 'CI must detect affected components before scheduling work.');
+assert(ci.includes('dorny/paths-filter@v4') || ci.includes('dorny/paths-filter@v3'), 'CI must detect affected components before scheduling work.');
 for (const job of ['backend:', 'frontend:', 'contracts:', 'dependency-audit:']) {
   assert(ci.includes(`  ${job}`), `CI is missing the ${job.slice(0, -1)} parallel lane.`);
 }

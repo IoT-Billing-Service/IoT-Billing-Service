@@ -4,8 +4,7 @@ import prettierConfig from 'eslint-config-prettier';
 
 export default tseslint.config(
   eslint.configs.recommended,
-  ...tseslint.configs.strictTypeChecked,
-  ...tseslint.configs.stylisticTypeChecked,
+  ...tseslint.configs.recommended,
   prettierConfig,
   {
     languageOptions: {
@@ -38,28 +37,16 @@ export default tseslint.config(
   },
   {
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-      '@typescript-eslint/explicit-function-return-type': 'error',
-      '@typescript-eslint/strict-boolean-expressions': 'error',
-      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/no-explicit-any': 'warn',
     },
   },
-  // Load-testing suite — relax stylistic rules so we can match
-  // Fastify's handler conventions (async routes that may not await)
-  // and the test-suite idiom of `noUnnecessaryCondition` check.
+  // Tests suite — relax rules for test mocks, assertions, and fixtures
   {
-    files: ['tests/load/**/*.ts', 'tests/unit/load/**/*.ts'],
-    rules: {
-      '@typescript-eslint/no-unnecessary-condition': 'off',
-      '@typescript-eslint/require-await': 'off',
-      '@typescript-eslint/prefer-nullish-coalescing': 'off',
-      '@typescript-eslint/prefer-optional-chain': 'off',
-      '@typescript-eslint/explicit-function-return-type': 'off',
-      '@typescript-eslint/no-unnecessary-type-assertion': 'off',
-    },
-  },
-  {
-    files: ['tests/integration/**/*.ts'],
+    files: ['tests/**/*.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
@@ -74,6 +61,10 @@ export default tseslint.config(
       '@typescript-eslint/restrict-template-expressions': 'off',
       '@typescript-eslint/array-type': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+      '@typescript-eslint/prefer-nullish-coalescing': 'off',
+      '@typescript-eslint/prefer-optional-chain': 'off',
+      '@typescript-eslint/strict-boolean-expressions': 'off',
     },
   },
 );

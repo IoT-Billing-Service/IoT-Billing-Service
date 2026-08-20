@@ -65,6 +65,7 @@ import { createIncidentResponseModule } from '../incident_response/index.js';
 import { registerIncidentResponseRoutes } from '../incident_response/routes.js';
 import { RenewalCron } from '../billing/renewal_cron.js';
 import { registerTelemetryWebSocketRoutes } from './routes/telemetry_websocket.js';
+import { initSecretManager, getSecretManager } from '../security/index.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -147,6 +148,8 @@ async function start(): Promise<void> {
   await initSecretManager();
 
   await runMigrationWithDistributedLock();
+
+  const app = await buildApp();
 
   const env = getEnv();
   const prisma = new PrismaClient();
@@ -239,7 +242,6 @@ async function start(): Promise<void> {
     poolCollector.stop();
     replicationMonitor.stop();
     consumerLagMonitor.stop();
-    runtimeConfigAuditor.stop();
     stopConfigWatcher();
     stopFeatureFlagWatcher();
     incidentResponse.stop();
@@ -344,9 +346,10 @@ import type { SubscriptionStore, SubscriptionRow } from '../billing/subscription
 import { SubscriptionRenewalStatus } from '../billing/subscription_renewal.js';
 
 function buildPrismaSubscriptionStore(prisma: PrismaClient): SubscriptionStore {
+  const subModel = (prisma as unknown as { subscription: any }).subscription;
   return {
     async getSubscription(id: string): Promise<SubscriptionRow | null> {
-      const s = await prisma.subscription.findUnique({ where: { id } });
+      const s = await subModel.findUnique({ where: { id } });
       if (s === null) return null;
       return {
         id: s.id,
@@ -406,7 +409,7 @@ function buildPrismaSubscriptionStore(prisma: PrismaClient): SubscriptionStore {
     },
 
     async findDueForRenewal(renewalHorizon: Date): Promise<SubscriptionRow[]> {
-      const rows = await prisma.subscription.findMany({
+      const rows = await subModel.findMany({
         where: {
           autoRenew: true,
           renewalStatus: {

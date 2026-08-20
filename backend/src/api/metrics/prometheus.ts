@@ -732,6 +732,21 @@ export function recordRedisPubsubMessagesLost(stream: string, count: number): vo
   }
 }
 
+export const e2eEncryptionOperations: promClient.Counter = new promClient.Counter({
+  name: 'e2e_encryption_operations_total',
+  help: 'Total number of end-to-end encryption operations',
+  labelNames: ['operation', 'result'],
+  registers: [promClient.register],
+});
+
+export const e2eEncryptionDuration: promClient.Histogram = new promClient.Histogram({
+  name: 'e2e_encryption_duration_us',
+  help: 'Duration of end-to-end encryption operations in microseconds',
+  labelNames: ['operation'],
+  buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000],
+  registers: [promClient.register],
+});
+
 export function recordE2eEncryptionOperation(
   operation: 'encrypt' | 'decrypt' | 'batch_encrypt' | 'batch_decrypt',
   result: 'success' | 'failure',

@@ -25,6 +25,7 @@ import {
   computeChannelDigest,
   type PaymentVoucher,
   type PaymentChannelStatus,
+  type PaymentChannelState,
 } from '../../billing/payment_channel.js';
 
 export interface OpenChannelBody {
@@ -91,7 +92,7 @@ export interface SettleBody {
   channelId: string;
 }
 
-function serializeChannel(channel: any) {
+function serializeChannel(channel: PaymentChannelState): Record<string, unknown> {
   return {
     id: channel.id,
     channelId: channel.channelId,
@@ -149,10 +150,11 @@ export function registerPaymentChannelRoutes(app: FastifyInstance, prisma?: Pris
         });
 
         return reply.status(201).send(serializeChannel(channel));
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to open payment channel';
         return reply.status(400).send({
           error: 'Bad Request',
-          message: err.message || 'Failed to open payment channel',
+          message,
         });
       }
     },
@@ -199,10 +201,11 @@ export function registerPaymentChannelRoutes(app: FastifyInstance, prisma?: Pris
           ...voucher,
           cumulativeAmount: voucher.cumulativeAmount.toString(),
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to sign voucher';
         return reply.status(400).send({
           error: 'Bad Request',
-          message: err.message || 'Failed to sign voucher',
+          message,
         });
       }
     },
@@ -293,10 +296,11 @@ export function registerPaymentChannelRoutes(app: FastifyInstance, prisma?: Pris
       try {
         const channel = await service.topUpChannel(body.channelId, additionalDeposit);
         return reply.send(serializeChannel(channel));
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to top up channel';
         return reply.status(400).send({
           error: 'Bad Request',
-          message: err.message || 'Failed to top up channel',
+          message,
         });
       }
     },
@@ -345,10 +349,11 @@ export function registerPaymentChannelRoutes(app: FastifyInstance, prisma?: Pris
           settledAt: result.settledAt,
           digest: result.digest,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to close payment channel';
         return reply.status(400).send({
           error: 'Bad Request',
-          message: err.message || 'Failed to close payment channel',
+          message,
         });
       }
     },
@@ -393,10 +398,11 @@ export function registerPaymentChannelRoutes(app: FastifyInstance, prisma?: Pris
           challengeDeadline: result.challengeDeadline.toISOString(),
           status: result.status,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to initiate dispute';
         return reply.status(400).send({
           error: 'Bad Request',
-          message: err.message || 'Failed to initiate dispute',
+          message,
         });
       }
     },
@@ -428,10 +434,11 @@ export function registerPaymentChannelRoutes(app: FastifyInstance, prisma?: Pris
           settledAt: result.settledAt,
           digest: result.digest,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to settle payment channel';
         return reply.status(400).send({
           error: 'Bad Request',
-          message: err.message || 'Failed to settle payment channel',
+          message,
         });
       }
     },
