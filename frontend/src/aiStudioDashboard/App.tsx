@@ -8,6 +8,7 @@ import EscrowList from './components/EscrowList';
 import NetworkRetryQueue from './components/NetworkRetryQueue';
 import TelemetryFeed from './components/TelemetryFeed';
 import { Code2, Cpu, HelpCircle, RefreshCw, Wifi, Zap } from 'lucide-react';
+import { useTelemetryWebSocket, type TelemetryStreamEvent } from '@/hooks/useTelemetryWebSocket';
 
 const INITIAL_PAYLOADS: TelemetryPayload[] = [
   {
@@ -56,6 +57,33 @@ export default function DashboardSimulatorApp() {
   // Reference to prevent state updates on unmounted component
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const rentTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleLiveTelemetry = useCallback((event: TelemetryStreamEvent) => {
+    const powerUsage = event.metrics.powerUsage ?? event.metrics.power ?? 0;
+    const node = INITIAL_NODES.find((candidate) => candidate.id === event.deviceId);
+    const payload: TelemetryPayload = {
+      id: `LIVE-${event.deviceId}-${event.serverTs}`,
+      nodeId: event.deviceId,
+      nodeName: node?.name ?? event.deviceId,
+      timestamp: new Date(event.serverTs).toLocaleTimeString(),
+      value: powerUsage,
+      unit: 'kW',
+      payloadSizeKB: 0,
+      cost: 0,
+      zkVerified: true,
+      rawHex: 'validated-stream',
+    };
+    setPayloads((previous) => [payload, ...previous].slice(0, 100));
+    setNodes((previous) =>
+      previous.map((candidate) =>
+        candidate.id === event.deviceId
+          ? { ...candidate, lastTelemetryValue: powerUsage }
+          : candidate,
+      ),
+    );
+  }, []);
+
+  const telemetryStream = useTelemetryWebSocket(handleLiveTelemetry);
 
   // 2. Storage Rent Decay Simulation Loop
   // Simulates Soroban's native ledger state storage rent every 12 seconds
@@ -346,6 +374,10 @@ export default function DashboardSimulatorApp() {
             </div>
             <p className="text-xs text-neutral-400 font-mono mt-1">
               Enterprise-Grade Web3 Hardware Telemetry Metering & Soroban Smart Contracts
+            </p>
+            <p className="text-[10px] text-neutral-500 font-mono mt-2">
+              Live telemetry: <span className={telemetryStream.state === 'connected' ? 'text-emerald-400' : 'text-amber-400'}>{telemetryStream.state}</span>
+              {telemetryStream.lastEventAt ? ` · last event ${new Date(telemetryStream.lastEventAt).toLocaleTimeString()}` : ''}
             </p>
           </div>
 
