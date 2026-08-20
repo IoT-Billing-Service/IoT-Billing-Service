@@ -69,6 +69,8 @@ model BillingCycle {
   accountId   String   @map("account_id")
   state       String   @default("OPEN")
   lockVersion Int      @default(1) @map("lock_version")
+  cycleUnit   String   @default("monthly") @map("cycle_unit")
+  customDurationMs BigInt? @map("custom_duration_ms")
   periodStart DateTime @map("period_start")
   periodEnd   DateTime @map("period_end")
   createdAt   DateTime @default(now()) @map("created_at")

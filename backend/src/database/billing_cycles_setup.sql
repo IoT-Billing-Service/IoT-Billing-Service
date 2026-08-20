@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS billing_cycles (
   state         TEXT NOT NULL DEFAULT 'OPEN'
                 CHECK (state IN ('OPEN', 'FINALIZING', 'FINALIZED', 'SETTLED')),
   lock_version  INTEGER NOT NULL DEFAULT 1,
+  cycle_unit    TEXT NOT NULL DEFAULT 'monthly'
+                CHECK (cycle_unit IN ('daily', 'weekly', 'monthly', 'annual', 'custom')),
+  custom_duration_ms BIGINT,
   period_start  TIMESTAMPTZ NOT NULL,
   period_end    TIMESTAMPTZ NOT NULL,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
