@@ -153,7 +153,7 @@ export function buildServiceMeshPreHandler(options: ServiceMeshMiddlewareOptions
         message: result.reason ?? 'mTLS policy evaluation failed',
         code: 'MTLS_POLICY_DENIED',
       });
-      return;
+      return reply;
     }
 
     if (result.expiringSoon) {
