@@ -343,4 +343,4 @@ jobs:
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Compliance targets:** PCI-DSS Requirement 6.3.1, SOC2 CC7.1" >> $GITHUB_STEP_SUMMARY
-          echo "> For full details, see [dependency-vulnerability-scanning.md](./docs/dependency-vulnerability-scanning.md)" >> $GITHUB_STEP_SUMMARY
+          echo "> For full details, see [dependency-vulnerability-scanning.md](./docs/operators/vulnerability-scanning.md)" >> $GITHUB_STEP_SUMMARY

@@ -539,7 +539,7 @@ rm -rf scripts/__pycache__
 - [Stellar Documentation](https://developers.stellar.org/)
 - [Soroban Documentation](https://soroban.stellar.org/)
 - [Stellar Expert Explorer](https://stellar.expert/)
-- [IoT-Billing-Service Docs](../README.md)
+- [IoT-Billing-Service Docs](../../contracts/README.md)
 
 ---
 
