@@ -15,6 +15,7 @@
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Repository Layout](#repository-layout)
+- [Documentation](#documentation)
 - [Prerequisites](#prerequisites)
 - [Getting Started](#getting-started)
   - [Backend](#backend)
@@ -85,6 +86,19 @@ The system is built for high throughput, offline‑first resilience, and transpa
 
 ---
 
+## Documentation
+
+All documentation is consolidated under [`docs/`](./docs) and indexed in [`DOCS.md`](./DOCS.md):
+
+| Audience | Start here |
+|---|---|
+| **Contributors** | [Onboarding & local setup](./docs/contributors/onboarding.md), [pre-commit hooks](./docs/contributors/pre-commit-hooks.md) |
+| **Developers** | [Architecture](./docs/developers/architecture.md), [backend](./docs/developers/backend.md), [frontend](./docs/developers/frontend.md), [smart contracts](./docs/developers/smart-contracts.md), [security](./docs/developers/contract-security.md) |
+| **Operators** | [Deployment](./docs/operators/deployment.md), [incident response](./docs/operators/incident-response.md), [monitoring & config](./docs/operators/monitoring-and-config.md) |
+| **Design archive** | [RFCs](./docs/design/) and [implementation plans](./docs/design/plans/) |
+
+---
+
 ## Prerequisites
 
 | Tool | Version | Purpose |
@@ -105,8 +119,8 @@ The system is built for high throughput, offline‑first resilience, and transpa
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/IoT-Billing-Service/IoT-Billind-Service.git
-cd IoT-Billind-Service
+git clone https://github.com/IoT-Billing-Service/IoT-Billing-Service.git
+cd IoT-Billing-Service
 ```
 
 ### 2. Backend
@@ -196,10 +210,12 @@ render deploy
 ### Docker
 
 ```bash
-docker compose up --build
+docker compose -f docker-compose.dev.yml up --build
 ```
 
-This starts the backend, frontend, PostgreSQL, Redis, and TimescaleDB services as defined in [`docker-compose.yml`](../docker-compose.yml).
+This starts the backend, frontend, PostgreSQL, Redis, and TimescaleDB services as defined in [`docker-compose.dev.yml`](./docker-compose.dev.yml).
+
+> 📄 Full deployment details — one-command Stellar testnet/mainnet contract deployment, key management, funding, and verification — live in [`docs/operators/deployment.md`](./docs/operators/deployment.md).
 
 ---
 
@@ -245,6 +261,8 @@ Billing tier configuration (`MetricRangesConfig`) is validated and hot-reloaded 
 
 The current reload status, version ID, and last validation error are always accessible via `getConfigStatus()`.
 
+> 📄 Operational details — signed configuration artifacts, integrity auditing, drift detection, and webhook delivery operations — live in [`docs/operators/monitoring-and-config.md`](./docs/operators/monitoring-and-config.md).
+
 ---
 
 ## CI / Testing
@@ -272,7 +290,7 @@ CI pipelines run automatically on every push via GitHub Actions (see `.github/wo
 
 Please follow the [Conventional Commits](https://www.conventionalcommits.org) specification and ensure all tests pass before requesting review.
 
-The pre-commit suite blocks common quality and security mistakes such as live `.env` files, private key material, unresolved merge markers, and invalid JSON. See [Pre-Commit Hook Suite](./docs/pre-commit-hooks.md) for setup and manual verification.
+The pre-commit suite blocks common quality and security mistakes such as live `.env` files, private key material, unresolved merge markers, and invalid JSON. See [Pre-Commit Hook Suite](./docs/contributors/pre-commit-hooks.md) for setup and manual verification, and [Developer Onboarding](./docs/contributors/onboarding.md) for automated local environment setup.
 
 ---
 

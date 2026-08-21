@@ -52,7 +52,7 @@ jobs:
               - 'scripts/validate-ci-workflows.mjs'
               - 'scripts/verify-production.mjs'
               - 'tests/ci/**'
-              - 'docs/pre-commit-hooks.md'
+              - 'docs/contributors/pre-commit-hooks.md'
               - 'docs/design/github-actions-optimization.md'
             node-dependencies:
               - 'package.json'

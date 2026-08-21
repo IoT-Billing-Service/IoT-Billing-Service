@@ -528,7 +528,7 @@ Example tools:
 - [Stellar Expert Documentation](https://stellar.expert/help)
 - [Stellar Developer Documentation](https://developers.stellar.org/)
 - [Soroban Documentation](https://soroban.stellar.org/)
-- [IoT-Billing-Service Contract Documentation](../README.md)
+- [IoT-Billing-Service Contract Documentation](../../contracts/README.md)
 
 ---
 

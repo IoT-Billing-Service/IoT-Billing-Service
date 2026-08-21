@@ -1041,7 +1041,7 @@ void setup() {
 - [ATECC608A Datasheet](https://ww1.microchip.com/downloads/en/DeviceDoc/20005926A.pdf)
 - [CryptoAuthLib Documentation](https://microchipcrypto.gitlab.io/avr-crypto-lib/)
 - [Ed25519 Specification](https://ed25519.cr.yp.to/)
-- [IoT-Billing-Service Contract Docs](../README.md)
+- [IoT-Billing-Service Contract Docs](../../contracts/README.md)
 
 ---
 
