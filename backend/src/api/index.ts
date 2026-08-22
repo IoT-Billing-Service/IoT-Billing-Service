@@ -66,6 +66,11 @@ import { registerIncidentResponseRoutes } from '../incident_response/routes.js';
 import { RenewalCron } from '../billing/renewal_cron.js';
 import { registerTelemetryWebSocketRoutes } from './routes/telemetry_websocket.js';
 import { initSecretManager, getSecretManager } from '../security/index.js';
+import {
+  registerHealthDashboardRoutes,
+  registerHealthDashboardWebSocket,
+} from './routes/health_dashboard.js';
+import { initializeHealthDashboard } from '../core/diagnostics/health_dashboard.js';
 
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
@@ -128,6 +133,8 @@ export async function buildApp(
   registerSheddingStatusRoute(app);
   registerTelemetryStreamRoutes(app);
   await registerTelemetryWebSocketRoutes(app);
+  await registerHealthDashboardRoutes(app);
+  await registerHealthDashboardWebSocket(app);
 
   // Issue #3: register hardware attestation endpoints.
   // Initialize a default in-memory attestation service for local/dev usage;
@@ -150,6 +157,9 @@ async function start(): Promise<void> {
   await runMigrationWithDistributedLock();
 
   const app = await buildApp();
+
+  // Initialize the health dashboard service
+  initializeHealthDashboard();
 
   const env = getEnv();
   const prisma = new PrismaClient();
