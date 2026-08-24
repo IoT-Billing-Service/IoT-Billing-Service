@@ -18,6 +18,7 @@ import { registerAdminRoutes } from './routes/admin.js';
 import { registerGeoPricingRoutes } from './routes/geo_pricing.js';
 import { registerCongestionPricingRoutes } from './routes/congestion_pricing.js';
 import { registerPaymentChannelRoutes } from './routes/payment_channel.js';
+import { registerMultiCurrencyRoutes } from './routes/multi_currency.js';
 import { registerOpsRoutes } from './routes/ops.js';
 import { registerTracingHooks } from './middleware/tracing.js';
 import {
@@ -130,6 +131,7 @@ export async function buildApp(
   registerGeoPricingRoutes(app);
   registerCongestionPricingRoutes(app);
   registerPaymentChannelRoutes(app);
+  registerMultiCurrencyRoutes(app);
   registerSheddingStatusRoute(app);
   registerTelemetryStreamRoutes(app);
   await registerTelemetryWebSocketRoutes(app);
