@@ -48,11 +48,11 @@ function errorClient(err: Error): DbClient {
 }
 
 const START = new Date('2026-01-01T00:00:00Z');
-const END_6H = new Date('2026-01-01T06:00:00Z');     // 6 hours → fifteen_minute
-const END_3D = new Date('2026-01-04T00:00:00Z');     // 3 days  → hourly
-const END_30D = new Date('2026-01-31T00:00:00Z');    // 30 days  → daily
-const END_120D = new Date('2026-05-01T00:00:00Z');   // ~120 d  → weekly
-const END_1Y = new Date('2027-01-01T00:00:00Z');     // ~365 d  → monthly
+const END_6H = new Date('2026-01-01T06:00:00Z'); // 6 hours → fifteen_minute
+const END_3D = new Date('2026-01-04T00:00:00Z'); // 3 days  → hourly
+const END_30D = new Date('2026-01-31T00:00:00Z'); // 30 days  → daily
+const END_120D = new Date('2026-05-01T00:00:00Z'); // ~120 d  → weekly
+const END_1Y = new Date('2027-01-01T00:00:00Z'); // ~365 d  → monthly
 
 /** Sample bucket rows returned from DB. */
 function sampleRows(deviceId = 'dev-001', count = 3): Record<string, unknown>[] {
@@ -198,11 +198,7 @@ describe('UsageAnalyticsService.getUsageSummary', () => {
   });
 
   it('counts distinct devices correctly across multiple bucket rows', async () => {
-    const rows = [
-      ...sampleRows('dev-A', 2),
-      ...sampleRows('dev-B', 3),
-      ...sampleRows('dev-C', 1),
-    ];
+    const rows = [...sampleRows('dev-A', 2), ...sampleRows('dev-B', 3), ...sampleRows('dev-C', 1)];
     const client = mockClient(rows);
     const summary = await service.getUsageSummary(client, 'tenant-1', START, END_30D);
     expect(summary.deviceCount).toBe(3);
@@ -288,9 +284,9 @@ describe('UsageAnalyticsService.getDeviceBreakdown', () => {
 
   it('propagates DB errors', async () => {
     const client = errorClient(new Error('timeout'));
-    await expect(
-      service.getDeviceBreakdown(client, 'tenant-1', START, END_6H),
-    ).rejects.toThrow('timeout');
+    await expect(service.getDeviceBreakdown(client, 'tenant-1', START, END_6H)).rejects.toThrow(
+      'timeout',
+    );
   });
 
   it('includes correct start/end/tenantId in result', async () => {
@@ -303,13 +299,7 @@ describe('UsageAnalyticsService.getDeviceBreakdown', () => {
 
   it('respects an explicit granularity override', async () => {
     const client = mockClient([]);
-    const breakdown = await service.getDeviceBreakdown(
-      client,
-      'tenant-1',
-      START,
-      END_6H,
-      'weekly',
-    );
+    const breakdown = await service.getDeviceBreakdown(client, 'tenant-1', START, END_6H, 'weekly');
     expect(breakdown.granularity).toBe('weekly');
     expect(breakdown.viewUsed).toBe('weekly_device_usage');
   });

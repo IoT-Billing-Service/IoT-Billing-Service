@@ -1,6 +1,6 @@
 /**
  * Service Health Dashboard with Real-Time Metrics
- * 
+ *
  * Provides comprehensive monitoring of IoT billing platform health with:
  * - Real-time performance metrics (P50, P95, P99 latencies)
  * - Cryptographic transaction verification
@@ -8,7 +8,7 @@
  * - Service dependency health
  * - System resource utilization
  * - Auto-scaling and capacity metrics
- * 
+ *
  * Performance targets:
  * - Billing operations: < 200ms P99
  * - Health check response: < 50ms
