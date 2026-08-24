@@ -28,6 +28,11 @@ export interface TelemetryInput {
 export interface AttestationInput {
   deviceId: string;
   certSerial: string;
+  /**
+   * PEM-encoded device leaf certificate for PKI hardware identity binding
+   * (issue #294). Required when the server is configured with PKI_CA_CERT_PEMS.
+   */
+  certPem?: string;
   timestamp?: number;
   nonce?: string;
 }
@@ -40,6 +45,14 @@ export interface ApiResult {
   recordsWritten?: number;
   attestedAt?: string;
   messageDigest?: string;
+  /** SHA-256 fingerprint of the device certificate (issue #294 — PKI binding). */
+  certFingerprint?: string;
+  /** SPIFFE URI from the device certificate SAN (issue #294). */
+  spiffeUri?: string;
+  /** Certificate expiry ISO-8601 timestamp (issue #294). */
+  certExpiresAt?: string;
+  /** True when the certificate is within the expiry warning window (issue #294). */
+  certExpiryWarning?: boolean;
 }
 
 export type FetchLike = (input: string, init?: RequestInitLike) => Promise<ResponseLike>;
@@ -166,6 +179,8 @@ export class DeviceSdk {
       timestamp,
       certSerial: input.certSerial,
       signature,
+      // Include PEM certificate when provided (issue #294 — PKI binding)
+      ...(input.certPem !== undefined && { certPem: input.certPem }),
     });
   }
 
