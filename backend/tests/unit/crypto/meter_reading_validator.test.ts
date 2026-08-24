@@ -57,7 +57,14 @@ function buildValidReading(opts?: {
   const metricId = 'energy_kwh';
 
   // Build the canonical message and sign it
-  const message = buildSignatureMessage({ deviceId, metricId, value, timestamp, lowerBound, upperBound });
+  const message = buildSignatureMessage({
+    deviceId,
+    metricId,
+    value,
+    timestamp,
+    lowerBound,
+    upperBound,
+  });
   const sigBytes = nacl.sign.detached(message, keyPair.secretKey);
   const signature = Buffer.from(sigBytes).toString('hex');
 
@@ -67,7 +74,16 @@ function buildValidReading(opts?: {
 
   return {
     keyPair,
-    reading: { deviceId, metricId, value, timestamp, lowerBound, upperBound, signature, rangeProof },
+    reading: {
+      deviceId,
+      metricId,
+      value,
+      timestamp,
+      lowerBound,
+      upperBound,
+      signature,
+      rangeProof,
+    },
   };
 }
 
@@ -98,7 +114,9 @@ describe('buildSignatureMessage', () => {
       upperBound: 1000n,
     };
     const changed = { ...base, value: 101n };
-    expect(Buffer.from(buildSignatureMessage(base)).equals(Buffer.from(buildSignatureMessage(changed)))).toBe(false);
+    expect(
+      Buffer.from(buildSignatureMessage(base)).equals(Buffer.from(buildSignatureMessage(changed))),
+    ).toBe(false);
   });
 
   it('includes all six required fields', () => {
@@ -215,10 +233,28 @@ describe('MeterReadingValidator.validate — range bound checks', () => {
     const lowerBound = 10n;
     const upperBound = 1000n;
     const timestamp = Date.now();
-    const message = buildSignatureMessage({ deviceId, metricId: 'm', value, timestamp, lowerBound, upperBound });
+    const message = buildSignatureMessage({
+      deviceId,
+      metricId: 'm',
+      value,
+      timestamp,
+      lowerBound,
+      upperBound,
+    });
     const sig = Buffer.from(nacl.sign.detached(message, keyPair.secretKey)).toString('hex');
-    const proof = RangeProofGenerator.generate(value, deviceId, lowerBound, upperBound).toString('base64');
-    const reading: MeterReading = { deviceId, metricId: 'm', value, timestamp, lowerBound, upperBound, signature: sig, rangeProof: proof };
+    const proof = RangeProofGenerator.generate(value, deviceId, lowerBound, upperBound).toString(
+      'base64',
+    );
+    const reading: MeterReading = {
+      deviceId,
+      metricId: 'm',
+      value,
+      timestamp,
+      lowerBound,
+      upperBound,
+      signature: sig,
+      rangeProof: proof,
+    };
     const result = validator.validate(reading, keyPair.publicKey);
     expect(result.valid).toBe(false);
     expect(result.errorCode).toBe(METER_VALIDATION_ERROR_CODES.OUT_OF_RANGE);
@@ -231,10 +267,28 @@ describe('MeterReadingValidator.validate — range bound checks', () => {
     const lowerBound = 0n;
     const upperBound = 1000n;
     const timestamp = Date.now();
-    const message = buildSignatureMessage({ deviceId, metricId: 'm', value, timestamp, lowerBound, upperBound });
+    const message = buildSignatureMessage({
+      deviceId,
+      metricId: 'm',
+      value,
+      timestamp,
+      lowerBound,
+      upperBound,
+    });
     const sig = Buffer.from(nacl.sign.detached(message, keyPair.secretKey)).toString('hex');
-    const proof = RangeProofGenerator.generate(value, deviceId, lowerBound, upperBound).toString('base64');
-    const reading: MeterReading = { deviceId, metricId: 'm', value, timestamp, lowerBound, upperBound, signature: sig, rangeProof: proof };
+    const proof = RangeProofGenerator.generate(value, deviceId, lowerBound, upperBound).toString(
+      'base64',
+    );
+    const reading: MeterReading = {
+      deviceId,
+      metricId: 'm',
+      value,
+      timestamp,
+      lowerBound,
+      upperBound,
+      signature: sig,
+      rangeProof: proof,
+    };
     const result = validator.validate(reading, keyPair.publicKey);
     expect(result.valid).toBe(false);
     expect(result.errorCode).toBe(METER_VALIDATION_ERROR_CODES.OUT_OF_RANGE);
@@ -332,7 +386,10 @@ describe('MeterReadingValidator.validate — ZK proof errors', () => {
     const { reading, keyPair } = buildValidReading({ value: 500n });
     const proofBuf = Buffer.from(reading.rangeProof as string, 'base64');
     const tampered = RangeProofGenerator.generateTampered(proofBuf, 'commitment');
-    const result = validator.validate({ ...reading, rangeProof: tampered.toString('base64') }, keyPair.publicKey);
+    const result = validator.validate(
+      { ...reading, rangeProof: tampered.toString('base64') },
+      keyPair.publicKey,
+    );
     // rangeProof is excluded from the signature message, so the Ed25519 check
     // passes and only the ZK proof fails.
     expect(result.valid).toBe(false);
@@ -344,7 +401,10 @@ describe('MeterReadingValidator.validate — ZK proof errors', () => {
     const { reading, keyPair } = buildValidReading({ value: 500n });
     const proofBuf = Buffer.from(reading.rangeProof as string, 'base64');
     const tampered = RangeProofGenerator.generateTampered(proofBuf, 'challenge');
-    const result = validator.validate({ ...reading, rangeProof: tampered.toString('base64') }, keyPair.publicKey);
+    const result = validator.validate(
+      { ...reading, rangeProof: tampered.toString('base64') },
+      keyPair.publicKey,
+    );
     expect(result.valid).toBe(false);
     expect(result.zkResult?.valid).toBe(false);
   });
@@ -353,7 +413,10 @@ describe('MeterReadingValidator.validate — ZK proof errors', () => {
     const { reading, keyPair } = buildValidReading({ value: 500n });
     const proofBuf = Buffer.from(reading.rangeProof as string, 'base64');
     const tampered = RangeProofGenerator.generateTampered(proofBuf, 'response');
-    const result = validator.validate({ ...reading, rangeProof: tampered.toString('base64') }, keyPair.publicKey);
+    const result = validator.validate(
+      { ...reading, rangeProof: tampered.toString('base64') },
+      keyPair.publicKey,
+    );
     expect(result.valid).toBe(false);
     expect(result.zkResult?.valid).toBe(false);
   });
@@ -417,9 +480,9 @@ describe('MeterReadingValidator.validateBatch', () => {
 
   it('throws RangeError when readings and publicKeys lengths differ', () => {
     const { reading, keyPair } = buildValidReading();
-    expect(() => validator.validateBatch([reading], [keyPair.publicKey, keyPair.publicKey])).toThrow(
-      RangeError,
-    );
+    expect(() =>
+      validator.validateBatch([reading], [keyPair.publicKey, keyPair.publicKey]),
+    ).toThrow(RangeError);
   });
 
   it('handles an empty batch', () => {

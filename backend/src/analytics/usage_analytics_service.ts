@@ -19,13 +19,7 @@ import { Counter, Histogram, type Registry } from 'prom-client';
 
 // ── Granularity ────────────────────────────────────────────────────────────────
 
-export type Granularity =
-  | 'fifteen_minute'
-  | 'hourly'
-  | 'daily'
-  | 'weekly'
-  | 'monthly'
-  | 'auto';
+export type Granularity = 'fifteen_minute' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'auto';
 
 /** Continuous-aggregate view names, keyed by granularity. */
 const VIEW_NAMES: Record<Exclude<Granularity, 'auto'>, string> = {

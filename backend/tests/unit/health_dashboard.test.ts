@@ -1,6 +1,6 @@
 /**
  * Health Dashboard Service Tests
- * 
+ *
  * Tests for:
  * - Billing operation metrics collection and percentile calculation
  * - Cryptographic transaction verification
@@ -173,7 +173,9 @@ describe('HealthDashboardService', () => {
       };
 
       service.recordBillingOperation(failedMetric);
-      expect(service.getHealthDashboardState().complianceStatus.failedVerifications).toBeGreaterThan(0);
+      expect(
+        service.getHealthDashboardState().complianceStatus.failedVerifications,
+      ).toBeGreaterThan(0);
     });
   });
 
@@ -306,9 +308,7 @@ describe('HealthDashboardService', () => {
       service.recordServiceHealth(degradedService);
 
       const state = service.getHealthDashboardState();
-      const alerts = state.realTimeAlerts.filter(
-        (a) => a.affectedComponent === 'payment-gateway',
-      );
+      const alerts = state.realTimeAlerts.filter((a) => a.affectedComponent === 'payment-gateway');
       expect(alerts.length).toBeGreaterThan(0);
       expect(alerts[0].severity).toBe('warning');
     });

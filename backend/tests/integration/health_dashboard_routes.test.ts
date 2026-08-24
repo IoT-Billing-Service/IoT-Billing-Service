@@ -1,6 +1,6 @@
 /**
  * Health Dashboard Routes Integration Tests
- * 
+ *
  * Tests for:
  * - REST endpoints
  * - Response times and caching
@@ -23,17 +23,17 @@ describe('Health Dashboard Routes Integration', () => {
 
   beforeAll(async () => {
     app = Fastify({ logger: false });
-    
+
     // Initialize the health dashboard service
     initializeHealthDashboard();
-    
+
     // Register websocket support
     await app.register(require('@fastify/websocket'));
-    
+
     // Register routes
     await registerHealthDashboardRoutes(app);
     await registerHealthDashboardWebSocket(app);
-    
+
     await app.ready();
   });
 
@@ -77,7 +77,7 @@ describe('Health Dashboard Routes Integration', () => {
 
     it('should respond in under 50ms', async () => {
       const startTime = Date.now();
-      
+
       await app.inject({
         method: 'GET',
         url: '/dashboard/health',
@@ -362,7 +362,7 @@ describe('Health Dashboard Routes Integration', () => {
 
       const totalTime = Date.now() - startTime;
       const avgTime = totalTime / iterations;
-      
+
       // Average response time should be reasonable
       expect(avgTime).toBeLessThan(100); // Generous for test environment
     });

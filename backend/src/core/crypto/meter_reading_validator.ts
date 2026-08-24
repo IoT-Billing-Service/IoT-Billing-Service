@@ -173,7 +173,9 @@ export function createMeterValidatorMetrics(registry: Registry): MeterValidatorM
  * `signature` and `rangeProof` are intentionally excluded — they are
  * appended *after* signing.
  */
-export function buildSignatureMessage(reading: Omit<MeterReading, 'signature' | 'rangeProof'>): Uint8Array {
+export function buildSignatureMessage(
+  reading: Omit<MeterReading, 'signature' | 'rangeProof'>,
+): Uint8Array {
   const canonical = JSON.stringify({
     deviceId: reading.deviceId,
     metricId: reading.metricId,

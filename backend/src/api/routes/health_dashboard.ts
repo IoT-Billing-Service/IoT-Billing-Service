@@ -1,6 +1,6 @@
 /**
  * Health Dashboard API Routes
- * 
+ *
  * Provides REST and WebSocket endpoints for real-time service health monitoring
  * with cryptographic transaction verification and compliance reporting.
  */

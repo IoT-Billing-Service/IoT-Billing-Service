@@ -54,6 +54,8 @@ import {
   type AttestationRequest,
   type AttestationServiceOptions,
 } from '../../core/crypto/attestation.js';
+import { PkiVerifier, NoOpPkiVerifier } from '../../core/crypto/pki_verifier.js';
+import { getEnv } from '../../config/env.js';
 import { recordAttestationSuccess, recordAttestationFailure } from '../metrics/prometheus.js';
 
 // ── HTTP status mapping ────────────────────────────────────────────────────────
@@ -68,6 +70,9 @@ const ERROR_TO_HTTP_STATUS: Record<string, number> = {
   [ATTESTATION_ERROR_CODES.CERT_MISSING]: 404,
   [ATTESTATION_ERROR_CODES.CERT_REVOKED]: 403,
   [ATTESTATION_ERROR_CODES.CHAIN_INVALID]: 422,
+  // PKI errors (issue #294)
+  [ATTESTATION_ERROR_CODES.PKI_CERT_MISSING]: 400,
+  [ATTESTATION_ERROR_CODES.PKI_CERT_INVALID]: 422,
   [ATTESTATION_ERROR_CODES.INTERNAL_ERROR]: 500,
 };
 
@@ -95,6 +100,9 @@ export function getAttestationService(): AttestationService {
  * store are used. Otherwise (tests / local dev) the in-memory variants are
  * used — they can be pre-seeded via the `certRegistry` / `attestationStore`
  * overrides.
+ *
+ * The PKI verifier (issue #294) is wired in from environment variables.
+ * Set `PKI_CA_CERT_PEMS` to enable hardware identity binding in production.
  */
 export function initAttestationService(
   certRegistry?: InMemoryCertificateRegistry,
@@ -114,7 +122,36 @@ export function initAttestationService(
 
   const nonceGuard = new InMemoryAttestationNonceGuard();
 
-  _attestationService = new AttestationService(registry, store, nonceGuard, options);
+  // Wire in the PKI verifier from environment (issue #294).
+  // When options.pkiVerifier is explicitly provided (e.g. from tests), use it
+  // directly; otherwise build from env.
+  // If env vars are not available (unit-test context without env setup),
+  // silently skip PKI — the service will operate in no-PKI mode.
+  let pkiVerifier = options?.pkiVerifier;
+  if (pkiVerifier === undefined) {
+    try {
+      const env = getEnv();
+      if (env.PKI_SKIP_VERIFICATION) {
+        pkiVerifier = new NoOpPkiVerifier();
+      } else if (env.PKI_CA_CERT_PEMS.trim()) {
+        pkiVerifier = new PkiVerifier({
+          caCertPems: env.PKI_CA_CERT_PEMS,
+          allowedSpiffeUris: env.PKI_ALLOWED_SPIFFE_URIS || undefined,
+          certExpiryWarnDays: env.PKI_CERT_EXPIRY_WARN_DAYS,
+        });
+      }
+      // When neither PKI_CA_CERT_PEMS nor PKI_SKIP_VERIFICATION is set,
+      // pkiVerifier remains undefined and PKI verification is skipped.
+    } catch {
+      // Env validation failed (e.g. unit tests without DATABASE_URL etc.).
+      // Leave pkiVerifier undefined — no PKI enforcement in this context.
+    }
+  }
+
+  _attestationService = new AttestationService(registry, store, nonceGuard, {
+    ...options,
+    pkiVerifier,
+  });
   return _attestationService;
 }
 
@@ -141,6 +178,8 @@ export function registerAttestationRoutes(app: FastifyInstance): void {
             timestamp: { type: 'number' },
             certSerial: { type: 'string' },
             signature: { type: 'string' },
+            // PEM-encoded device leaf certificate for PKI chain verification (issue #294).
+            certPem: { type: 'string' },
           },
         },
       },
@@ -166,6 +205,11 @@ export function registerAttestationRoutes(app: FastifyInstance): void {
         deviceId: result.deviceId,
         attestedAt: result.attestedAt,
         messageDigest: result.messageDigest,
+        // PKI fields (issue #294) — only present when PKI verification was performed
+        certFingerprint: result.certFingerprint,
+        spiffeUri: result.spiffeUri,
+        certExpiresAt: result.certExpiresAt,
+        certExpiryWarning: result.certExpiryWarning,
       });
     },
   );

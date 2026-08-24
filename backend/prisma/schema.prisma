@@ -200,6 +200,9 @@ model HardwareCertificate {
   model     String
   batch     String
   revoked   Boolean  @default(false)
+  /// True when this certificate batch has been enrolled in the PKI
+  /// infrastructure (issue #294). Used to gate PKI-required flows.
+  pkiVerified Boolean @default(false) @map("pki_verified")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -228,12 +231,21 @@ model AttestationRecord {
   /// Server-side timestamp when attestation was accepted.
   attestedAt    DateTime @default(now()) @map("attested_at")
   createdAt     DateTime @default(now()) @map("created_at")
+  /// SHA-256 fingerprint (hex) of the device leaf certificate (issue #294).
+  /// Present when PKI hardware identity binding was verified.
+  certFingerprint String? @map("cert_fingerprint")
+  /// SPIFFE URI from the device certificate SAN (issue #294).
+  spiffeUri     String?  @map("spiffe_uri")
+  /// Expiry timestamp of the device leaf certificate (issue #294).
+  certExpiresAt DateTime? @map("cert_expires_at")
 
   certificate HardwareCertificate @relation(fields: [certSerial], references: [serial])
 
   @@index([deviceId])
   @@index([certSerial])
   @@index([attestedAt])
+  @@index([certFingerprint])
+  @@index([spiffeUri])
   @@map("attestation_records")
 }
 

@@ -124,6 +124,24 @@ const envSchema = z.object({
   // Envoy / Istio sidecar proxies that have already terminated TLS upstream.
   // Set to false only when the service is exposed directly (no sidecar).
   MTLS_TRUST_XFCC_HEADER: z.coerce.boolean().default(true),
+  // --- PKI Hardware Identity Binding (issue #294) ---------------------------
+  // One or more PEM-encoded CA certificates that form the trust anchor(s) for
+  // hardware device certificate verification.  Multiple PEM blocks can be
+  // concatenated with newlines.  When empty, PKI chain verification is skipped
+  // (dev/test only — production must set this).
+  PKI_CA_CERT_PEMS: z.string().default(''),
+  // Comma-separated list of SPIFFE URIs allowed to present device certificates.
+  // When non-empty, each attesting device's certificate MUST contain one of
+  // these URIs in its Subject Alternative Names. When empty, SPIFFE validation
+  // is skipped (CN-only mode). Extends MTLS_ALLOWED_SPIFFE_URIS for the
+  // device attestation pipeline specifically.
+  PKI_ALLOWED_SPIFFE_URIS: z.string().default(''),
+  // Days before a device certificate expiry to emit a Prometheus warning metric.
+  // Operators should rotate the certificate before it expires.
+  PKI_CERT_EXPIRY_WARN_DAYS: z.coerce.number().int().positive().default(30),
+  // When true, skip PKI chain verification during device attestation.
+  // Use only for local development and unit tests.
+  PKI_SKIP_VERIFICATION: z.coerce.boolean().default(false),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -59,6 +59,9 @@ export const ATTESTATION_ERROR_CODES = {
   CERT_REVOKED: 'ATTEST_ERR_CERT_REVOKED',
   CERT_MISMATCH: 'ATTEST_ERR_CERT_MISMATCH',
   CHAIN_INVALID: 'ATTEST_ERR_CHAIN_INVALID',
+  // PKI errors (issue #294)
+  PKI_CERT_MISSING: 'ATTEST_ERR_PKI_CERT_MISSING',
+  PKI_CERT_INVALID: 'ATTEST_ERR_PKI_CERT_INVALID',
   INTERNAL_ERROR: 'ATTEST_ERR_INTERNAL',
 } as const;
 
@@ -99,6 +102,12 @@ export interface AttestationRequest {
    * 64 bytes).
    */
   signature: string;
+  /**
+   * PEM-encoded device leaf certificate for PKI chain verification (issue #294).
+   * Required when the attestation service is configured with a PKI verifier.
+   * When absent and a PKI verifier is configured, attestation is rejected.
+   */
+  certPem?: string;
 }
 
 /** Result returned by {@link AttestationService.attest}. */
@@ -112,6 +121,26 @@ export interface AttestationResult {
   attestedAt?: string;
   /** SHA-256 digest (hex) of the canonical message, for audit logging. */
   messageDigest?: string;
+  /**
+   * SHA-256 fingerprint (hex) of the device leaf certificate.
+   * Present only when PKI verification was performed (issue #294).
+   */
+  certFingerprint?: string;
+  /**
+   * SPIFFE URI extracted from the device certificate SAN.
+   * Present only when PKI verification was performed and a SPIFFE URI was found.
+   */
+  spiffeUri?: string;
+  /**
+   * Certificate expiry ISO-8601 timestamp.
+   * Present only when PKI verification was performed.
+   */
+  certExpiresAt?: string;
+  /**
+   * True when the certificate is within the expiry warning window.
+   * Operators should rotate the certificate before it expires.
+   */
+  certExpiryWarning?: boolean;
 }
 
 /**
@@ -141,6 +170,20 @@ export interface AttestationRecord {
   nonce: string;
   messageDigest: string;
   attestedAt: Date;
+  /**
+   * SHA-256 fingerprint of the device leaf certificate (issue #294).
+   * Present when PKI verification was performed.
+   */
+  certFingerprint?: string;
+  /**
+   * SPIFFE URI from the device certificate SAN (issue #294).
+   * Present when PKI verification was performed and a SPIFFE URI was found.
+   */
+  spiffeUri?: string;
+  /**
+   * Certificate expiry timestamp (issue #294).
+   */
+  certExpiresAt?: Date;
 }
 
 /**
@@ -276,6 +319,18 @@ export interface AttestationServiceOptions {
   skipRevocationCheck?: boolean;
   /** Override the maximum timestamp drift window. */
   maxTimestampDriftMs?: number;
+  /**
+   * PKI verifier for hardware identity binding (issue #294).
+   * When provided, the attestation pipeline verifies the device certificate
+   * against a CA trust anchor after the revocation check.
+   * When omitted, PKI chain verification is skipped.
+   */
+  pkiVerifier?: import('./pki_verifier.js').PkiVerifier;
+  /**
+   * Skip PKI chain verification (for tests / local dev).
+   * Has no effect when pkiVerifier is not provided.
+   */
+  skipPkiVerification?: boolean;
 }
 
 /**
@@ -370,6 +425,46 @@ export class AttestationService {
         };
       }
 
+      // ── Step 5b: PKI hardware identity binding (issue #294) ───────────────
+      let certFingerprint: string | undefined;
+      let spiffeUri: string | undefined;
+      let certExpiresAt: Date | undefined;
+      let certExpiryWarning: boolean | undefined;
+
+      const pkiVerifier = this.options.pkiVerifier;
+      if (pkiVerifier !== undefined && this.options.skipPkiVerification !== true) {
+        if (!req.certPem || req.certPem.trim() === '') {
+          return {
+            success: false,
+            errorCode: ATTESTATION_ERROR_CODES.PKI_CERT_MISSING,
+            reason:
+              'PKI verification is enabled but no certPem was provided in the attestation request',
+            deviceId: req.deviceId,
+          };
+        }
+
+        const pkiStart = Date.now();
+        const pkiResult = pkiVerifier.verify(req.certPem);
+        const pkiDuration = Date.now() - pkiStart;
+
+        const { recordPkiVerification } = await import('./pki_verifier.js');
+        recordPkiVerification(pkiResult, pkiDuration);
+
+        if (!pkiResult.success) {
+          return {
+            success: false,
+            errorCode: ATTESTATION_ERROR_CODES.PKI_CERT_INVALID,
+            reason: `PKI certificate verification failed [${pkiResult.errorCode ?? 'unknown'}]: ${pkiResult.reason ?? ''}`,
+            deviceId: req.deviceId,
+          };
+        }
+
+        certFingerprint = pkiResult.fingerprint;
+        spiffeUri = pkiResult.spiffeUri;
+        certExpiresAt = pkiResult.expiresAt ? new Date(pkiResult.expiresAt) : undefined;
+        certExpiryWarning = pkiResult.expiryWarning;
+      }
+
       // ── Step 6: Persist attestation record ───────────────────────────────
       const message = buildAttestationMessage(req);
       const messageDigest = digestMessage(message);
@@ -382,6 +477,9 @@ export class AttestationService {
         nonce: req.nonce,
         messageDigest,
         attestedAt,
+        certFingerprint,
+        spiffeUri,
+        certExpiresAt,
       });
 
       return {
@@ -389,6 +487,10 @@ export class AttestationService {
         deviceId: req.deviceId,
         attestedAt: attestedAt.toISOString(),
         messageDigest,
+        certFingerprint,
+        spiffeUri,
+        certExpiresAt: certExpiresAt?.toISOString(),
+        certExpiryWarning,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -509,6 +611,9 @@ export class PrismaBackedAttestationStore implements AttestationStore {
         nonce: entry.nonce,
         messageDigest: entry.messageDigest,
         attestedAt: entry.attestedAt,
+        ...(entry.certFingerprint !== undefined && { certFingerprint: entry.certFingerprint }),
+        ...(entry.spiffeUri !== undefined && { spiffeUri: entry.spiffeUri }),
+        ...(entry.certExpiresAt !== undefined && { certExpiresAt: entry.certExpiresAt }),
       },
     });
   }
