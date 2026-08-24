@@ -48,9 +48,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const certs = JSON.parse(
-  readFileSync(join(__dirname, 'pki_test_certs.json'), 'utf8'),
-) as {
+const certs = JSON.parse(readFileSync(join(__dirname, 'pki_test_certs.json'), 'utf8')) as {
   caPem: string;
   devicePem: string;
   expiredPem: string;
@@ -374,35 +372,51 @@ describe('NoOpPkiVerifier', () => {
 
 describe('recordPkiVerification metrics', () => {
   it('increments success counter on successful verification', async () => {
-    const before = (await pkiVerificationsTotal.get()).values.find(v => v.labels.result === 'success')?.value ?? 0;
+    const before =
+      (await pkiVerificationsTotal.get()).values.find((v) => v.labels.result === 'success')
+        ?.value ?? 0;
     recordPkiVerification({ success: true, fingerprint: '0'.repeat(64), expiryWarning: false }, 1);
-    const after = (await pkiVerificationsTotal.get()).values.find(v => v.labels.result === 'success')?.value ?? 0;
+    const after =
+      (await pkiVerificationsTotal.get()).values.find((v) => v.labels.result === 'success')
+        ?.value ?? 0;
     expect(after).toBe(before + 1);
   });
 
   it('increments failure counter on failed verification', async () => {
-    const before = (await pkiVerificationsTotal.get()).values.find(v => v.labels.result === 'failure')?.value ?? 0;
-    recordPkiVerification({
-      success: false,
-      errorCode: PKI_ERROR_CODES.CERT_EXPIRED,
-      reason: 'expired',
-    }, 1);
-    const after = (await pkiVerificationsTotal.get()).values.find(v => v.labels.result === 'failure')?.value ?? 0;
+    const before =
+      (await pkiVerificationsTotal.get()).values.find((v) => v.labels.result === 'failure')
+        ?.value ?? 0;
+    recordPkiVerification(
+      {
+        success: false,
+        errorCode: PKI_ERROR_CODES.CERT_EXPIRED,
+        reason: 'expired',
+      },
+      1,
+    );
+    const after =
+      (await pkiVerificationsTotal.get()).values.find((v) => v.labels.result === 'failure')
+        ?.value ?? 0;
     expect(after).toBe(before + 1);
   });
 
   it('increments error_code counter on failure', async () => {
-    const before = (await pkiVerificationFailuresTotal.get()).values.find(
-      v => v.labels.error_code === PKI_ERROR_CODES.CERT_UNTRUSTED
-    )?.value ?? 0;
-    recordPkiVerification({
-      success: false,
-      errorCode: PKI_ERROR_CODES.CERT_UNTRUSTED,
-      reason: 'untrusted',
-    }, 1);
-    const after = (await pkiVerificationFailuresTotal.get()).values.find(
-      v => v.labels.error_code === PKI_ERROR_CODES.CERT_UNTRUSTED
-    )?.value ?? 0;
+    const before =
+      (await pkiVerificationFailuresTotal.get()).values.find(
+        (v) => v.labels.error_code === PKI_ERROR_CODES.CERT_UNTRUSTED,
+      )?.value ?? 0;
+    recordPkiVerification(
+      {
+        success: false,
+        errorCode: PKI_ERROR_CODES.CERT_UNTRUSTED,
+        reason: 'untrusted',
+      },
+      1,
+    );
+    const after =
+      (await pkiVerificationFailuresTotal.get()).values.find(
+        (v) => v.labels.error_code === PKI_ERROR_CODES.CERT_UNTRUSTED,
+      )?.value ?? 0;
     expect(after).toBe(before + 1);
   });
 
@@ -421,11 +435,15 @@ describe('recordPkiVerification metrics', () => {
   });
 
   it('observes duration in the histogram', async () => {
-    const before = (await pkiVerificationDurationMs.get()).values
-      .filter(v => v.metricName === 'pki_verification_duration_ms_count')[0]?.value ?? 0;
+    const before =
+      (await pkiVerificationDurationMs.get()).values.filter(
+        (v) => v.metricName === 'pki_verification_duration_ms_count',
+      )[0]?.value ?? 0;
     recordPkiVerification({ success: true, fingerprint: '0'.repeat(64) }, 5);
-    const after = (await pkiVerificationDurationMs.get()).values
-      .filter(v => v.metricName === 'pki_verification_duration_ms_count')[0]?.value ?? 0;
+    const after =
+      (await pkiVerificationDurationMs.get()).values.filter(
+        (v) => v.metricName === 'pki_verification_duration_ms_count',
+      )[0]?.value ?? 0;
     expect(after).toBeGreaterThan(before);
   });
 });
@@ -464,8 +482,16 @@ describe('PkiVerifier integration with AttestationService', () => {
     const timestamp = Date.now();
     const certSerial = 'CERT-PKI-001';
 
-    const message = buildAttestationMessage({ deviceId: 'pki-device-1', publicKey, nonce, timestamp, certSerial });
-    const signature = Buffer.from(nacl.sign.detached(Buffer.from(message), keyPair.secretKey)).toString('hex');
+    const message = buildAttestationMessage({
+      deviceId: 'pki-device-1',
+      publicKey,
+      nonce,
+      timestamp,
+      certSerial,
+    });
+    const signature = Buffer.from(
+      nacl.sign.detached(Buffer.from(message), keyPair.secretKey),
+    ).toString('hex');
 
     const result = await service.attest({
       deviceId: 'pki-device-1',
@@ -514,8 +540,16 @@ describe('PkiVerifier integration with AttestationService', () => {
     const nonce = 'pki-nonce-002';
     const timestamp = Date.now();
     const certSerial = 'CERT-PKI-002';
-    const message = buildAttestationMessage({ deviceId: 'pki-device-2', publicKey, nonce, timestamp, certSerial });
-    const signature = Buffer.from(nacl.sign.detached(Buffer.from(message), keyPair.secretKey)).toString('hex');
+    const message = buildAttestationMessage({
+      deviceId: 'pki-device-2',
+      publicKey,
+      nonce,
+      timestamp,
+      certSerial,
+    });
+    const signature = Buffer.from(
+      nacl.sign.detached(Buffer.from(message), keyPair.secretKey),
+    ).toString('hex');
 
     const result = await service.attest({
       deviceId: 'pki-device-2',
@@ -557,8 +591,16 @@ describe('PkiVerifier integration with AttestationService', () => {
     const nonce = 'pki-nonce-003';
     const timestamp = Date.now();
     const certSerial = 'CERT-PKI-003';
-    const message = buildAttestationMessage({ deviceId: 'pki-device-3', publicKey, nonce, timestamp, certSerial });
-    const signature = Buffer.from(nacl.sign.detached(Buffer.from(message), keyPair.secretKey)).toString('hex');
+    const message = buildAttestationMessage({
+      deviceId: 'pki-device-3',
+      publicKey,
+      nonce,
+      timestamp,
+      certSerial,
+    });
+    const signature = Buffer.from(
+      nacl.sign.detached(Buffer.from(message), keyPair.secretKey),
+    ).toString('hex');
 
     const result = await service.attest({
       deviceId: 'pki-device-3',
@@ -600,8 +642,16 @@ describe('PkiVerifier integration with AttestationService', () => {
     const nonce = 'pki-nonce-004';
     const timestamp = Date.now();
     const certSerial = 'CERT-PKI-004';
-    const message = buildAttestationMessage({ deviceId: 'pki-device-4', publicKey, nonce, timestamp, certSerial });
-    const signature = Buffer.from(nacl.sign.detached(Buffer.from(message), keyPair.secretKey)).toString('hex');
+    const message = buildAttestationMessage({
+      deviceId: 'pki-device-4',
+      publicKey,
+      nonce,
+      timestamp,
+      certSerial,
+    });
+    const signature = Buffer.from(
+      nacl.sign.detached(Buffer.from(message), keyPair.secretKey),
+    ).toString('hex');
 
     const result = await service.attest({
       deviceId: 'pki-device-4',
