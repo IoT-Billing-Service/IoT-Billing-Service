@@ -1,6 +1,28 @@
 import { create } from 'zustand';
 
-export type CurrencyCode = 'USD' | 'EUR' | 'NGN';
+export type CurrencyCode =
+  | 'USD'
+  | 'EUR'
+  | 'GBP'
+  | 'JPY'
+  | 'CAD'
+  | 'AUD'
+  | 'CHF'
+  | 'CNY'
+  | 'INR'
+  | 'BRL'
+  | 'MXN'
+  | 'KRW'
+  | 'SGD'
+  | 'HKD'
+  | 'SEK'
+  | 'NOK'
+  | 'DKK'
+  | 'PLN'
+  | 'ZAR'
+  | 'AED'
+  | 'NGN'
+  | 'XLM';
 
 export interface CurrencyPrefState {
   currency: CurrencyCode;
