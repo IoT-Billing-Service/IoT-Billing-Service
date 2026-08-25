@@ -228,7 +228,7 @@ export function tryParseEncryptedField(value: unknown): EncryptedField | null {
   if (typeof value !== 'object' || value === null) return null;
   const obj = value as Record<string, unknown>;
   if (obj['v'] === PROTOCOL_VERSION && typeof obj['d'] === 'string') {
-    return { v: obj['v'] as string, d: obj['d'] as string };
+    return { v: obj['v'], d: obj['d'] };
   }
   return null;
 }

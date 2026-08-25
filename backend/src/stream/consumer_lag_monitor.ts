@@ -213,7 +213,7 @@ export class ConsumerGroupLagMonitor {
 
   /** Probe a single consumer group and return its state. */
   private async _probeGroup(streamKey: string, groupName: string): Promise<ConsumerGroupState> {
-    let pendingEntries = 0;
+    let pendingEntries: number;
     let consumerCount = 0;
     let maxIdleMs = -1;
     const consumerIdleMs: Record<string, number> = {};
@@ -236,7 +236,7 @@ export class ConsumerGroupLagMonitor {
       if (perConsumer && Array.isArray(perConsumer)) {
         consumerCount = perConsumer.length;
 
-        for (const [consumerName, _pendingCount] of perConsumer) {
+        for (const [consumerName] of perConsumer) {
           // XPENDING with per-consumer detail returns count but not idle time.
           // We need XINFO CONSUMERS for idle times.
           let idle = -1;
@@ -248,7 +248,7 @@ export class ConsumerGroupLagMonitor {
               'CONSUMERS',
               streamKey,
               groupName,
-            )) as unknown as string[][];
+            )) as string[][];
 
             for (const entry of rawConsumers) {
               const obj: Record<string, string> = {};

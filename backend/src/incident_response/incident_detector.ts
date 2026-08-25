@@ -202,11 +202,11 @@ export function createSloBurnRateRule(
     source: 'slo_burn_rate',
     severity,
     suggestedRunbook: 'slo_burn_rate_response',
-    evaluate: async (): Promise<DetectedIncident | null> => {
+    evaluate: (): Promise<DetectedIncident | null> => {
       // In production, this would query Prometheus for the burn rate metric.
       // For now, we return null (no incident) — the actual evaluation is
       // triggered by Prometheus Alertmanager webhooks.
-      return null;
+      return Promise.resolve(null);
     },
   };
 }
@@ -224,9 +224,9 @@ export function createCircuitBreakerRule(
     source: 'circuit_breaker',
     severity,
     suggestedRunbook: 'circuit_breaker_response',
-    evaluate: async (): Promise<DetectedIncident | null> => {
+    evaluate: (): Promise<DetectedIncident | null> => {
       // In production, this would check the circuit breaker state metric.
-      return null;
+      return Promise.resolve(null);
     },
   };
 }
@@ -244,9 +244,9 @@ export function createReplicationLagRule(
     source: 'replication_lag',
     severity,
     suggestedRunbook: 'replication_lag_response',
-    evaluate: async (): Promise<DetectedIncident | null> => {
+    evaluate: (): Promise<DetectedIncident | null> => {
       // In production, this would query the replication monitor.
-      return null;
+      return Promise.resolve(null);
     },
   };
 }
@@ -264,9 +264,9 @@ export function createBillingAnomalyRule(
     source: 'billing_anomaly',
     severity,
     suggestedRunbook: 'billing_anomaly_response',
-    evaluate: async (): Promise<DetectedIncident | null> => {
+    evaluate: (): Promise<DetectedIncident | null> => {
       // In production, this would analyze billing metrics for anomalies.
-      return null;
+      return Promise.resolve(null);
     },
   };
 }
@@ -286,10 +286,10 @@ export function createConsumerGroupLagRule(
     source: 'consumer_group_lag',
     severity,
     suggestedRunbook: 'consumer_group_lag_response',
-    evaluate: async (): Promise<DetectedIncident | null> => {
+    evaluate: (): Promise<DetectedIncident | null> => {
       // In production, this would query the consumer lag monitor or Prometheus.
       // The alert rules in billing_alerts.yml fire independently via Alertmanager.
-      return null;
+      return Promise.resolve(null);
     },
   };
 }

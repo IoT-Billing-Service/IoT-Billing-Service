@@ -278,7 +278,7 @@ export function capacitySheddingHook(
   return null;
 }
 
-export async function resetCapacitySheddingForTesting(): Promise<void> {
+export function resetCapacitySheddingForTesting(): void {
   requestQueue.length = 0;
   activeRequests.clear();
   currentConfig = { ...DEFAULT_SHEDDING_CONFIG };

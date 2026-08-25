@@ -90,7 +90,7 @@ describe('ReconciliationService', () => {
       );
 
       // Start reconciliation (don't await — it will hang)
-      const promise = service.runReconciliation();
+      void service.runReconciliation();
 
       // Second call should throw
       await expect(service.runReconciliation()).rejects.toThrow(

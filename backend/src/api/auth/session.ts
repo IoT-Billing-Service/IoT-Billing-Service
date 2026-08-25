@@ -308,14 +308,11 @@ export async function refreshSession(
   const lockKey = `refresh_lock:${sessionId}`;
   await redis.set(lockKey, '1', 'EX', 10);
 
-  let resultTokens: TokenPair | null = null;
-
   try {
     const cooldownKey = `auth:session:${sessionId}:cooldown`;
     const cachedTokens = await redis.get(cooldownKey);
     if (cachedTokens !== null) {
-      resultTokens = JSON.parse(cachedTokens) as TokenPair;
-      return resultTokens;
+      return JSON.parse(cachedTokens) as TokenPair;
     }
 
     const sessionKey = `auth:session:${sessionId}`;
@@ -359,8 +356,7 @@ export async function refreshSession(
     const tokens = { accessToken, refreshToken: newRefreshToken };
     await redis.set(cooldownKey, JSON.stringify(tokens), 'EX', 5);
 
-    resultTokens = tokens;
-    return resultTokens;
+    return tokens;
   } finally {
     await redis.del(lockKey);
   }

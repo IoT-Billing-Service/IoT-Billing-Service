@@ -78,7 +78,7 @@ export class PoolMetricsCollector {
   /** Perform one collection cycle immediately. Useful for tests. */
   collect(): void {
     for (const name of this.poolNames) {
-      let stats: PoolStats | null = null;
+      let stats: PoolStats | null;
       try {
         stats = this.source.getMetrics(name);
       } catch (error) {

@@ -9,7 +9,7 @@
  * - formatEnvIssues() surfaces structured, path-keyed error records
  * - Default values are applied for optional fields
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { loadEnv, getEnv, clearEnvCache, formatEnvIssues } from '../../../src/config/env.js';
 import { z } from 'zod';

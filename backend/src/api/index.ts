@@ -4,12 +4,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { PrismaClient } from '@prisma/client';
 import { getEnv } from '../config/env.js';
-import {
-  configureRuntimeConfigurationAudit,
-  getRuntimeConfigurationAuditStatus,
-  initializeConfigWatcher,
-  stopConfigWatcher,
-} from '../config/index.js';
+import { stopConfigWatcher } from '../config/index.js';
 import { getRedis } from '../database/redis.js';
 import { initTelemetry, shutdownTelemetry } from '../core/diagnostics/otel.js';
 import { registerAuthRoutes } from './routes/auth.js';
@@ -44,14 +39,10 @@ import {
   recordLedgerSyncPollError,
   registerMetricsRoute,
   setLedgerSyncMetrics,
-  recordBackupVerificationSuccess,
-  recordBackupVerificationFailure,
-  recordRestoreTestSuccess,
-  recordRestoreTestFailure,
   updateRequestQueueDepth,
   updateActiveRequestCount,
 } from './metrics/prometheus.js';
-import { registerCircuitHealth, registerBackupHealth } from './health.js';
+import { registerCircuitHealth } from './health.js';
 import {
   initializeFeatureFlagWatcher,
   stopFeatureFlagWatcher,
@@ -76,7 +67,7 @@ import { initializeHealthDashboard } from '../core/diagnostics/health_dashboard.
 const DEFAULT_LEDGER_SYNC_ID = 'primary';
 
 export function registerSheddingStatusRoute(app: FastifyInstance): void {
-  app.get('/shedding-status', async () => {
+  app.get('/shedding-status', () => {
     const status = getSheddingStatus();
     updateRequestQueueDepth(status.queueDepth);
     updateActiveRequestCount(status.activeRequests);
@@ -296,30 +287,6 @@ async function start(): Promise<void> {
     await shutdownTelemetry();
     process.exit(1);
   }
-}
-
-function parseRuntimeConfigurationKeys(raw: string): Map<string, string> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error(
-      'RUNTIME_CONFIG_AUTHORIZED_KEYS must be a JSON object of key ids to PEM public keys',
-    );
-  }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error(
-      'RUNTIME_CONFIG_AUTHORIZED_KEYS must be a JSON object of key ids to PEM public keys',
-    );
-  }
-  const keys = new Map<string, string>();
-  for (const [keyId, publicKey] of Object.entries(parsed)) {
-    if (typeof publicKey !== 'string' || publicKey.length === 0) {
-      throw new Error(`Invalid runtime configuration public key for ${keyId}`);
-    }
-    keys.set(keyId, publicKey);
-  }
-  return keys;
 }
 
 /**

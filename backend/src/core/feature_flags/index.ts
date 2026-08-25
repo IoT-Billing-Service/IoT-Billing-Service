@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import type { Redis } from 'ioredis';
 import {
   incrementFeatureFlagEvaluations,
@@ -39,13 +38,6 @@ export enum DegradationBehavior {
   FALLBACK_CACHED = 'fallback_cached',
   THROTTLE = 'throttle',
 }
-
-const DEFAULT_PRIORITY_ORDER: FlagPriority[] = [
-  FlagPriority.CRITICAL,
-  FlagPriority.HIGH,
-  FlagPriority.MEDIUM,
-  FlagPriority.LOW,
-];
 
 const FLAG_DEFINITIONS: Record<FeatureFlag, FlagDefinition> = {
   [FeatureFlag.BATCH_BILLING]: {
@@ -285,7 +277,7 @@ export async function initializeFeatureFlagWatcher(redis: Redis): Promise<void> 
   }
 
   activeWatcherIntervalId = setInterval(() => {
-    void (async () => {
+    void (async (): Promise<void> => {
       try {
         await syncOverridesFromRedis(redis);
         flagCache.clear();
@@ -305,7 +297,7 @@ export function stopFeatureFlagWatcher(): void {
   }
 }
 
-export async function resetFeatureFlagsForTesting(): Promise<void> {
+export function resetFeatureFlagsForTesting(): void {
   flagOverrides.clear();
   flagCache.clear();
   lastOverrideSync = 0;

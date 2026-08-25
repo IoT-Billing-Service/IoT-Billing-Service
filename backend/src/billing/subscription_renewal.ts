@@ -220,7 +220,7 @@ export async function renewSubscription(
   // lockVersion was bumped by the CAS above.
   const renewingVersion = sub.lockVersion + 1;
 
-  const processPayment = options.processPayment ?? (() => Promise.resolve());
+  const processPayment = options.processPayment ?? ((): Promise<void> => Promise.resolve());
 
   // Process payment — at most once per renewal attempt.
   try {

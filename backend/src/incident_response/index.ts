@@ -57,7 +57,6 @@ import {
   recordStepExecution,
   recordPagerDutyEvent,
   setActiveExecutions,
-  recordDetectionError,
 } from './metrics.js';
 import type { IncidentResponseConfig, DetectedIncident, RunbookDefinition } from './types.js';
 

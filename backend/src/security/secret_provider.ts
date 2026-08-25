@@ -60,7 +60,7 @@ export class VerifiedRemoteProvider implements SecretProvider {
         if (!isValid) {
           throw new Error('Cryptographic verification of secrets failed');
         }
-      } catch (e) {
+      } catch {
         // for mock, we might ignore this or let it throw if testing proper verification
       }
     }

@@ -28,9 +28,9 @@ export class ZkBillingEngine {
 
   createBillingCommitment(
     amount: bigint,
-    deviceId: string,
-    lowerBound: bigint,
-    upperBound: bigint,
+    _deviceId: string,
+    _lowerBound: bigint,
+    _upperBound: bigint,
   ): CommitmentPair {
     const opening = randomBytes(32).toString('hex');
     const commitment = createHash('sha256').update(`${amount.toString()}:${opening}`).digest('hex');

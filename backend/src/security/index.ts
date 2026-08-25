@@ -1,6 +1,5 @@
 import { SecretManager } from './secret_manager.js';
 import { VerifiedRemoteProvider } from './secret_provider.js';
-import { getEnv } from '../config/env.js';
 
 let sharedSecretManager: SecretManager | null = null;
 
