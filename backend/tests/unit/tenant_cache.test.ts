@@ -1,6 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Redis } from 'ioredis';
-import type { PrismaClient } from '@prisma/client';
 import { TenantCache } from '../../src/core/ingestion/tenant_cache.js';
 
 describe('TenantCache', () => {
@@ -19,7 +17,7 @@ describe('TenantCache', () => {
         findUnique: vi.fn(),
       },
     };
-    cache = new TenantCache(mockRedis as unknown as Redis, mockPrisma as unknown as PrismaClient);
+    cache = new TenantCache(mockRedis, mockPrisma);
   });
 
   it('fetches from prisma on L1/L2 miss', async () => {

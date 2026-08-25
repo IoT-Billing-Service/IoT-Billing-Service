@@ -173,9 +173,7 @@ export function registerIngestionRoutes(
       if (result.success && result.deviceId !== undefined) {
         try {
           const metrics: Record<string, number> = {};
-          for (const [k, v] of Object.entries(
-            (payload.metrics as Record<string, number | string>) ?? {},
-          )) {
+          for (const [k, v] of Object.entries(payload.metrics ?? {})) {
             const n = typeof v === 'number' ? v : Number(v);
             if (!Number.isNaN(n)) metrics[k] = n;
           }

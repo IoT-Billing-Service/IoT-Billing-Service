@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 
 // ── Types (mirrors backend DashboardResponse) ──────────────────────────────────
 
@@ -81,8 +81,6 @@ const REFRESH_INTERVAL_MS = 15_000; // Auto-refresh every 15s
 
 export function useDashboardData() {
   const queryClient = useQueryClient();
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const startTimeRef = useRef<number>(Date.now());
 
   const query = useQuery<DashboardResponse, Error>({
     queryKey: ['ops-dashboard'],
@@ -103,14 +101,11 @@ export function useDashboardData() {
     retryDelay: (attemptIndex: number) => Math.min(1000 * 2 ** attemptIndex, 10_000),
   });
 
-  useEffect(() => {
-    if (query.data !== undefined) {
-      setLastUpdated(new Date());
-    }
-  }, [query.data]);
+  const lastUpdated = useMemo(() => {
+    return query.dataUpdatedAt > 0 ? new Date(query.dataUpdatedAt) : null;
+  }, [query.dataUpdatedAt]);
 
   const refetch = useCallback(async () => {
-    startTimeRef.current = Date.now();
     await queryClient.invalidateQueries({ queryKey: ['ops-dashboard'] });
   }, [queryClient]);
 

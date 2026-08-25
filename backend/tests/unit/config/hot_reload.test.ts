@@ -28,7 +28,6 @@ import {
   stopConfigWatcher,
   getConfig,
   getConfigStatus,
-  setConfig,
 } from '../../../src/config/index.js';
 import * as prometheus from '../../../src/api/metrics/prometheus.js';
 
@@ -138,7 +137,7 @@ describe('initializeConfigWatcher – hot-reload polling', () => {
     expect(getConfig().version_id).toBe('poll-v1');
 
     // Switch Redis to return v2
-    (redis.get as ReturnType<typeof vi.fn>).mockResolvedValue(v2);
+    redis.get.mockResolvedValue(v2);
 
     // Advance the fake clock past one polling interval
     await vi.advanceTimersByTimeAsync(100);
@@ -167,7 +166,7 @@ describe('initializeConfigWatcher – hot-reload polling', () => {
     expect(getConfig().version_id).toBe('rollback-v1');
 
     // Simulate a corrupt write to Redis
-    (redis.get as ReturnType<typeof vi.fn>).mockResolvedValue('{{corrupt}}');
+    redis.get.mockResolvedValue('{{corrupt}}');
     await vi.advanceTimersByTimeAsync(100);
 
     // Previous config retained
@@ -186,7 +185,7 @@ describe('initializeConfigWatcher – hot-reload polling', () => {
       version_id: 'bad-v1',
       tiers: { T: { min: 999, max: 1 } },
     });
-    (redis.get as ReturnType<typeof vi.fn>).mockResolvedValue(invalid);
+    redis.get.mockResolvedValue(invalid);
     await vi.advanceTimersByTimeAsync(100);
 
     // Rollback: original version must be retained
@@ -220,7 +219,7 @@ describe('stopConfigWatcher', () => {
     stopConfigWatcher();
 
     // Even if Redis now returns a new version, no poll should happen
-    (redis.get as ReturnType<typeof vi.fn>).mockResolvedValue(v2);
+    redis.get.mockResolvedValue(v2);
     await vi.advanceTimersByTimeAsync(300);
 
     // Version must NOT have changed
@@ -247,7 +246,7 @@ describe('Prometheus counters', () => {
     const redis = buildMockRedis({ existsResult: 1, getResult: v1 });
     await initializeConfigWatcher(redis as never, 50);
 
-    (redis.get as ReturnType<typeof vi.fn>).mockResolvedValue(v2);
+    redis.get.mockResolvedValue(v2);
     await vi.advanceTimersByTimeAsync(100);
 
     // incrementConfigReloadTotal is called from setConfig on every successful reload
@@ -261,7 +260,7 @@ describe('Prometheus counters', () => {
     const redis = buildMockRedis({ existsResult: 1, getResult: v1 });
     await initializeConfigWatcher(redis as never, 50);
 
-    (redis.get as ReturnType<typeof vi.fn>).mockResolvedValue(invalid);
+    redis.get.mockResolvedValue(invalid);
     await vi.advanceTimersByTimeAsync(100);
 
     expect(prometheus.incrementConfigValidationFailures).toHaveBeenCalled();
@@ -280,7 +279,7 @@ describe('getConfigStatus – validation error tracking', () => {
     const redis = buildMockRedis({ existsResult: 1, getResult: v1 });
     await initializeConfigWatcher(redis as never, 50);
 
-    (redis.get as ReturnType<typeof vi.fn>).mockResolvedValue(invalid);
+    redis.get.mockResolvedValue(invalid);
     await vi.advanceTimersByTimeAsync(100);
 
     const status = getConfigStatus();
@@ -299,12 +298,12 @@ describe('getConfigStatus – validation error tracking', () => {
     await initializeConfigWatcher(redis as never, 50);
 
     // First: push an invalid config to set the error
-    (redis.get as ReturnType<typeof vi.fn>).mockResolvedValue(invalid);
+    redis.get.mockResolvedValue(invalid);
     await vi.advanceTimersByTimeAsync(100);
     expect(getConfigStatus().lastValidationError).not.toBeNull();
 
     // Then: push a valid config to clear the error
-    (redis.get as ReturnType<typeof vi.fn>).mockResolvedValue(v2);
+    redis.get.mockResolvedValue(v2);
     await vi.advanceTimersByTimeAsync(100);
     expect(getConfigStatus().lastValidationError).toBeNull();
   });

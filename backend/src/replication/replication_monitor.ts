@@ -240,7 +240,6 @@ export class ReplicationMonitor {
       }
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
-      lagMs = -1;
     }
 
     const status = this._classify(lagMs);

@@ -550,8 +550,8 @@ export class InMemoryCertificateRegistry implements CertificateRegistry {
     }
   }
 
-  async lookup(serial: string): Promise<HardwareCertificate | null> {
-    return this.certs.get(serial) ?? null;
+  lookup(serial: string): Promise<HardwareCertificate | null> {
+    return Promise.resolve(this.certs.get(serial) ?? null);
   }
 }
 
@@ -561,8 +561,9 @@ export class InMemoryCertificateRegistry implements CertificateRegistry {
 export class InMemoryAttestationStore implements AttestationStore {
   readonly records: AttestationRecord[] = [];
 
-  async record(entry: AttestationRecord): Promise<void> {
+  record(entry: AttestationRecord): Promise<void> {
     this.records.push(entry);
+    return Promise.resolve();
   }
 
   clear(): void {

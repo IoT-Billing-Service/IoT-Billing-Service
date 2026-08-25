@@ -230,7 +230,7 @@ export function registerGeoPricingRoutes(app: FastifyInstance): void {
 
         const updated = await prisma.device.update({
           where: { id: deviceId },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
           data: { countryCode: normalised } as any,
         });
 

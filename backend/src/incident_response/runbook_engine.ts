@@ -27,7 +27,6 @@ import type {
   RunbookExecutionStatus,
   RunbookStepConfig,
   StepExecutionResult,
-  StepExecutionStatus,
   StepType,
   PagerDutyAction,
   PagerDutyEventResponse,
@@ -170,7 +169,7 @@ export class RunbookEngine {
         if (stepResult.status === 'failed' || stepResult.status === 'timed_out') {
           // Execute rollback if configured.
           if (stepConfig.rollbackStep !== undefined) {
-            const rollbackResult = await this.executeRollback(stepConfig, incident);
+            const rollbackResult = this.executeRollback(stepConfig, incident);
             steps.push(rollbackResult);
           }
 
@@ -259,11 +258,11 @@ export class RunbookEngine {
         case 'http_request':
           return await this.executeHttpStep(config, incident, startedAt);
         case 'database_query':
-          return await this.executeDatabaseStep(config, incident, startedAt);
+          return this.executeDatabaseStep(config, incident, startedAt);
         case 'blockchain_tx':
-          return await this.executeBlockchainStep(config, incident, startedAt);
+          return this.executeBlockchainStep(config, incident, startedAt);
         case 'notification':
-          return await this.executeNotificationStep(config, incident, startedAt);
+          return this.executeNotificationStep(config, incident, startedAt);
         case 'script':
           return await this.executeScriptStep(config, incident, startedAt);
         case 'sleep':
@@ -375,11 +374,11 @@ export class RunbookEngine {
   /**
    * Execute a database query step.
    */
-  private async executeDatabaseStep(
+  private executeDatabaseStep(
     config: RunbookStepConfig & { type: 'database_query' },
     incident: DetectedIncident,
     startedAt: string,
-  ): Promise<StepExecutionResult> {
+  ): StepExecutionResult {
     // Database query execution requires a Prisma client or pg pool.
     // In production, this would be wired to the application's database.
     // For now, we return a placeholder result.
@@ -399,11 +398,11 @@ export class RunbookEngine {
   /**
    * Execute a blockchain transaction step.
    */
-  private async executeBlockchainStep(
+  private executeBlockchainStep(
     config: RunbookStepConfig & { type: 'blockchain_tx' },
     incident: DetectedIncident,
     startedAt: string,
-  ): Promise<StepExecutionResult> {
+  ): StepExecutionResult {
     // Blockchain transaction execution requires Soroban SDK configuration.
     // In production, this would submit a transaction via the tx_manager.
     return {
@@ -422,11 +421,11 @@ export class RunbookEngine {
   /**
    * Execute a notification step.
    */
-  private async executeNotificationStep(
+  private executeNotificationStep(
     config: RunbookStepConfig & { type: 'notification' },
     incident: DetectedIncident,
     startedAt: string,
-  ): Promise<StepExecutionResult> {
+  ): StepExecutionResult {
     const message = substituteVariables(config.message, incident);
 
     switch (config.channel) {
@@ -610,11 +609,7 @@ export class RunbookEngine {
     startedAt: string,
   ): Promise<StepExecutionResult> {
     try {
-      const result = await this.executeStep(
-        config.rollbackAction as RunbookStepConfig,
-        incident,
-        [],
-      );
+      const result = await this.executeStep(config.rollbackAction, incident, []);
       return {
         stepName: config.name,
         stepType: 'rollback',
@@ -641,10 +636,10 @@ export class RunbookEngine {
   /**
    * Execute rollback for a failed step.
    */
-  private async executeRollback(
+  private executeRollback(
     failedStep: RunbookStepConfig,
-    incident: DetectedIncident,
-  ): Promise<StepExecutionResult> {
+    _incident: DetectedIncident,
+  ): StepExecutionResult {
     const startedAt = new Date().toISOString();
     return {
       stepName: `rollback_${failedStep.name}`,
@@ -719,7 +714,7 @@ export class RunbookEngine {
 
     if (firstPart === 'context' && parts[1] !== undefined) {
       const secondPart: string = parts[1];
-      const contextValue: unknown = (incident.context as Record<string, unknown>)[secondPart];
+      const contextValue: unknown = incident.context[secondPart];
       return contextValue !== undefined && contextValue !== null ? String(contextValue) : '';
     }
 

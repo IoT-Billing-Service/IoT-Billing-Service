@@ -125,6 +125,7 @@ export class BalanceManager {
         `Balance reconciliation failed for ${stellarAddress}: ${
           error instanceof Error ? error.message : String(error)
         }`,
+        { cause: error },
       );
     }
   }

@@ -357,6 +357,7 @@ billing_pending_transactions ${metrics.pendingTransactions}
   });
 
   return app;
+}
 
 // ─── Server Starter ─────────────────────────────────────────────────────────
 

@@ -197,7 +197,7 @@ export class SettlementCron {
     }
 
     // Submit on-chain settlement transaction to Soroban.
-    let txHash: string | null = null;
+    let txHash: string | null;
     try {
       txHash = await this.submitSettlementTx(cycleId, totalUsage);
     } catch (err) {
@@ -324,6 +324,7 @@ export class SettlementCron {
           `Soroban settlement tx failed for cycle ${cycleId}: ${
             err instanceof Error ? err.message : String(err)
           }`,
+          { cause: err },
         );
       }
     }

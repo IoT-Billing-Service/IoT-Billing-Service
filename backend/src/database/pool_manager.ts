@@ -383,7 +383,7 @@ function getPoolManager(): ElasticPoolManager {
         });
       }
     });
-  } catch (err) {
+  } catch {
     // SecretManager might not be initialized during certain CLI tasks
   }
 

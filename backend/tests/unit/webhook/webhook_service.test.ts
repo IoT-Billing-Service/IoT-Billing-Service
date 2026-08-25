@@ -4,7 +4,6 @@ import {
   WEBHOOK_SIGNATURE_HEADER,
   WEBHOOK_DELIVERY_ID_HEADER,
   WEBHOOK_TIMESTAMP_HEADER,
-  type WebhookEventType,
 } from '../../../src/webhook/webhook_service.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -175,7 +174,7 @@ describe('WebhookService', () => {
         maxAttempts: 1,
       });
 
-      const sub = svc.register('https://example.com/hook', ['refund.completed']);
+      svc.register('https://example.com/hook', ['refund.completed']);
 
       await svc.publish('refund.completed', { refundId: 'ref-1' });
 
@@ -196,7 +195,7 @@ describe('WebhookService', () => {
         maxAttempts: 1,
       });
 
-      const sub = svc.register('https://example.com/hook', ['device.registered'], 'test-secret');
+      svc.register('https://example.com/hook', ['device.registered'], 'test-secret');
 
       await svc.publish('device.registered', { deviceId: 'dev-1' });
 
@@ -279,7 +278,7 @@ describe('WebhookService', () => {
     it('returns empty results when no subscriptions match', async () => {
       service.register('https://example.com/hook', ['device.registered']);
 
-      const results = await service.publish('billing.cycle.settled' as WebhookEventType, {
+      const results = await service.publish('billing.cycle.settled', {
         id: '1',
       });
 

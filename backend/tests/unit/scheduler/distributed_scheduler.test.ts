@@ -225,10 +225,8 @@ describe('DistributedScheduler', () => {
       await internal.executeJob(job as Job);
 
       const retryUpdate = mockPool.query.mock.calls.find(
-        (call: any) =>
-          typeof call?.[0] === 'string' &&
-          call[0].includes("status = 'PENDING'") &&
-          call[0].includes('retries'),
+        ([sql]: [string]) =>
+          typeof sql === 'string' && sql.includes("status = 'PENDING'") && sql.includes('retries'),
       );
       expect(retryUpdate).toBeDefined();
       expect(retryUpdate?.[1]).toEqual([1, 'boom', 'job-1']);
