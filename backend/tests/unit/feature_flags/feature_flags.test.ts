@@ -17,7 +17,6 @@ import {
   clearFlagOverride,
   clearAllOverrides,
   resetFeatureFlagsForTesting,
-  getFlagDefinition,
   getAllFlagDefinitions,
   computeDegradationProfile,
   initializeFeatureFlagWatcher,
@@ -62,7 +61,7 @@ describe('isFlagEnabledSync', () => {
   });
 
   it('reflects in-memory overrides', async () => {
-    await setFlagOverride(mockRedis as any, FeatureFlag.BATCH_BILLING, false);
+    await setFlagOverride(mockRedis, FeatureFlag.BATCH_BILLING, false);
     expect(isFlagEnabledSync(FeatureFlag.BATCH_BILLING)).toBe(false);
   });
 });
@@ -75,21 +74,21 @@ describe('isFlagEnabled with Redis', () => {
 
   it('uses default when no Redis override exists', async () => {
     mockRedis.hgetall.mockResolvedValue({});
-    const result = await isFlagEnabled(FeatureFlag.BATCH_BILLING, mockRedis as any);
+    const result = await isFlagEnabled(FeatureFlag.BATCH_BILLING, mockRedis);
     expect(result).toBe(true);
   });
 
   it('reads override from Redis', async () => {
     mockRedis.hgetall.mockResolvedValue({ batch_billing: 'false' });
-    const result = await isFlagEnabled(FeatureFlag.BATCH_BILLING, mockRedis as any);
+    const result = await isFlagEnabled(FeatureFlag.BATCH_BILLING, mockRedis);
     expect(result).toBe(false);
   });
 
   it('caches results for CACHE_TTL_MS', async () => {
     mockRedis.hgetall.mockResolvedValue({});
-    await isFlagEnabled(FeatureFlag.BATCH_BILLING, mockRedis as any);
+    await isFlagEnabled(FeatureFlag.BATCH_BILLING, mockRedis);
     const callCount = mockRedis.hgetall.mock.calls.length;
-    await isFlagEnabled(FeatureFlag.BATCH_BILLING, mockRedis as any);
+    await isFlagEnabled(FeatureFlag.BATCH_BILLING, mockRedis);
     expect(mockRedis.hgetall.mock.calls.length).toBe(callCount);
   });
 });
@@ -102,7 +101,7 @@ describe('setFlagOverride / clearFlagOverride', () => {
 
   it('sets override and clears cache', async () => {
     mockRedis.hset.mockResolvedValue(1);
-    await setFlagOverride(mockRedis as any, FeatureFlag.BATCH_BILLING, false);
+    await setFlagOverride(mockRedis, FeatureFlag.BATCH_BILLING, false);
     expect(mockRedis.hset).toHaveBeenCalledWith(
       'feature_flags:overrides',
       'batch_billing',
@@ -114,16 +113,16 @@ describe('setFlagOverride / clearFlagOverride', () => {
   it('clears override and reverts to default', async () => {
     mockRedis.hset.mockResolvedValue(1);
     mockRedis.hdel.mockResolvedValue(1);
-    await setFlagOverride(mockRedis as any, FeatureFlag.BATCH_BILLING, false);
+    await setFlagOverride(mockRedis, FeatureFlag.BATCH_BILLING, false);
     expect(isFlagEnabledSync(FeatureFlag.BATCH_BILLING)).toBe(false);
-    await clearFlagOverride(mockRedis as any, FeatureFlag.BATCH_BILLING);
+    await clearFlagOverride(mockRedis, FeatureFlag.BATCH_BILLING);
     expect(mockRedis.hdel).toHaveBeenCalledWith('feature_flags:overrides', 'batch_billing');
     expect(isFlagEnabledSync(FeatureFlag.BATCH_BILLING)).toBe(true);
   });
 
   it('clearAllOverrides removes all overrides', async () => {
     mockRedis.del.mockResolvedValue(1);
-    await clearAllOverrides(mockRedis as any);
+    await clearAllOverrides(mockRedis);
     expect(mockRedis.del).toHaveBeenCalledWith('feature_flags:overrides');
   });
 });
@@ -171,7 +170,7 @@ describe('initializeFeatureFlagWatcher', () => {
 
   it('syncs overrides on init', async () => {
     mockRedis.hgetall.mockResolvedValue({});
-    await initializeFeatureFlagWatcher(mockRedis as any);
+    await initializeFeatureFlagWatcher(mockRedis);
     expect(mockRedis.hgetall).toHaveBeenCalledWith('feature_flags:overrides');
   });
 });

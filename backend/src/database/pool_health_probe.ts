@@ -1,5 +1,3 @@
-import pg from 'pg';
-import { getEnv } from '../config/env.js';
 import {
   ElasticPoolManager,
   GLOBAL_MIN_CONNECTIONS,

@@ -44,7 +44,7 @@ export class TenantCache {
         const profile = JSON.parse(l2Hit) as TenantProfile;
         this.setL1Cache(deviceId, profile);
         return profile;
-      } catch (err) {
+      } catch {
         // Invalid JSON in cache, fallback to DB
       }
     }

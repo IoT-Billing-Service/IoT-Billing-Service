@@ -39,6 +39,7 @@ model Account {
   webhookSubscriptions WebhookSubscription[]
   billingCycles   BillingCycle[]
   refunds         RefundRecord[]
+  subscriptions   Subscription[]
 
   @@map("accounts")
 }
@@ -255,6 +256,98 @@ model LedgerSyncState {
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("ledger_sync_state")
+}
+
+model Subscription {
+  id             String   @id @default(cuid())
+  accountId      String   @map("account_id")
+  planId         String   @map("plan_id")
+  amountDue      BigInt   @map("amount_due")
+  periodDays     Int      @map("period_days")
+  expiresAt      DateTime @map("expires_at")
+  autoRenew      Boolean  @default(true) @map("auto_renew")
+  renewalStatus  String   @default("ACTIVE") @map("renewal_status")
+  lockVersion    Int      @default(1) @map("lock_version")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  account Account @relation(fields: [accountId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model OAuth2Client {
+  id                String   @id @default(cuid())
+  name              String
+  clientSecretHash  String?  @map("client_secret_hash")
+  redirectUris      String   @map("redirect_uris")
+  allowedScopes     String   @map("allowed_scopes")
+  ownerWallet       String   @map("owner_wallet")
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  authCodes OAuth2AuthCode[]
+  tokens    OAuth2Token[]
+
+  @@map("oauth2_clients")
+}
+
+model OAuth2AuthCode {
+  id                    String   @id @default(cuid())
+  clientId              String   @map("client_id")
+  walletAddress         String   @map("wallet_address")
+  redirectUri           String   @map("redirect_uri")
+  grantedScopes         String   @map("granted_scopes")
+  codeChallenge         String   @map("code_challenge")
+  codeChallengeMethod   String   @map("code_challenge_method")
+  codeHash              String   @unique @map("code_hash")
+  used                  Boolean  @default(false)
+  expiresAt             DateTime @map("expires_at")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  client OAuth2Client @relation(fields: [clientId], references: [id])
+
+  @@map("oauth2_auth_codes")
+}
+
+model OAuth2Token {
+  id             String    @id @default(cuid())
+  clientId       String    @map("client_id")
+  walletAddress  String    @map("wallet_address")
+  tokenType      String    @map("token_type")
+  tokenHash      String    @unique @map("token_hash")
+  scopes         String
+  expiresAt      DateTime  @map("expires_at")
+  revokedAt      DateTime? @map("revoked_at")
+  parentTokenId  String?   @map("parent_token_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  client      OAuth2Client  @relation(fields: [clientId], references: [id])
+  parentToken OAuth2Token?  @relation("TokenRotation", fields: [parentTokenId], references: [id])
+  childTokens OAuth2Token[] @relation("TokenRotation")
+
+  @@map("oauth2_tokens")
+}
+
+model RefundRecord {
+  id               String   @id @default(cuid())
+  billingRecordId  String   @map("billing_record_id")
+  accountId        String   @map("account_id")
+  amount           BigInt
+  state            String
+  lockVersion      Int      @default(1) @map("lock_version")
+  txHash           String?  @map("tx_hash")
+  retryCount       Int      @default(0) @map("retry_count")
+  reason           String?
+  idempotencyKey   String   @unique @map("idempotency_key")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  billingRecord BillingRecord @relation(fields: [billingRecordId], references: [id])
+  account       Account       @relation(fields: [accountId], references: [id])
+
+  @@map("refund_records")
 }
 
 /// Audit snapshot of the pricing tier table captured at finalization time

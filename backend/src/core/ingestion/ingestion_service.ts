@@ -22,13 +22,7 @@ import { Buffer } from 'node:buffer';
 import type { PrismaClient } from '@prisma/client';
 import { ZkRangeProofVerifier } from '../crypto/zk_verifier.js';
 import { PowVerifier, type PowSolution, DEFAULT_DIFFICULTY } from '../crypto/pow_verifier.js';
-import {
-  decryptSensitiveFields,
-  tryParseEncryptedField,
-  ENCRYPTION_KEY_LENGTH,
-  E2E_ERROR_CODES,
-  type EncryptionKey,
-} from '../crypto/e2e_encryption.js';
+import { decryptSensitiveFields, type EncryptionKey } from '../crypto/e2e_encryption.js';
 import { MetricBoundsEnforcer, PRIVACY_VIOLATION_ERROR_CODE } from '../../config/metric_ranges.js';
 import { validateSignature, type SignedPayload, type NonceCache } from './validator.js';
 
@@ -230,7 +224,7 @@ export class IngestionService {
 
       if (this.encryptionKeyRaw !== null && request.payload.encrypted !== undefined) {
         const encryptedFields = request.payload.encrypted;
-        const { decrypted, count, failures } = decryptSensitiveFields(
+        const { decrypted, failures } = decryptSensitiveFields(
           encryptedFields,
           this.encryptionKeyRaw,
         );

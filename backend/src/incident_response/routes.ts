@@ -15,7 +15,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getEnv } from '../config/env.js';
-import type { DetectedIncident, IncidentSeverity, RunbookDefinition } from './types.js';
+import type { IncidentSeverity, RunbookDefinition } from './types.js';
 import type { RunbookEngine } from './runbook_engine.js';
 import type { IncidentDetector } from './incident_detector.js';
 import { BUILTIN_RUNBOOKS, BUILTIN_RUNBOOKS_BY_NAME } from './runbook_definitions.js';
@@ -203,7 +203,7 @@ export function registerIncidentResponseRoutes(
 
       // Override source if provided.
       if (source !== undefined) {
-        (incident as { source: string }).source = source as DetectedIncident['source'];
+        (incident as { source: string }).source = source;
       }
 
       // Execute the runbook.
@@ -271,7 +271,7 @@ export function registerIncidentResponseRoutes(
       );
 
       if (source !== undefined) {
-        (incident as { source: string }).source = source as DetectedIncident['source'];
+        (incident as { source: string }).source = source;
       }
 
       // Find matching runbook.

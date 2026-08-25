@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../../src/api/metrics/prometheus.js', () => ({
   incrementFeatureFlagEvaluations: vi.fn(),
@@ -23,8 +23,6 @@ vi.mock('../../../src/core/feature_flags/index.js', async (importOriginal) => {
   };
 });
 
-import { FlagPriority } from '../../../src/core/feature_flags/index.js';
-
 import {
   computeSheddingDecision,
   SheddingAction,
@@ -34,14 +32,6 @@ import {
   getSheddingStatus,
   resetCapacitySheddingForTesting,
 } from '../../../src/core/capacity_shedding/index.js';
-
-function defaultDegradationProfile() {
-  return {
-    shedNonCritical: false,
-    disabledFlags: [],
-    activePriority: FlagPriority.LOW,
-  };
-}
 
 function mockRequest(url: string, method = 'GET'): any {
   return {

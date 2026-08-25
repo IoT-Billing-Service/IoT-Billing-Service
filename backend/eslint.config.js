@@ -65,6 +65,16 @@ export default tseslint.config(
       '@typescript-eslint/prefer-nullish-coalescing': 'off',
       '@typescript-eslint/prefer-optional-chain': 'off',
       '@typescript-eslint/strict-boolean-expressions': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  // Unit and security tests: relax stylistic rules that are noisy in test code.
+  {
+    files: ['tests/unit/**/*.ts', 'tests/security/**/*.ts'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/await-thenable': 'off',
     },
   },
 );

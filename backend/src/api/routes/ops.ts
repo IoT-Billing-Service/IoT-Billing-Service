@@ -196,9 +196,6 @@ export function registerOpsRoutes(app: FastifyInstance): void {
                 : Promise.resolve(null),
             ]);
 
-          // Types for Prisma groupBy result shapes (inference limitation with Promise.all).
-          type G = { _count: { id: number }; [key: string]: unknown };
-
           // Compute device summary
           const totalDevices = deviceCounts.reduce(
             (sum: number, g: { _count: { id: number } }) => sum + g._count.id,

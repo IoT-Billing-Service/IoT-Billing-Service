@@ -475,9 +475,6 @@ export class ReconciliationService {
       outcome = 'requires_review';
     } else if (severity === DiscrepancySeverity.CRITICAL) {
       outcome = 'critical_alert';
-    } else {
-      // NONE — everything matches
-      outcome = 'matched';
     }
 
     return {
