@@ -10,6 +10,33 @@ groups:
           summary: "Billing P99 latency exceeds 200ms"
           description: "P99 billing latency is {{ $value }}ms, exceeding 200ms target"
 
+      - alert: EscrowP99LatencyExceeded
+        expr: escrow_p99_latency_ms > 200
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Escrow contract P99 latency exceeds 200ms"
+          description: "Escrow P99 latency is {{ $value }}ms, exceeding the 200ms performance target"
+
+      - alert: EscrowP99TargetFailed
+        expr: escrow_p99_target_passed == 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Escrow load test P99 target gate failed"
+          description: "The escrow contract load test P99 gate has failed. Investigate billing operation latency."
+
+      - alert: EscrowGasConsumptionHigh
+        expr: escrow_op_gas_avg > 15000000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Escrow operation gas consumption is high"
+          description: "Operation {{ $labels.operation }} avg gas {{ $value }} stroops exceeds 15M threshold"
+
       - alert: RuntimeConfigurationDrift
         expr: runtime_config_integrity_state < 1 or increase(runtime_config_drift_events_total[5m]) > 0
         for: 0s
