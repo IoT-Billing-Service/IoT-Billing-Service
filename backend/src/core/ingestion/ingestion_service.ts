@@ -19,12 +19,27 @@
  */
 
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
+import nacl from 'tweetnacl';
 import { ZkRangeProofVerifier } from '../crypto/zk_verifier.js';
 import { PowVerifier, type PowSolution, DEFAULT_DIFFICULTY } from '../crypto/pow_verifier.js';
 import { decryptSensitiveFields, type EncryptionKey } from '../crypto/e2e_encryption.js';
 import { MetricBoundsEnforcer, PRIVACY_VIOLATION_ERROR_CODE } from '../../config/metric_ranges.js';
-import { validateSignature, type SignedPayload, type NonceCache } from './validator.js';
+import {
+  validateSignature,
+  buildSignedMessage,
+  type SignedPayload,
+  type NonceCache,
+} from './validator.js';
+import type { IngestionRetryQueue, IngestionRetryJob, StoredIngestRequest } from './retry_queue.js';
+import {
+  DeviceDisabledError,
+  DeviceNotFoundError,
+  PayloadIntegrityError,
+  isPermanentIngestionError,
+} from './errors.js';
+import { incrementIngestionRetryJobsEnqueued } from '../../api/metrics/prometheus.js';
 
 // ── Error codes ────────────────────────────────────────────────────────────────
 
@@ -68,6 +83,14 @@ export interface TelemetryEntry {
 
 export interface IngestMetricsResult {
   success: boolean;
+  /** True when the payload passed verification but persistence was deferred
+   *  to the durable retry queue (issue #292). The client should treat this as
+   *  an acceptance, not an error. */
+  accepted?: boolean;
+  /** Durable retry job id, present when `accepted` is true. */
+  jobId?: string;
+  /** Hint (ms) before the client should consider the job still in flight. */
+  retryAfterMs?: number;
   errorCode?: IngestionErrorCode;
   reason?: string;
   /** Number of telemetry records persisted. */
@@ -92,9 +115,32 @@ export interface IngestionServiceOptions {
    * key, encrypted fields are left as-is.
    */
   encryptionKey?: EncryptionKey;
+  /**
+   * Durable retry queue (issue #292). When set, a transient persistence
+   * failure that survives the fast in-flight retries is enqueued and the
+   * request is accepted (HTTP 202) instead of failing with ERR_INTERNAL.
+   */
+  retryQueue?: IngestionRetryQueue;
+  /**
+   * Number of fast in-flight persistence retries before falling back to the
+   * durable queue. Default 2. Kept small so the ingest hot path stays well
+   * under the 200 ms P99 budget.
+   */
+  maxFastRetries?: number;
+  /** Base delay (ms) between fast in-flight retries. Default 10. */
+  fastRetryBaseDelayMs?: number;
+  /** Maximum delay (ms) for a fast in-flight retry. Default 100. */
+  fastRetryMaxDelayMs?: number;
 }
 
 // ── Service ────────────────────────────────────────────────────────────────────
+
+/** Default number of fast in-flight persistence retries (issue #292). */
+const DEFAULT_MAX_FAST_RETRIES = 2;
+/** Default base delay (ms) between fast in-flight persistence retries. */
+const DEFAULT_FAST_RETRY_BASE_MS = 10;
+/** Default cap (ms) for a single fast in-flight persistence retry delay. */
+const DEFAULT_FAST_RETRY_MAX_MS = 100;
 
 /**
  * Main ingestion orchestrator.
@@ -102,6 +148,15 @@ export interface IngestionServiceOptions {
  * Every public method is fully synchronous except for the Prisma write step.
  * The verification pipeline short-circuits at the first failure to minimise
  * CPU waste.
+ *
+ * ## Fault tolerance (issue #292)
+ *
+ * The persistence step is wrapped in a small fast-retry loop (default 2
+ * retries, sub-100 ms backoff) that absorbs short-lived DB blips on the hot
+ * path. When the durable {@link IngestionRetryQueue} is configured and the
+ * fast retries are exhausted, the fully-verified request is enqueued and the
+ * call returns `accepted: true` so nothing is lost — the background worker
+ * re-persists it with exponential backoff.
  */
 export class IngestionService {
   private readonly verifier = new ZkRangeProofVerifier();
@@ -293,13 +348,58 @@ export class IngestionService {
       }
 
       // ── Step 8: Persist telemetry via Prisma transaction ────────────────
-      const recordsWritten = await this.persistTelemetry(request.payload.deviceId, metrics);
+      // Fault-tolerant (issue #292): transient DB failures are retried a few
+      // times in-flight; if they persist and a durable queue is configured,
+      // the verified request is enqueued and the call is accepted (202).
+      try {
+        const recordsWritten = await this.persistWithFastRetry(request.payload.deviceId, metrics);
+        return {
+          success: true,
+          deviceId: request.payload.deviceId,
+          recordsWritten,
+        };
+      } catch (persistErr) {
+        if (persistErr instanceof DeviceNotFoundError) {
+          return {
+            success: false,
+            errorCode: INGESTION_ERROR_CODES.DEVICE_NOT_FOUND,
+            reason: persistErr.message,
+            deviceId: request.payload.deviceId,
+          };
+        }
+        if (persistErr instanceof DeviceDisabledError) {
+          return {
+            success: false,
+            errorCode: INGESTION_ERROR_CODES.DEVICE_DISABLED,
+            reason: persistErr.message,
+            deviceId: request.payload.deviceId,
+          };
+        }
+        // Permanent failures other than device state must not be enqueued.
+        if (isPermanentIngestionError(persistErr)) {
+          return {
+            success: false,
+            errorCode: INGESTION_ERROR_CODES.INTERNAL_ERROR,
+            reason: `Ingestion internal error: ${String(persistErr)}`,
+          };
+        }
 
-      return {
-        success: true,
-        deviceId: request.payload.deviceId,
-        recordsWritten,
-      };
+        // Transient failure that survived the fast retries.
+        if (this.options.retryQueue !== undefined) {
+          const jobId = await this.enqueueVerifiedRequest(request, proofBuffer, metrics);
+          return {
+            success: true,
+            accepted: true,
+            jobId,
+            retryAfterMs: this.options.fastRetryMaxDelayMs ?? DEFAULT_FAST_RETRY_MAX_MS,
+            deviceId: request.payload.deviceId,
+            recordsWritten: 0,
+          };
+        }
+
+        // No durable queue configured — preserve the legacy hard-fail path.
+        throw persistErr;
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return {
@@ -308,6 +408,152 @@ export class IngestionService {
         reason: `Ingestion internal error: ${message}`,
       };
     }
+  }
+
+  /**
+   * Re-persist a queued ingestion job (issue #292). Called by the retry
+   * worker. The queued request is re-verified cheaply before the DB write:
+   *
+   * 1. **Integrity** — the stored payload digest must match a fresh digest of
+   *    the stored request; JSONB key reordering is neutralised by canonical
+   *    serialisation.
+   * 2. **Authenticity** — the Ed25519 signature must still verify over the
+   *    exact signed message bytes captured at enqueue time.
+   * 3. **Bounds** — the (re-checked) metric values must still be in range.
+   *
+   * The sliding-window nonce/timestamp checks are intentionally NOT re-run:
+   * the payload already passed them on the hot path, and a delayed retry
+   * would fail the timestamp window for legitimate reasons.
+   *
+   * @returns the number of telemetry records persisted.
+   */
+  async persistVerifiedJob(job: IngestionRetryJob): Promise<number> {
+    const stored = job.stateData;
+
+    const freshDigest = sha256Hex(
+      canonicalJson({
+        payload: stored.payload,
+        publicKey: stored.publicKey,
+        proof: stored.proof,
+        powSolution: stored.powSolution,
+        metrics: stored.metrics,
+        signedMessage: stored.signedMessage,
+        verifiedAt: stored.verifiedAt,
+      }),
+    );
+    if (freshDigest !== stored.payloadDigest) {
+      throw new PayloadIntegrityError(job.id);
+    }
+
+    const publicKeyBytes = Buffer.from(stored.publicKey, 'hex');
+    if (publicKeyBytes.length !== 32) {
+      throw new PayloadIntegrityError(job.id);
+    }
+
+    const sigBytes = Buffer.from(stored.payload.signature, 'hex');
+    const signatureValid = nacl.sign.detached.verify(
+      Buffer.from(stored.signedMessage, 'utf-8'),
+      sigBytes,
+      publicKeyBytes,
+    );
+    if (!signatureValid) {
+      throw new PayloadIntegrityError(job.id);
+    }
+
+    // Defense-in-depth: re-enforce metric bounds on the stored plaintext.
+    const boundsResult = this.boundsEnforcer.enforceBatch(stored.metrics);
+    if (!boundsResult.allowed) {
+      throw new PayloadIntegrityError(job.id);
+    }
+
+    return this.persistTelemetry(stored.payload.deviceId, stored.metrics);
+  }
+
+  // ── Private fault-tolerant persistence (issue #292) ──────────────────────
+
+  /**
+   * Persist with a small number of fast in-flight retries for transient
+   * failures. Permanent failures (device not found / disabled) propagate
+   * immediately; transient failures retry with capped exponential backoff
+   * and re-throw once the budget is exhausted.
+   */
+  private async persistWithFastRetry(
+    deviceId: string,
+    metrics: Record<string, number>,
+  ): Promise<number> {
+    const maxFastRetries = this.options.maxFastRetries ?? DEFAULT_MAX_FAST_RETRIES;
+    const baseDelayMs = this.options.fastRetryBaseDelayMs ?? DEFAULT_FAST_RETRY_BASE_MS;
+    const maxDelayMs = this.options.fastRetryMaxDelayMs ?? DEFAULT_FAST_RETRY_MAX_MS;
+
+    let attempt = 0;
+    for (;;) {
+      try {
+        return await this.persistTelemetry(deviceId, metrics);
+      } catch (err) {
+        if (isPermanentIngestionError(err)) {
+          throw err;
+        }
+        attempt += 1;
+        if (attempt > maxFastRetries) {
+          throw err;
+        }
+        const delayMs = Math.min(baseDelayMs * 2 ** (attempt - 1), maxDelayMs);
+        await this.sleep(delayMs);
+      }
+    }
+  }
+
+  /**
+   * Persist the fully-verified request to the durable retry queue. The
+   * exact signed message bytes and the final verified metrics are captured
+   * so the retry worker can re-verify and re-persist without re-running the
+   * expensive checks or re-deriving decrypted values.
+   */
+  private async enqueueVerifiedRequest(
+    request: IngestMetricsRequest,
+    proofBuffer: Buffer,
+    metrics: Record<string, number>,
+  ): Promise<string> {
+    const queue = this.options.retryQueue;
+    if (queue === undefined) {
+      throw new Error('retryQueue is not configured');
+    }
+
+    const publicKeyHex =
+      typeof request.publicKey === 'string'
+        ? request.publicKey
+        : Buffer.from(request.publicKey).toString('hex');
+
+    const signedMessage = buildSignedMessage(request.payload).toString('utf-8');
+    const stored: StoredIngestRequest = {
+      payload: request.payload,
+      publicKey: publicKeyHex,
+      proof: proofBuffer.toString('base64'),
+      powSolution: request.powSolution,
+      metrics,
+      signedMessage,
+      verifiedAt: Date.now(),
+      payloadDigest: '',
+    };
+    stored.payloadDigest = sha256Hex(
+      canonicalJson({
+        payload: stored.payload,
+        publicKey: stored.publicKey,
+        proof: stored.proof,
+        powSolution: stored.powSolution,
+        metrics: stored.metrics,
+        signedMessage: stored.signedMessage,
+        verifiedAt: stored.verifiedAt,
+      }),
+    );
+
+    const jobId = await queue.enqueue(stored);
+    incrementIngestionRetryJobsEnqueued();
+    return jobId;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   // ── Private persistence ──────────────────────────────────────────────────
@@ -326,11 +572,11 @@ export class IngestionService {
     });
 
     if (!device) {
-      throw new Error(`Device not found: ${deviceId}`);
+      throw new DeviceNotFoundError(deviceId);
     }
 
     if (!device.enabled) {
-      throw new Error(`Device disabled: ${deviceId}`);
+      throw new DeviceDisabledError(deviceId);
     }
 
     const entries = Object.entries(metrics).map(([metricName, metricValue]) => {
@@ -368,6 +614,33 @@ export class IngestionService {
     // Ensure positive int32
     return (hash & 0x7fffffff) % 10000;
   }
+}
+
+/**
+ * Serialise an arbitrary JSON value with keys sorted recursively.
+ *
+ * Postgres JSONB does not preserve object key order, so a digest computed
+ * over `JSON.stringify` would change after a round-trip through the store.
+ * Sorting keys makes the digest stable regardless of JSONB normalisation.
+ */
+export function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
+  }
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record).sort();
+    const body = keys
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .join(',');
+    return `{${body}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** SHA-256 hex digest of a UTF-8 string. */
+export function sha256Hex(value: string): string {
+  return createHash('sha256').update(value, 'utf-8').digest('hex');
 }
 
 /**

@@ -148,6 +148,20 @@ function incrementValidationCount(): void {
 }
 
 /**
+ * Build the exact byte string a device signed: the payload with the
+ * `signature` field removed, serialised in arrival key order.
+ *
+ * Exporting this lets the ingestion retry path (issue #292) capture the
+ * signed bytes at enqueue time and re-verify them after the payload has
+ * round-tripped through JSONB (which reorders keys), without recomputing a
+ * different serialisation.
+ */
+export function buildSignedMessage(payload: SignedPayload): Buffer {
+  const { signature: _signature, ...rest } = payload;
+  return Buffer.from(JSON.stringify(rest), 'utf-8');
+}
+
+/**
  * Run every check that does not touch the nonce cache: signature length,
  * timestamp sliding window, and the Ed25519 signature itself. Returns a
  * rejecting {@link ValidationResult} on failure, or `null` when the payload is
@@ -158,9 +172,8 @@ function verifyAuthenticity(
   publicKey: Uint8Array,
   payload: SignedPayload,
 ): ValidationResult | null {
-  const { signature, ...rest } = payload;
-  const message = Buffer.from(JSON.stringify(rest), 'utf-8');
-  const sigBytes = Buffer.from(signature, 'hex');
+  const message = buildSignedMessage(payload);
+  const sigBytes = Buffer.from(payload.signature, 'hex');
 
   if (sigBytes.length !== 64) {
     span.setAttribute('validation.result', 'invalid_signature_length');

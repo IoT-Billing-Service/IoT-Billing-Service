@@ -217,7 +217,11 @@ describe('HealthDashboardService', () => {
         timestamp,
       );
 
-      const tamperedSignature = correctSignature.slice(0, -1) + '0'; // Tamper with last char
+      // Flip the last hex char so the tampered signature is guaranteed to
+      // differ from the correct one (appending '0' was a no-op when the last
+      // char was already '0', making this test flaky).
+      const lastChar = correctSignature.slice(-1);
+      const tamperedSignature = correctSignature.slice(0, -1) + (lastChar === '0' ? '1' : '0');
 
       const result = service.verifyTransaction(
         transactionId,
@@ -400,8 +404,13 @@ describe('HealthDashboardService', () => {
     it('should track transaction verification in compliance report', () => {
       for (let i = 0; i < 5; i++) {
         const id = `tx-${i}`;
-        const sig = service.generateTransactionSignature(id, 1000, 'acc-1', new Date());
-        service.verifyTransaction(id, 1000, 'acc-1', new Date(), sig);
+        // Verify with the SAME timestamp that produced the signature — the
+        // hash covers timestamp.getTime(), so a fresh Date() here would make
+        // verification fail whenever the two calls cross a millisecond
+        // boundary (flaky on fast machines / CI).
+        const ts = new Date();
+        const sig = service.generateTransactionSignature(id, 1000, 'acc-1', ts);
+        service.verifyTransaction(id, 1000, 'acc-1', ts, sig);
       }
 
       const report = service.getComplianceReport();
