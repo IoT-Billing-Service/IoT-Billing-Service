@@ -9,6 +9,12 @@ pub mod cross_contract;
 pub mod release;
 
 #[cfg(test)]
+pub mod gas_metrics;
+#[cfg(test)]
+pub mod load_test_harness;
+#[cfg(test)]
+pub mod load_tests;
+#[cfg(test)]
 mod tests;
 
 #[contracterror]
