@@ -47,6 +47,11 @@ const envSchema = z.object({
   TOKEN_REFRESH_HINT_SECONDS: z.coerce.number().int().nonnegative().default(120),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   OTEL_SERVICE_NAME: z.string().default('iot-billing-backend'),
+  // --- Structured logging (issue #276) ---------------------------------------
+  // Minimum severity a log record must meet to be emitted. Follows the same
+  // trace < debug < info < warn < error < fatal ordering as the OpenTelemetry
+  // Logs severity number scale (see core/diagnostics/logger.ts).
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   MAX_PAYLOAD_SIZE_BYTES: z.coerce.number().int().positive().default(65536),
   NONCE_WINDOW_MS: z.coerce.number().int().positive().default(5000),
   LEDGER_START: z.coerce.number().int().nonnegative().default(0),

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { FastifyRequest } from 'fastify';
+import { getLogger } from '../core/diagnostics/logger.js';
 
 export { loadEnv, getEnv } from './env.js';
 export type { Env } from './env.js';
@@ -258,7 +259,7 @@ export function configureRuntimeConfigurationAudit(
     authorizedKeys,
     auditSink: (event): void => {
       recordRuntimeConfigAuditEvent(event.event);
-      console.info(JSON.stringify({ ...event, component: 'runtime_configuration_audit' }));
+      getLogger().info(event.event, { ...event, component: 'runtime_configuration_audit' });
     },
   });
   setRuntimeConfigIntegrityState('unverified');
@@ -390,7 +391,10 @@ function parseAndValidateRedisConfig(raw: string): MetricRangesConfig | null {
   if (!validation.success) {
     configStatus.lastValidationError = validation.errors;
     incrementConfigValidationFailures();
-    console.error('Config validation failed (retaining previous config):', validation.errors);
+    getLogger().warn('config_validation_failed', {
+      errors: validation.errors,
+      outcome: 'retained_previous_config',
+    });
     return null;
   }
 
@@ -469,7 +473,7 @@ export async function initializeConfigWatcher(redis: Redis, intervalMs = 50): Pr
           // If config is null, validation failed; previous config retained (rollback).
         }
       } catch (err) {
-        console.error('Error polling Redis config:', err);
+        getLogger().error('redis_config_poll_failed', err);
       }
     })();
   }, intervalMs);

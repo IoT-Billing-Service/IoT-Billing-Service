@@ -4,6 +4,7 @@ import {
   verify as verifySignature,
   type KeyObject,
 } from 'node:crypto';
+import { getLogger } from '../core/diagnostics/logger.js';
 
 /** The only signature algorithm accepted for runtime configuration approvals. */
 export const RUNTIME_CONFIG_SIGNATURE_ALGORITHM = 'ed25519' as const;
@@ -110,7 +111,7 @@ export class RuntimeConfigurationAuditor<T> {
     this.auditSink =
       options.auditSink ??
       ((event: RuntimeConfigurationAuditEvent): void => {
-        console.info(JSON.stringify(event));
+        getLogger().info(event.event, event as unknown as Record<string, unknown>);
       });
   }
 
