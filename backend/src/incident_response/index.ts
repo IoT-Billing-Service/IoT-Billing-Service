@@ -40,6 +40,7 @@
  */
 
 import { PagerDutyClient } from './pagerduty_client.js';
+import { SlackClient } from './slack_client.js';
 import {
   IncidentDetector,
   createSloBurnRateRule,
@@ -67,6 +68,8 @@ import type { IncidentResponseConfig, DetectedIncident, RunbookDefinition } from
 export interface IncidentResponseModule {
   /** PagerDuty client instance. */
   pagerDutyClient: PagerDutyClient;
+  /** Slack client instance, if configured (issue #281). */
+  slackClient: SlackClient | undefined;
   /** Incident detector instance. */
   detector: IncidentDetector;
   /** Runbook engine instance. */
@@ -93,9 +96,15 @@ export function createIncidentResponseModule(
   // Create PagerDuty client.
   const pagerDutyClient = new PagerDutyClient(config.pagerDuty);
 
+  // Create Slack client (issue #281). Optional — omitted entirely (rather
+  // than constructed with an empty webhook URL) when not configured, so
+  // RunbookEngine's `this.slackClient !== null` check cleanly skips it.
+  const slackClient = config.slack ? new SlackClient(config.slack) : undefined;
+
   // Create runbook engine.
   const engine = new RunbookEngine({
     pagerDutyClient,
+    slackClient,
     maxConcurrentExecutions: config.maxConcurrentExecutions ?? 10,
     maxHistoryRecords: config.storage?.maxRecords ?? 1000,
   });
@@ -147,6 +156,7 @@ export function createIncidentResponseModule(
 
   return {
     pagerDutyClient,
+    slackClient,
     detector,
     engine,
     start: () => detector.start(),
