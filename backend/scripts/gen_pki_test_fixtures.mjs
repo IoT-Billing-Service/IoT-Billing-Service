@@ -185,25 +185,28 @@ const untrustedTbs = buildTbsCert({
 const untrustedDer = signAndBuild(untrustedTbs, untrustedCaKey.privPem);
 const untrustedPem = toPem(untrustedDer);
 
-// Soon-to-expire device cert (5 days from now — within 30-day warn window)
+// Soon-to-expire device cert (20 days from now — still inside the 30-day warn
+// window used by the expiry-warning tests, but beyond the 3-day window, so
+// both assertions hold for a comfortable CI lifetime).
 const soonTbs = buildTbsCert({
   serial: 5,
   issuerPairs: CA_PAIRS,
   subjectPairs: [[OID_CN, 'iot-device-soon-expire']],
   notBefore: MS(-1),
-  notAfter: MS(5),
+  notAfter: MS(20),
   rawPublicKey: deviceKey.rawPub,
   extensions: [extBasicConstraints(false)],
 });
 const soonDer = signAndBuild(soonTbs, caKey.privPem);
 const soonExpiryPem = toPem(soonDer);
 
-// Future (not yet valid) device cert
+// Future (not yet valid) device cert — starts 30 days from now so the
+// CERT_NOT_YET_VALID assertion holds for a comfortable CI lifetime.
 const futureTbs = buildTbsCert({
   serial: 6,
   issuerPairs: CA_PAIRS,
   subjectPairs: [[OID_CN, 'iot-device-future']],
-  notBefore: MS(1),   // starts tomorrow
+  notBefore: MS(30),
   notAfter: MS(365),
   rawPublicKey: deviceKey.rawPub,
   extensions: [extBasicConstraints(false)],

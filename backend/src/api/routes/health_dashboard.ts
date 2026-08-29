@@ -164,7 +164,7 @@ export async function registerHealthDashboardRoutes(app: FastifyInstance): Promi
    */
   app.post<{ Body: BillingOperationMetric }>(
     '/dashboard/health/record-billing',
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Body: BillingOperationMetric }>, reply: FastifyReply) => {
       try {
         const metric: BillingOperationMetric = request.body;
 
@@ -203,7 +203,7 @@ export async function registerHealthDashboardRoutes(app: FastifyInstance): Promi
    */
   app.post<{ Body: ServiceHealth }>(
     '/dashboard/health/record-service',
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Body: ServiceHealth }>, reply: FastifyReply) => {
       try {
         const service: ServiceHealth = request.body;
 
@@ -249,7 +249,18 @@ export async function registerHealthDashboardRoutes(app: FastifyInstance): Promi
     };
   }>(
     '/dashboard/health/verify-transaction',
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (
+      request: FastifyRequest<{
+        Body: {
+          transactionId: string;
+          amount: number;
+          accountId: string;
+          timestamp: string;
+          signature: string;
+        };
+      }>,
+      reply: FastifyReply,
+    ) => {
       try {
         const { transactionId, amount, accountId, timestamp, signature } = request.body;
 
@@ -295,7 +306,7 @@ export async function registerHealthDashboardRoutes(app: FastifyInstance): Promi
    */
   app.post<{ Body: Record<string, number> }>(
     '/dashboard/health/update-system-metrics',
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Body: Record<string, number> }>, reply: FastifyReply) => {
       try {
         dashboardService.updateSystemMetrics(request.body);
         return { updated: true };

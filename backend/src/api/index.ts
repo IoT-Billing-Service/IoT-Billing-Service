@@ -21,7 +21,12 @@ import {
   startTelemetryBridge,
   stopTelemetryBridge,
 } from './routes/telemetry_stream.js';
-import { registerIngestionRoutes } from './routes/ingestion.js';
+import {
+  registerIngestionRoutes,
+  initIngestionService,
+  startIngestionRetryWorker,
+  stopIngestionRetryWorker,
+} from './routes/ingestion.js';
 import { registerAttestationRoutes, initAttestationService } from './routes/attestation.js';
 import {
   TelemetryNotificationListener,
@@ -157,6 +162,12 @@ async function start(): Promise<void> {
   const env = getEnv();
   const prisma = new PrismaClient();
   initAttestationService(undefined, undefined, undefined, prisma);
+
+  // Issue #292: initialise the fault-tolerant ingestion pipeline (durable
+  // retry queue + worker + DLQ). The worker only starts once the server is
+  // listening, below.
+  initIngestionService(prisma);
+
   const renewalCron = new RenewalCron(buildPrismaSubscriptionStore(prisma));
   renewalCron.start();
 
@@ -239,6 +250,7 @@ async function start(): Promise<void> {
     app.log.info(`Received ${signal}, shutting down`);
     synchronizer.stop();
     renewalCron.stop();
+    stopIngestionRetryWorker();
     getSseManager().shutdown();
     stopTelemetryBridge();
     gcMonitor.stop();
@@ -263,6 +275,9 @@ async function start(): Promise<void> {
   process.once('SIGTERM', () => {
     void shutdown('SIGTERM');
   });
+
+  // Issue #292: start the retry worker now that traffic can flow.
+  startIngestionRetryWorker();
 
   try {
     await app.listen({ port: env.PORT, host: env.HOST });

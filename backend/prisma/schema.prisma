@@ -135,14 +135,30 @@ model TelemetryData {
   @@map("telemetry_data")
 }
 
+/// Durable retry queue for validated telemetry payloads whose persistence
+/// failed transiently (issue #292). A row is created only AFTER the payload
+/// passed the full cryptographic verification pipeline (PoW, Ed25519
+/// signature + nonce, ZK range proof, metric bounds), so the stored request
+/// can be safely re-persisted by the retry worker without re-running the
+/// expensive checks. `stateData` holds the verified request plus a digest
+/// used to detect tampering while the job is queued.
 model IngestionJob {
-  id         String   @id @default(cuid())
-  deviceId   String   @map("device_id")
-  status     String   @default("pending")
-  stateData  Json?    @map("state_data")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(cuid())
+  deviceId      String   @map("device_id")
+  /// pending -> processing -> completed | failed
+  status        String   @default("pending")
+  /// Number of failed processing attempts so far.
+  retryCount    Int      @default(0) @map("retry_count")
+  /// Earliest time the retry worker may claim this job again.
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+  /// Human-readable reason from the most recent failed attempt.
+  lastError     String?  @map("last_error")
+  /// Verified request (payload, public key, proof, PoW) + payload digest.
+  stateData     Json?    @map("state_data")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
+  @@index([status, nextAttemptAt])
   @@map("ingestion_jobs")
 }
 
@@ -328,26 +344,6 @@ model OAuth2Token {
   childTokens OAuth2Token[] @relation("TokenRotation")
 
   @@map("oauth2_tokens")
-}
-
-model RefundRecord {
-  id               String   @id @default(cuid())
-  billingRecordId  String   @map("billing_record_id")
-  accountId        String   @map("account_id")
-  amount           BigInt
-  state            String
-  lockVersion      Int      @default(1) @map("lock_version")
-  txHash           String?  @map("tx_hash")
-  retryCount       Int      @default(0) @map("retry_count")
-  reason           String?
-  idempotencyKey   String   @unique @map("idempotency_key")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  billingRecord BillingRecord @relation(fields: [billingRecordId], references: [id])
-  account       Account       @relation(fields: [accountId], references: [id])
-
-  @@map("refund_records")
 }
 
 /// Audit snapshot of the pricing tier table captured at finalization time

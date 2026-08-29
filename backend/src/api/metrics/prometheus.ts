@@ -1211,6 +1211,71 @@ export function recordPaymentChannelDispute(): void {
   paymentChannelDisputesTotal.inc();
 }
 
+// ── Ingestion retry queue metrics (issue #292) ────────────────────────────────
+
+/** Total verified telemetry requests enqueued for asynchronous retry. */
+export const ingestionRetryJobsEnqueuedTotal: promClient.Counter = new promClient.Counter({
+  name: 'ingestion_retry_jobs_enqueued_total',
+  help: 'Total telemetry payloads enqueued for asynchronous retry after transient persistence failure',
+});
+
+/** Total persistence attempts made by the retry worker. */
+export const ingestionRetryAttemptsTotal: promClient.Counter = new promClient.Counter({
+  name: 'ingestion_retry_attempts_total',
+  help: 'Total persistence attempts made by the ingestion retry worker',
+});
+
+/** Total jobs requeued for another attempt after a transient failure. */
+export const ingestionRetryRequeuedTotal: promClient.Counter = new promClient.Counter({
+  name: 'ingestion_retry_requeued_total',
+  help: 'Total ingestion jobs requeued after a transient failure',
+});
+
+/** Total jobs successfully persisted by the retry worker. */
+export const ingestionRetryCompletedTotal: promClient.Counter = new promClient.Counter({
+  name: 'ingestion_retry_completed_total',
+  help: 'Total ingestion jobs successfully persisted by the retry worker',
+});
+
+/** Total jobs that exhausted the retry budget (dead-lettered). */
+export const ingestionRetryDlqTotal: promClient.Counter = new promClient.Counter({
+  name: 'ingestion_retry_dlq_total',
+  help: 'Total ingestion jobs dead-lettered after exhausting the retry budget',
+});
+
+/** Jobs currently pending or being processed by the retry worker. */
+export const ingestionRetryQueueDepth: promClient.Gauge = new promClient.Gauge({
+  name: 'ingestion_retry_queue_depth',
+  help: 'Number of ingestion jobs awaiting or undergoing asynchronous retry',
+  labelNames: ['state'],
+});
+
+export function incrementIngestionRetryJobsEnqueued(): void {
+  ingestionRetryJobsEnqueuedTotal.inc();
+}
+
+export function incrementIngestionRetryAttempts(): void {
+  ingestionRetryAttemptsTotal.inc();
+}
+
+export function incrementIngestionRetryRequeued(): void {
+  ingestionRetryRequeuedTotal.inc();
+}
+
+export function incrementIngestionRetryCompleted(): void {
+  ingestionRetryCompletedTotal.inc();
+}
+
+export function incrementIngestionRetryDlq(): void {
+  ingestionRetryDlqTotal.inc();
+}
+
+/** Update the queue-depth gauge from the latest poll snapshot. */
+export function setIngestionRetryQueueDepth(pending: number, processing: number): void {
+  ingestionRetryQueueDepth.set({ state: 'pending' }, pending);
+  ingestionRetryQueueDepth.set({ state: 'processing' }, processing);
+}
+
 /**
  * Register the `GET /metrics` endpoint that returns Prometheus text format.
  *
