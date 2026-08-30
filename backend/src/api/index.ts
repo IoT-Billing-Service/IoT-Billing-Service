@@ -232,12 +232,25 @@ async function start(): Promise<void> {
   consumerLagMonitor.start();
 
   // Issue #85: Incident Response Runbook Automation with PagerDuty Integration.
+  // Issue #281: Slack notification channel, alongside PagerDuty.
   // Initialise the module and register admin API routes.
+  const slackWebhookUrl = process.env['SLACK_WEBHOOK_URL'];
   const incidentResponseConfig = {
     pagerDuty: {
       routingKey: process.env['PAGERDUTY_ROUTING_KEY'] ?? '',
       apiBaseUrl: process.env['PAGERDUTY_API_BASE_URL'],
     },
+    // Only set when a webhook URL is actually configured, so an
+    // unconfigured deployment doesn't construct a SlackClient that would
+    // just fail every post — see createIncidentResponseModule.
+    ...(slackWebhookUrl
+      ? {
+          slack: {
+            webhookUrl: slackWebhookUrl,
+            channel: process.env['SLACK_CHANNEL'],
+          },
+        }
+      : {}),
     detectionIntervalMs: Number(process.env['INCIDENT_DETECTION_INTERVAL_MS']) || 30_000,
     maxConcurrentExecutions: Number(process.env['INCIDENT_MAX_CONCURRENT_EXECUTIONS']) || 10,
     autoResolveEnabled: true,

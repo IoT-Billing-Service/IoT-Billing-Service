@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RunbookEngine } from '../../../src/incident_response/runbook_engine.js';
 import { PagerDutyClient } from '../../../src/incident_response/pagerduty_client.js';
+import type { SlackClient } from '../../../src/incident_response/slack_client.js';
 import type { DetectedIncident, RunbookDefinition } from '../../../src/incident_response/types.js';
 
 // ---------------------------------------------------------------------------
@@ -322,6 +323,79 @@ describe('RunbookEngine', () => {
       const result = await engine.execute(createSimpleRunbook(), createTestIncident());
 
       expect(result.pagerDutyEvents).toBeUndefined();
+    });
+  });
+
+  describe('Slack integration (issue #281)', () => {
+    it('should notify Slack on trigger and on resolve when execution completes', async () => {
+      const mockSlackClient = {
+        notifyTriggered: vi.fn().mockResolvedValue({ status: 'success', message: 'ok' }),
+        notifyResolved: vi.fn().mockResolvedValue({ status: 'success', message: 'ok' }),
+        post: vi.fn(),
+      };
+
+      const engine = new RunbookEngine({
+        slackClient: mockSlackClient as unknown as SlackClient,
+      });
+
+      const runbook = createSimpleRunbook();
+      const incident = createTestIncident({ source: 'billing_anomaly' });
+
+      await engine.execute(runbook, incident);
+
+      // Both calls are fire-and-forget (best-effort) — wait a tick so the
+      // unawaited promises in the engine have a chance to resolve before
+      // asserting on the mock.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(mockSlackClient.notifyTriggered).toHaveBeenCalledWith(incident, runbook.name);
+      expect(mockSlackClient.notifyResolved).toHaveBeenCalledWith(incident, 'completed');
+    });
+
+    it('should notify Slack with a failed outcome when a step fails', async () => {
+      const mockSlackClient = {
+        notifyTriggered: vi.fn().mockResolvedValue({ status: 'success', message: 'ok' }),
+        notifyResolved: vi.fn().mockResolvedValue({ status: 'success', message: 'ok' }),
+        post: vi.fn(),
+      };
+
+      const engine = new RunbookEngine({
+        slackClient: mockSlackClient as unknown as SlackClient,
+      });
+
+      const runbook = createSimpleRunbook({
+        steps: [{ type: 'unknown_step_type' } as never],
+      });
+
+      await engine.execute(runbook, createTestIncident());
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(mockSlackClient.notifyResolved).toHaveBeenCalledWith(expect.anything(), 'failed');
+    });
+
+    it('should not throw or block execution when Slack posting rejects', async () => {
+      const mockSlackClient = {
+        notifyTriggered: vi.fn().mockRejectedValue(new Error('Slack is down')),
+        notifyResolved: vi.fn().mockRejectedValue(new Error('Slack is down')),
+        post: vi.fn(),
+      };
+
+      const engine = new RunbookEngine({
+        slackClient: mockSlackClient as unknown as SlackClient,
+      });
+
+      const result = await engine.execute(createSimpleRunbook(), createTestIncident());
+
+      // The runbook itself must succeed regardless of Slack's failure.
+      expect(result.status).toBe('completed');
+    });
+
+    it('should not call Slack when no client is configured', async () => {
+      const engine = new RunbookEngine();
+      // No assertion target needed beyond "this does not throw" — there's
+      // no slackClient to spy on, which is the point of this test.
+      const result = await engine.execute(createSimpleRunbook(), createTestIncident());
+      expect(result.status).toBe('completed');
     });
   });
 

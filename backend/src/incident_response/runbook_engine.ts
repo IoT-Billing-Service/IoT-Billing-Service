@@ -32,6 +32,7 @@ import type {
   PagerDutyEventResponse,
 } from './types.js';
 import { PagerDutyClient } from './pagerduty_client.js';
+import { SlackClient } from './slack_client.js';
 
 // ---------------------------------------------------------------------------
 // Template Variable Substitution
@@ -76,6 +77,7 @@ function substituteVariables(template: string, incident: DetectedIncident): stri
  */
 export class RunbookEngine {
   private readonly pagerDutyClient: PagerDutyClient | null;
+  private readonly slackClient: SlackClient | null;
   private readonly maxConcurrentExecutions: number;
   private activeExecutions = 0;
   private executionHistory: RunbookExecutionResult[] = [];
@@ -84,11 +86,13 @@ export class RunbookEngine {
   constructor(
     options: {
       pagerDutyClient?: PagerDutyClient;
+      slackClient?: SlackClient;
       maxConcurrentExecutions?: number;
       maxHistoryRecords?: number;
     } = {},
   ) {
     this.pagerDutyClient = options.pagerDutyClient ?? null;
+    this.slackClient = options.slackClient ?? null;
     this.maxConcurrentExecutions = options.maxConcurrentExecutions ?? 10;
     this.maxHistoryRecords = options.maxHistoryRecords ?? 1000;
   }
@@ -158,6 +162,15 @@ export class RunbookEngine {
         }
       }
 
+      // Slack is a best-effort notification side-channel: a failed or slow
+      // Slack post must never fail or delay the runbook itself, since
+      // PagerDuty (above) is the system of record for the incident.
+      if (this.slackClient !== null) {
+        this.slackClient.notifyTriggered(incident, runbook.name).catch(() => {
+          // Intentionally swallowed — see comment above.
+        });
+      }
+
       // Step 2: Execute runbook steps.
       const steps: StepExecutionResult[] = [];
       let overallStatus: RunbookExecutionStatus = 'completed';
@@ -189,6 +202,17 @@ export class RunbookEngine {
           action: 'resolve',
           response: resolveResponse,
           timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Slack notification on outcome — unlike the PagerDuty resolve call
+      // above, this fires for both 'completed' and 'failed' so the channel
+      // sees a failed runbook too (PagerDuty intentionally stays open/
+      // triggered on failure so a human follows up there; Slack is purely
+      // informational and best-effort, see the trigger notification above).
+      if (this.slackClient !== null) {
+        this.slackClient.notifyResolved(incident, overallStatus === 'completed' ? 'completed' : 'failed').catch(() => {
+          // Intentionally swallowed — see comment on the trigger notification above.
         });
       }
 

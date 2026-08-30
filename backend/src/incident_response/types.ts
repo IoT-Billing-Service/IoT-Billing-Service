@@ -74,6 +74,20 @@ export interface PagerDutyConfig {
   retryBaseDelayMs?: number;
 }
 
+/** Configuration for the Slack incident notification channel (issue #281). */
+export interface SlackConfig {
+  /** Slack Incoming Webhook URL. */
+  webhookUrl: string;
+  /** Optional channel override (Incoming Webhooks are usually bound to one channel already). */
+  channel?: string;
+  /** Request timeout in milliseconds. Default: 10000 */
+  timeoutMs?: number;
+  /** Maximum retries for failed webhook posts. Default: 3 */
+  maxRetries?: number;
+  /** Retry backoff base delay in milliseconds. Default: 1000 */
+  retryBaseDelayMs?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Incident Detection
 // ---------------------------------------------------------------------------
@@ -367,6 +381,8 @@ export interface RunbookExecutionResult {
 export interface IncidentResponseConfig {
   /** PagerDuty configuration. */
   pagerDuty: PagerDutyConfig;
+  /** Slack notification configuration (issue #281). Optional — if omitted, no Slack notifications are sent. */
+  slack?: SlackConfig;
   /** Whether incident detection is enabled. Default: true */
   detectionEnabled?: boolean;
   /** Polling interval for detection sources in milliseconds. Default: 30000 */
