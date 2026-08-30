@@ -142,6 +142,33 @@ const envSchema = z.object({
   // When true, skip PKI chain verification during device attestation.
   // Use only for local development and unit tests.
   PKI_SKIP_VERIFICATION: z.coerce.boolean().default(false),
+  // --- Kafka Connect blockchain event sink (issue #291) ----------------------
+  // Comma-separated list of Kafka bootstrap brokers (host:port).
+  KAFKA_BROKERS: z.string().default('localhost:9092'),
+  // Kafka client id used by the sink worker.
+  KAFKA_CLIENT_ID: z.string().default('iot-billing-kafka-connect'),
+  // Consumer group id. Offsets are committed here, enabling at-least-once
+  // delivery with replay across crashes within the same group.
+  KAFKA_GROUP_ID: z.string().default('iot-billing-blockchain-sink'),
+  // Topic that carries blockchain event envelopes.
+  KAFKA_BLOCKCHAIN_EVENTS_TOPIC: z.string().default('blockchain.events'),
+  // Master switch for the sink worker. The vault-preserving default is off:
+  // the process starts without touching Kafka unless explicitly enabled.
+  KAFKA_CONNECT_SINK_ENABLED: z.coerce.boolean().default(false),
+  // Task identity used in metrics/labels (`kafka_connect_sink_backlog_records`).
+  KAFKA_CONNECT_SINK_TASK_ID: z.string().default('blockchain-event-sink'),
+  // Max records handed to the task per `put()` batch (Connect batch size).
+  KAFKA_CONNECT_MAX_BATCH: z.coerce.number().int().positive().default(500),
+  // Interval (ms) at which the worker flushes and commits offsets.
+  KAFKA_CONNECT_FLUSH_INTERVAL_MS: z.coerce.number().int().positive().default(500),
+  // Optional Ed25519 public key (PEM or SPKI DER) for envelope signature
+  // verification. When set, encrypted/unsigned envelopes are rejected.
+  KAFKA_CONNECT_VERIFY_PUBLIC_KEY: z.string().optional(),
+  // Enable TLS for the Kafka brokers.
+  KAFKA_SSL: z.coerce.boolean().default(false),
+  // Optional SASL/SCRAM credentials for authenticated brokers.
+  KAFKA_SASL_USERNAME: z.string().optional(),
+  KAFKA_SASL_PASSWORD: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

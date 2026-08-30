@@ -1048,6 +1048,82 @@ export function setConsumerGroupLagHealth(
   consumerGroupLagHealth.set({ stream, group }, val);
 }
 
+// --- Kafka Connect blockchain event sink (issue #291) -----------------------
+// Measures the end-to-end bridge from Kafka events into the durable ledger bus.
+
+/**
+ * Number of Kafka records delivered to the sink task. Mirrors the records
+ * Kafka Connect would deliver; used to observe intake rate.
+ */
+export const kafkaConnectEventsReceived: promClient.Counter = new promClient.Counter({
+  name: 'kafka_connect_events_received_total',
+  help: 'Kafka blockchain events delivered to the sink task',
+  labelNames: ['topic'],
+});
+
+/**
+ * Number of events successfully written to the durable ledger target.
+ */
+export const kafkaConnectEventsSunk: promClient.Counter = new promClient.Counter({
+  name: 'kafka_connect_events_sunk_total',
+  help: 'Kafka blockchain events written to the durable ledger bus',
+  labelNames: ['topic'],
+});
+
+/**
+ * Number of events rejected by the sink, by reason (e.g. invalid JSON, bad
+ * sequence, hash/signature mismatch, publish failure). Rejected records are
+ * never written to the ledger.
+ */
+export const kafkaConnectEventsFailed: promClient.Counter = new promClient.Counter({
+  name: 'kafka_connect_events_failed_total',
+  help: 'Kafka blockchain events rejected by the sink by reason',
+  labelNames: ['topic', 'reason'],
+});
+
+/**
+ * Duration of a single-record sink operation (decode + publish). Buckets are
+ * chosen around the platform's <200ms P99 billing budget.
+ */
+export const kafkaConnectSinkDurationMs: promClient.Histogram = new promClient.Histogram({
+  name: 'kafka_connect_sink_duration_ms',
+  help: 'Per-record sink processing duration in ms (decode + publish)',
+  labelNames: ['topic'],
+  buckets: [5, 10, 25, 50, 100, 150, 200, 250, 500, 1000, 2500, 5000],
+});
+
+/**
+ * Records still buffered in the task awaiting the next flush. Backpressure
+ * signal for the connect runtime / autoscaler.
+ */
+export const kafkaConnectBacklog: promClient.Gauge = new promClient.Gauge({
+  name: 'kafka_connect_sink_backlog_records',
+  help: 'Records currently buffered in the Kafka Connect sink task',
+  labelNames: ['task'],
+});
+
+// Setters --------------------------------------------------------------------
+
+export function incKafkaConnectEventsReceived(topic: string): void {
+  kafkaConnectEventsReceived.inc({ topic });
+}
+
+export function incKafkaConnectEventsSunk(topic: string): void {
+  kafkaConnectEventsSunk.inc({ topic });
+}
+
+export function incKafkaConnectEventsFailed(topic: string, reason: string): void {
+  kafkaConnectEventsFailed.inc({ topic, reason });
+}
+
+export function observeKafkaConnectSinkDurationMs(topic: string, durationMs: number): void {
+  kafkaConnectSinkDurationMs.observe({ topic }, durationMs);
+}
+
+export function setKafkaConnectBacklog(task: string, records: number): void {
+  kafkaConnectBacklog.set({ task }, records);
+}
+
 // --- Feature flag metrics (issue #64) -----------------------------------------
 
 export const featureFlagEvaluations: promClient.Counter = new promClient.Counter({
