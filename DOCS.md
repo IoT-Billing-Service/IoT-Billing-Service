@@ -78,6 +78,7 @@ Historical design documents and implementation plans, kept for context. These de
 | [Revenue forecasting](./docs/design/revenue-forecasting.md) | Predictive analytics for revenue forecasting |
 | [Emergency pause mechanism](./docs/design/emergency-pause-mechanism.md) | Emergency pause mechanism |
 | [Fault-tolerant telemetry ingestion](./docs/design/fault-tolerant-telemetry-ingestion.md) | Durable retry queue for telemetry ingestion (#292) |
+| [Kafka Connect blockchain event sink](./docs/design/kafka-connect-blockchain-events.md) | Kafka Connect-style sink bridging Kafka blockchain events into the durable ledger (#291) |
 | [GitHub Actions optimization](./docs/design/github-actions-optimization.md) | CI optimization and release controls |
 
 ### Implementation plans (`docs/design/plans/`)

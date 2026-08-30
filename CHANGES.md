@@ -1,3 +1,52 @@
+# Issue #291 — Kafka Connect Sink for Blockchain Event Streaming
+
+Implements a Kafka Connect-style sink (in TypeScript, matching this repo's
+stack) that drains blockchain event envelopes from a Kafka topic and writes
+them, in order and byte-safe, into the platform's durable Redis Streams ledger
+event bus (`billing:events`).
+
+## What this adds
+
+- **`backend/src/stream/kafka_connect/`** — a self-contained connector module
+  mirroring the Kafka Connect Sink API:
+  - `types.ts`: `SinkRecord` / offset / sink-target abstractions.
+  - `record_codec.ts`: envelope decode + validation, canonical SHA-256 tamper
+    hash, and optional Ed25519 signature verification (fail-closed when a
+    verification key is configured).
+  - `connector.ts`: `BlockchainEventSinkConnector` descriptor (config schema,
+    version, task fan-out).
+  - `sink_task.ts`: `SinkTask` lifecycle (`start → put → flush → stop`) with
+    per-partition ordering (serialized batch queue), high-water offset
+    reporting, and at-least-once semantics (publish failures are counted, not
+    committed → Kafka replays them idempotently).
+- **`backend/src/stream/kafka_connect_worker.ts`** — native long-running
+  worker: KafkaJS consumer → task → manual offset commit.
+- **`backend/src/config/env.ts`** — Kafka/sink configuration (defaults keep it
+  fail-closed; `KAFKA_CONNECT_SINK_ENABLED=false` by default).
+- **`backend/src/api/metrics/prometheus.ts`** — sink metrics
+  (`kafka_connect_events_received/sunk/failed_total`, sink latency histogram,
+  backlog gauge).
+- **K8s** — `kafka-connect-sink-deployment.yaml` + HPA.
+- **Tests** — four Vitest suites (codec, connector, sink task, worker), 36
+  assertions, including real-Node Ed25519 signature verification.
+- **Docs** — `docs/design/kafka-connect-blockchain-events.md` (design, env,
+  metrics, deployment), linked from `DOCS.md`.
+
+## Design notes
+
+- Blocking invariant: a rejected record (bad JSON, bad sequence, hash/signature
+  mismatch) is counted and skipped — never written to the ledger — so one bad
+  record cannot stall a partition.
+- Ordering is preserved by enqueuing each `put()` batch behind a single
+  in-process promise chain, mirroring how Kafka Connect delivers to a task.
+- Delivery is at-least-once: offsets commit only after a successful flush;
+  replay is safe because a `LedgerEvent` with the same `sequence` satisfies the
+  ledger continuity invariant (no dedup state needed).
+- Single-record sink latency is observed against the platform's `<200ms P99`
+  billing budget.
+
+Closes #291.
+
 # Issue #272 — Audit Trail with Tamper-Evident Hash Chain Verification
 
 ## What was already there
