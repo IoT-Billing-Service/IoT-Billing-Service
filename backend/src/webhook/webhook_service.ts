@@ -37,6 +37,7 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { BackoffCalculator } from '../core/blockchain/backoff.js';
 import type { DlqManager } from '../core/dlq_manager.js';
+import { getLogger } from '../core/diagnostics/logger.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -463,7 +464,10 @@ export class WebhookService {
             lastError ?? 'Unknown error',
           );
         } catch (dlqErr) {
-          console.error('Failed to push webhook to DLQ:', dlqErr);
+          getLogger().error('webhook_dlq_push_failed', dlqErr, {
+            subscriptionId: sub.id,
+            eventType,
+          });
         }
       }
     }

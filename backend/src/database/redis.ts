@@ -1,5 +1,6 @@
 import { Redis } from 'ioredis';
 import { getEnv } from '../config/env.js';
+import { getLogger } from '../core/diagnostics/logger.js';
 
 let cached: Redis | null = null;
 
@@ -14,7 +15,7 @@ export function getRedis(): Redis {
     lazyConnect: false,
   });
   cached.on('error', (err: Error) => {
-    console.error('Redis client error:', err.message);
+    getLogger().error('redis_client_error', err);
   });
   return cached;
 }

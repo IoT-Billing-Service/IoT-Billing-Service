@@ -32,6 +32,7 @@
 import type { Redis } from 'ioredis';
 import { getRedis } from '../database/redis.js';
 import { getEnv } from '../config/env.js';
+import { getLogger } from '../core/diagnostics/logger.js';
 import {
   setConsumerGroupPendingEntries,
   setConsumerGroupConsumers,
@@ -185,27 +186,22 @@ export class ConsumerGroupLagMonitor {
 
         // Log warnings for degraded/unhealthy states.
         if (lagHealth !== 'healthy') {
-          console.warn(
-            JSON.stringify({
-              level: 'warn',
-              event: 'ConsumerGroupLagDegraded',
-              stream: target.streamKey,
-              group: target.groupName,
-              pendingEntries: state.pendingEntries,
-              consumerCount: state.consumerCount,
-              maxIdleMs: state.maxIdleMs,
-              health: lagHealth,
-              warnThreshold: this.warnEntries,
-              criticalThreshold: this.criticalEntries,
-            }),
-          );
+          getLogger().warn('ConsumerGroupLagDegraded', {
+            stream: target.streamKey,
+            group: target.groupName,
+            pendingEntries: state.pendingEntries,
+            consumerCount: state.consumerCount,
+            maxIdleMs: state.maxIdleMs,
+            health: lagHealth,
+            warnThreshold: this.warnEntries,
+            criticalThreshold: this.criticalEntries,
+          });
         }
       }
     } catch (err) {
-      console.error(
-        '[consumer-lag-monitor] Poll cycle failed:',
-        err instanceof Error ? err.message : String(err),
-      );
+      getLogger().error('consumer_lag_monitor_poll_failed', err, {
+        component: 'consumer-lag-monitor',
+      });
     } finally {
       this._running = false;
     }
