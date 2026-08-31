@@ -14,7 +14,7 @@
     "@google/genai": "^2.19.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^6.1.1",
-    "lucide-react": "^1.27.0",
+    "lucide-react": "^1.35.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "vite": "^8.2.2",
