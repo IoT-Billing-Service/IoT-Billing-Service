@@ -46,7 +46,7 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^8.2.2",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.11"
   },
   "optionalDependencies": {
     "@tailwindcss/oxide-linux-x86_64": "npm:null@*"
