@@ -118,7 +118,7 @@ importers:
         specifier: ^6.6.0
         version: 6.19.3(magicast@0.3.5)(typescript@5.9.3)
       tsx:
-        specifier: ^4.19.3
+        specifier: ^4.23.12
         version: 4.23.12
       typescript:
         specifier: ^5.8.3
