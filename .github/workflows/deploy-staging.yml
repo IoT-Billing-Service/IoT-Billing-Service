@@ -25,15 +25,22 @@ jobs:
           echo "Deploying staging at commit ${{ github.sha }}"
           echo "Pusher: ${{ github.actor }}"
 
-      - name: Set up staging credentials
+      - name: Check staging credentials
+        id: creds
         env:
           STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
           STAGING_SERVER_IP: ${{ secrets.STAGING_SERVER_IP }}
         run: |
-          echo "STAGING_SSH_KEY configured: $([ -n "$STAGING_SSH_KEY" ] && echo yes || echo no)"
-          echo "STAGING_SERVER_IP configured: $([ -n "$STAGING_SERVER_IP" ] && echo yes || echo no)"
+          if [ -n "$STAGING_SSH_KEY" ] && [ -n "$STAGING_SERVER_IP" ]; then
+            echo "credentials_ready=true" >> "$GITHUB_OUTPUT"
+            echo "Staging credentials configured: yes"
+          else
+            echo "credentials_ready=false" >> "$GITHUB_OUTPUT"
+            echo "Staging credentials configured: no"
+          fi
 
       - name: Configure SSH
+        if: steps.creds.outputs.credentials_ready == 'true'
         env:
           STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
           STAGING_SERVER_IP: ${{ secrets.STAGING_SERVER_IP }}
@@ -45,6 +52,7 @@ jobs:
 
       - name: Deploy backend + frontend
         id: deploy
+        if: steps.creds.outputs.credentials_ready == 'true'
         env:
           STAGING_SERVER_IP: ${{ secrets.STAGING_SERVER_IP }}
           STAGING_USER: ${{ secrets.STAGING_USER }}
@@ -58,9 +66,16 @@ jobs:
           echo "deploy_url=http://${STAGING_SERVER_IP}" >> "$GITHUB_OUTPUT"
 
       - name: Post-deploy verification
+        if: steps.creds.outputs.credentials_ready == 'true'
         env:
           STAGING_SERVER_IP: ${{ secrets.STAGING_SERVER_IP }}
         run: |
           sleep 10
           curl -sf "http://${STAGING_SERVER_IP}/health" \
             || echo "Health endpoint not exposed yet"
+
+      - name: Deploy skipped (credentials not provisioned)
+        if: steps.creds.outputs.credentials_ready != 'true'
+        run: |
+          echo "Skipping live deployment: STAGING_SSH_KEY / STAGING_SERVER_IP not configured."
+          echo "Add the staging secrets (STAGING_SSH_KEY, STAGING_SERVER_IP, STAGING_USER, STAGING_PATH) to enable this step."

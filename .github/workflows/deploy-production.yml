@@ -25,15 +25,22 @@ jobs:
           echo "Deploying from main branch at commit ${{ github.sha }}"
           echo "Pusher: ${{ github.actor }}"
 
-      - name: Set up deployment credentials
+      - name: Check deployment credentials
+        id: creds
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           PROD_SERVER_IP: ${{ secrets.PROD_SERVER_IP }}
         run: |
-          echo "DEPLOY_SSH_KEY is configured: $([ -n "$DEPLOY_SSH_KEY" ] && echo 'yes' || echo 'no')"
-          echo "PROD_SERVER_IP is configured: $([ -n "$PROD_SERVER_IP" ] && echo 'yes' || echo 'no')"
+          if [ -n "$DEPLOY_SSH_KEY" ] && [ -n "$PROD_SERVER_IP" ]; then
+            echo "credentials_ready=true" >> "$GITHUB_OUTPUT"
+            echo "Deployment credentials configured: yes"
+          else
+            echo "credentials_ready=false" >> "$GITHUB_OUTPUT"
+            echo "Deployment credentials configured: no"
+          fi
 
       - name: Configure SSH
+        if: steps.creds.outputs.credentials_ready == 'true'
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           PROD_SERVER_IP: ${{ secrets.PROD_SERVER_IP }}
@@ -45,6 +52,7 @@ jobs:
 
       - name: Deploy application
         id: deploy
+        if: steps.creds.outputs.credentials_ready == 'true'
         env:
           PROD_SERVER_IP: ${{ secrets.PROD_SERVER_IP }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
@@ -60,9 +68,16 @@ jobs:
           echo "Deployment completed successfully"
 
       - name: Post-deployment verification
+        if: steps.creds.outputs.credentials_ready == 'true'
         env:
           PROD_SERVER_IP: ${{ secrets.PROD_SERVER_IP }}
         run: |
           echo "Running deployment health check..."
           sleep 10
           curl -sf "https://${PROD_SERVER_IP}/health" || echo "Health check endpoint not configured yet"
+
+      - name: Deploy skipped (credentials not provisioned)
+        if: steps.creds.outputs.credentials_ready != 'true'
+        run: |
+          echo "Skipping live deployment: DEPLOY_SSH_KEY / PROD_SERVER_IP not configured."
+          echo "Add the deployment secrets (DEPLOY_SSH_KEY, PROD_SERVER_IP, DEPLOY_USER, DEPLOY_PATH) to enable this step."
