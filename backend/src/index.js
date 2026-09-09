@@ -13,7 +13,7 @@ const bus = new TelemetryBus();
 
 // 3. HTTP + WS server
 const server = http.createServer();
-const app = createApi({ storage, telemetryBus: bus });
+const app = createApi({ storage, telemetryBus: bus, config });
 server.on('request', app);
 const hub = new WebSocketHub(server);
 bus.subscribe((row) => hub.broadcast(row));

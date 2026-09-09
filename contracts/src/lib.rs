@@ -2,19 +2,21 @@
 //!
 //! Micro-billing for connected devices powered by the Stellar/Soroban ledger.
 //!
-//! Devices are registered with a fixed tariff rate (stroops per unit of work).
-//! Operators pre-fund an escrow deposit; each verified `submit_reading` deducts
-//! `delta_units * rate` from the deposit and credits the utility operator.
-//! `settle_balance` lets the operator withdraw settled funds.
+//! Devices are registered with a fixed tariff rate (stroops per unit of work)
+//! and an ed25519 public key used to authorize telemetry. Operators pre-fund an
+//! escrow deposit; each signature-verified `submit_reading` deducts
+//! `delta_units * rate` from the deposit and credits the utility operator's
+//! settlement ledger. `settle_balance` lets the operator withdraw *earned* funds
+//! only — it cannot touch device deposits.
 
 #![no_std]
 
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
 
 use crate::storage::{
-    deposit, reading, registration, tariff, verify_signature, write_deposit, write_reading,
-    write_registration, write_tariff, DepositBalance, DeviceRegistration, ReadingCounter,
-    TariffRate,
+    deposit, read_operator_balance, reading, registration, tariff, verify_signature, write_deposit,
+    write_operator_balance, write_reading, write_registration, write_tariff, DepositBalance,
+    DeviceRegistration, OperatorBalance, ReadingCounter, TariffRate,
 };
 use crate::types::{DeviceStatus, Error};
 
@@ -41,12 +43,14 @@ impl IotBillingContract {
     /// Register a hardware device with a billing rate.
     ///
     /// # Arguments
-    /// * `device_id`   - Unique on-chain address of the device.
-    /// * `operator`    - Utility operator that receives the billing revenue.
-    /// * `rate_per_unit` - Price in stroops charged per reported unit.
+    /// * `device_id`      - Unique on-chain address of the device.
+    /// * `device_pubkey`  - Raw ed25519 public key authorized to sign readings.
+    /// * `operator`       - Utility operator that receives the billing revenue.
+    /// * `rate_per_unit`  - Price in stroops charged per reported unit.
     pub fn register_device(
         env: Env,
         device_id: Address,
+        device_pubkey: BytesN<32>,
         operator: Address,
         rate_per_unit: i128,
     ) -> Result<bool, Error> {
@@ -67,6 +71,7 @@ impl IotBillingContract {
                 operator: operator.clone(),
                 status: DeviceStatus::Active,
                 registered_at: env.ledger().timestamp(),
+                device_pubkey: device_pubkey.clone(),
             },
         );
         write_tariff(&env, &device_id, &TariffRate { rate_per_unit });
@@ -109,35 +114,53 @@ impl IotBillingContract {
         Ok(true)
     }
 
-    /// Submit a signed telemetry reading for a device.
+    /// Submit a signed telemetry reading on behalf of a device.
     ///
-    /// Verifies the device's signature over `(seq || delta_units || timestamp)`,
-    /// computes `total_cost = delta_units * rate_per_unit`, deducts from the
-    /// deposit and credits the operator. Emits a ticker event with topics
-    /// `[Symbol("meter"), device_id]` and data `(delta_units, total_cost,
-    /// timestamp)` for the indexer.
+    /// The caller is a relayer (NOT the device). Authorization is delegated to
+    /// an ed25519 signature over
+    /// `SIGNING_DOMAIN || device_pubkey || data_seq || delta_units || timestamp`,
+    /// recovered against the public key stored at registration. `data_seq` must
+    /// be the strictly-next sequence for the device, which defeats replay of a
+    /// captured signature.
+    ///
+    /// Emits a ticker event with topics `[Symbol("meter"), device_id]` and data
+    /// `(delta_units, total_cost, balance_after, seq, ledger_ts)` for the
+    /// indexer.
     pub fn submit_reading(
         env: Env,
         device_id: Address,
         delta_units: u64,
+        data_seq: u64,
+        timestamp: u64,
         sig: BytesN<64>,
     ) -> Result<i128, Error> {
-        device_id.require_auth();
-
-        if registration(&env, &device_id).is_none() {
-            return Err(Error::NotRegistered);
+        let reg = registration(&env, &device_id).ok_or(Error::NotRegistered)?;
+        if reg.status != DeviceStatus::Active {
+            return Err(Error::DeviceNotActive);
         }
         if delta_units == 0 {
             return Err(Error::ZeroReading);
         }
 
-        // Replay protection: sequence must increase monotonically.
+        // Replay protection: the signed sequence must be the next counter value.
         let mut rdg = reading(&env, &device_id).unwrap_or(ReadingCounter {
             last_seq: 0,
             last_ts: 0,
             cumulative_units: 0,
         });
-        let current_seq = rdg.last_seq.checked_add(1).ok_or(Error::Overflow)?;
+        let expected_seq = rdg.last_seq.checked_add(1).ok_or(Error::Overflow)?;
+        if data_seq != expected_seq {
+            return Err(Error::InvalidSequence);
+        }
+
+        verify_signature(
+            &env,
+            &reg.device_pubkey,
+            data_seq,
+            delta_units,
+            timestamp,
+            &sig,
+        )?;
 
         let tp = tariff(&env, &device_id).ok_or(Error::NotRegistered)?;
         if tp.rate_per_unit < 0 {
@@ -148,34 +171,43 @@ impl IotBillingContract {
             .checked_mul(tp.rate_per_unit)
             .ok_or(Error::Overflow)?;
 
+        // Deduct the cost from the device's escrow deposit...
         let mut bal = deposit(&env, &device_id).ok_or(Error::NotRegistered)?;
         if total_cost > bal.amount {
             return Err(Error::InsufficientBalance);
         }
-
-        // Skeleton signature gate: a production build would recover the signer
-        // from a domain-separated hash via `env.crypto().recover_ed25519_ph`.
-        verify_signature(&env, &device_id, &sig)?;
-
         bal.amount -= total_cost;
         write_deposit(&env, &device_id, &bal);
 
+        // ...and credit the device's operator's settlement ledger.
+        let mut op_bal = read_operator_balance(&env, &reg.operator);
+        op_bal.total_earned = op_bal
+            .total_earned
+            .checked_add(total_cost)
+            .ok_or(Error::Overflow)?;
+        write_operator_balance(&env, &reg.operator, &op_bal);
+
         let now = env.ledger().timestamp();
-        rdg.last_seq = current_seq;
+        rdg.last_seq = data_seq;
         rdg.last_ts = now;
-        rdg.cumulative_units += delta_units;
+        rdg.cumulative_units = rdg
+            .cumulative_units
+            .checked_add(delta_units)
+            .ok_or(Error::Overflow)?;
         write_reading(&env, &device_id, &rdg);
 
-        // Typed billing event consumed by the backend indexer.
+        // Typed billing event consumed by the backend indexer:
+        // (delta_units, total_cost, balance_after, seq, ledger_ts).
         env.events().publish(
             (topic(&env, TOPIC_METER), device_id),
-            (delta_units, total_cost, now),
+            (delta_units, total_cost, bal.amount, data_seq, now),
         );
 
         Ok(total_cost)
     }
 
-    /// Operator settlement withdrawal from escrow.
+    /// Operator settlement withdrawal — moves *earned* fees out of the operator
+    /// settlement ledger. Device deposits are never withdrawable by operators.
     pub fn settle_balance(env: Env, operator: Address, amount: i128) -> Result<bool, Error> {
         operator.require_auth();
 
@@ -183,8 +215,18 @@ impl IotBillingContract {
             return Err(Error::InvalidAmount);
         }
 
-        // A ledger-bound settlement ledger per operator would be deducted here;
-        // the skeleton authorizes and records the withdrawal event.
+        let mut bal = read_operator_balance(&env, &operator);
+        let withdrawable = bal.total_earned.saturating_sub(bal.total_settled);
+        if amount > withdrawable {
+            return Err(Error::InsufficientEarnings);
+        }
+
+        bal.total_settled = bal
+            .total_settled
+            .checked_add(amount)
+            .ok_or(Error::Overflow)?;
+        write_operator_balance(&env, &operator, &bal);
+
         env.events()
             .publish((topic(&env, TOPIC_SETTLEMENT), operator, amount), ());
 
@@ -206,5 +248,9 @@ impl IotBillingContract {
 
     pub fn get_reading(env: Env, device_id: Address) -> Option<ReadingCounter> {
         reading(&env, &device_id)
+    }
+
+    pub fn get_operator_balance(env: Env, operator: Address) -> OperatorBalance {
+        read_operator_balance(&env, &operator)
     }
 }

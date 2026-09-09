@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """IoT Billing — peripheral hardware client emulator.
 
-Emulates a Solana/Soroban-registered device: generates realistic sensor
-telemetry, locally accumulates meter ticks, signs each `delta_units` reading
-payload, and streams it to the backend indexer or directly to the contract.
+Emulates an ed25519-enabled device: generates realistic sensor telemetry,
+locally accumulates meter ticks, signs each `delta_units` reading payload with
+its hardware ed25519 key (matching the on-chain `submit_reading` message
+scheme), and streams it to the backend gateway.
+
+Payloads are signed as
+    ed25519_sign( "iot-billing-v1" || device_pubkey || seq(be64)
+                  || delta_units(be64) || timestamp_ms(be64) )
+which is exactly what `contracts/src/storage.rs::verify_signature` checks.
 
 Usage:
     python3 client.py --type solar --rate 5 --device-key test_key_1
@@ -13,12 +19,16 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import random
 import time
 import urllib.request
 from dataclasses import dataclass, field
+
+import nacl.signing
+
+# Must match `storage::SIGNING_DOMAIN` in the contract.
+SIGNING_DOMAIN = b"iot-billing-v1"
 
 
 @dataclass
@@ -46,29 +56,31 @@ def compute_delta(profile: DeviceProfile, t: float) -> float:
     )
 
 
-def sign_payload(device_key: str, seq: int, delta_units: int, ts: int) -> str:
-    """Deterministic placeholder signature (ed25519 analogue for emulation).
+def sign_payload(sk: nacl.signing.SigningKey, seq: int, delta_units: int, ts: int) -> tuple[bytes, str]:
+    """Sign a reading with the device's real ed25519 hardware key.
 
-    A real device signs the domain-separated payload with its hardware key; the
-    Skeleton contract only requires a well-formed, device-bound 64-byte blob.
+    Returns `(device_pubkey_bytes, hex_signature)`.
     """
-    message = f"{device_key}|{seq}|{delta_units}|{ts}".encode()
-    digest = hashlib.sha256(message).digest()
-    tag = device_key.encode()[:1]
-    # 64 bytes: tag(1) + sha256(32) + filler aligned to 64
-    sig = tag.ljust(64, b"\x00")
-    sig = sig[:1] + digest + sig[33:64]
-    return sig.hex()
+    pubkey = sk.verify_key.encode()
+    message = (
+        SIGNING_DOMAIN + pubkey + seq.to_bytes(8, "big") +
+        delta_units.to_bytes(8, "big") + ts.to_bytes(8, "big")
+    )
+    sig = sk.sign(message).signature
+    return pubkey, sig.hex()
 
 
+@dataclass
 class EmulatedDevice:
-    def __init__(self, profile: DeviceProfile, device_key: str, endpoint: str):
-        self.profile = profile
-        self.device_key = device_key
-        self.endpoint = endpoint
-        self.seq = 0
-        self.cumulative = 0.0
-        self.started = time.time()
+    profile: DeviceProfile
+    device_key: str
+    endpoint: str
+    signer: nacl.signing.SigningKey = field(
+        default_factory=nacl.signing.SigningKey.generate
+    )
+    seq: int = 0
+    cumulative: float = 0.0
+    started: float = field(default_factory=time.time)
 
     def _accumulated_ticks(self, value: float) -> int:
         resolution = self.profile.resolution
@@ -82,10 +94,11 @@ class EmulatedDevice:
         delta_units = self._accumulated_ticks(value)
         ts = int(time.time() * 1000)
         self.seq += 1
-        signature = sign_payload(self.device_key, self.seq, delta_units, ts)
+        pubkey, signature = sign_payload(self.signer, self.seq, delta_units, ts)
 
-        payload = {
+        return {
             "device_id": self.device_key,
+            "device_pubkey": pubkey.hex(),
             "device_type": self.profile.device_type,
             "seq": self.seq,
             "delta_units": delta_units,
@@ -93,7 +106,6 @@ class EmulatedDevice:
             "timestamp_ms": ts,
             "signature": signature,
         }
-        return payload
 
     def stream(self):
         print(
@@ -132,7 +144,7 @@ def main():
     parser.add_argument("--device-key", required=True)
     parser.add_argument("--interval-ms", type=int, default=None)
     parser.add_argument("--resolution", type=float, default=None)
-    parser.add_argument("--endpoint", default=None, help="POST target (http://…/readings)")
+    parser.add_argument("--endpoint", default=None, help="POST target (http://…/api/readings)")
     args = parser.parse_args()
 
     profile = PROFILES[args.type]
