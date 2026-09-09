@@ -1,0 +1,68 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.deploy_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate deployment branch
+        run: |
+          echo "Deploying from main branch at commit ${{ github.sha }}"
+          echo "Pusher: ${{ github.actor }}"
+
+      - name: Set up deployment credentials
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          PROD_SERVER_IP: ${{ secrets.PROD_SERVER_IP }}
+        run: |
+          echo "DEPLOY_SSH_KEY is configured: $([ -n "$DEPLOY_SSH_KEY" ] && echo 'yes' || echo 'no')"
+          echo "PROD_SERVER_IP is configured: $([ -n "$PROD_SERVER_IP" ] && echo 'yes' || echo 'no')"
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          PROD_SERVER_IP: ${{ secrets.PROD_SERVER_IP }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$PROD_SERVER_IP" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy application
+        id: deploy
+        env:
+          PROD_SERVER_IP: ${{ secrets.PROD_SERVER_IP }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          echo "Deploying to production server..."
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=yes \
+            "${DEPLOY_USER}@${PROD_SERVER_IP}" \
+            "cd ${DEPLOY_PATH} && git pull origin main && npm ci && npm run build --workspace frontend && pm2 restart iot-billing"
+
+          echo "deploy_url=https://${PROD_SERVER_IP}" >> "$GITHUB_OUTPUT"
+          echo "Deployment completed successfully"
+
+      - name: Post-deployment verification
+        env:
+          PROD_SERVER_IP: ${{ secrets.PROD_SERVER_IP }}
+        run: |
+          echo "Running deployment health check..."
+          sleep 10
+          curl -sf "https://${PROD_SERVER_IP}/health" || echo "Health check endpoint not configured yet"

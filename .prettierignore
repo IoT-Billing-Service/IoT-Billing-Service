@@ -1,0 +1,7 @@
+node_modules
+dist
+target
+backend/data
+contracts/test_snapshots
+package-lock.json
+Cargo.lock

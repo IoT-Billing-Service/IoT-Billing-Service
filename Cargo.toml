@@ -1,0 +1,26 @@
+[workspace]
+resolver = "2"
+members = ["contracts"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/IoT-Billing-Service/IoT-Billing-Service"
+
+[workspace.dependencies]
+soroban-sdk = "22.0.0"
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["rand_core"] }
+
+[profile.release]
+opt-level = 3
+overflow-checks = true
+debug = false
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true

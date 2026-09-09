@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - dev
+      - staging
+  pull_request:
+    branches:
+      - dev
+      - staging
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Soroban Contract (cargo test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            contracts/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install dependencies
+        run: cargo fetch --manifest-path contracts/Cargo.toml
+
+      - name: Format check
+        run: cargo fmt --manifest-path contracts/Cargo.toml -- --check
+
+      - name: Clippy
+        run: cargo clippy --manifest-path contracts/Cargo.toml --all-targets -- -D warnings
+
+      - name: Run contract tests
+        run: cargo test --manifest-path contracts/Cargo.toml
+
+      - name: Build release wasm
+        run: cargo build --manifest-path contracts/Cargo.toml --release --target wasm32-unknown-unknown
+
+  backend:
+    name: Backend (node test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --workspace backend
+
+      - name: Backend lint
+        run: npm run lint --workspace backend
+
+      - name: Backend tests
+        run: npm test --workspace backend
+
+  frontend:
+    name: Frontend (tsc + vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --workspace frontend
+
+      - name: Type check
+        run: npm run typecheck --workspace frontend
+
+      - name: Lint
+        run: npm run lint --workspace frontend
+
+      - name: Tests
+        run: npm test --workspace frontend
+
+      - name: Build
+        run: npm run build --workspace frontend
+
+  ci:
+    name: CI Gate
+    if: always()
+    needs: [contract, backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [ "${{ needs.contract.result }}" != "success" ] || \
+             [ "${{ needs.backend.result }}" != "success" ] || \
+             [ "${{ needs.frontend.result }}" != "success" ]; then
+            echo "One or more CI jobs failed"
+            exit 1
+          fi
+          echo "All CI jobs passed"
