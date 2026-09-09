@@ -29,7 +29,7 @@ export function LiveStream() {
     }
   }, [event]);
 
-  const last = event;
+  const last = event && event.type === 'meter_billed' ? event : null;
 
   return (
     <section>

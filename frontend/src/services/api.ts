@@ -16,6 +16,22 @@ export interface Balance {
   total_billed: number;
 }
 
+export interface DeviceInfo {
+  device_id: string;
+  event_count: number;
+  total_units: number;
+  total_cost: number;
+  last_ledger: number;
+  last_activity: number | null;
+}
+
+export async function fetchDevices(): Promise<DeviceInfo[]> {
+  const res = await fetch(`${API_URL}/devices`);
+  if (!res.ok) throw new Error(`fetchDevices failed: ${res.status}`);
+  const body = await res.json();
+  return body.devices ?? [];
+}
+
 export async function fetchMetrics(deviceId: string): Promise<MetricSeries[]> {
   const res = await fetch(`${API_URL}/devices/${deviceId}/metrics`);
   if (!res.ok) throw new Error(`fetchMetrics failed: ${res.status}`);
