@@ -54,7 +54,43 @@ export class CacheStore {
         ON meter_events (device_id, ledger);
       CREATE INDEX IF NOT EXISTS idx_events_emitted
         ON meter_events (emitted_at);
+
+      CREATE TABLE IF NOT EXISTS pending_readings (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id      TEXT NOT NULL,
+        device_pubkey  TEXT NOT NULL,
+        seq            INTEGER NOT NULL,
+        delta_units    INTEGER NOT NULL,
+        timestamp_ms   INTEGER NOT NULL,
+        tx_hash        TEXT,
+        accepted_at    TEXT NOT NULL
+      );
     `);
+  }
+
+  recordPendingReading({
+    device_id,
+    device_pubkey,
+    seq,
+    delta_units,
+    timestamp_ms,
+    tx_hash,
+  }) {
+    return this.db
+      .prepare(
+        `INSERT INTO pending_readings
+           (device_id, device_pubkey, seq, delta_units, timestamp_ms, tx_hash, accepted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        device_id,
+        device_pubkey,
+        seq,
+        delta_units,
+        timestamp_ms,
+        tx_hash ?? null,
+        new Date().toISOString(),
+      );
   }
 
   getLastLedger() {
@@ -150,6 +186,22 @@ export class CacheStore {
       .prepare('SELECT MAX(seq) AS seq FROM meter_events WHERE device_id = ?')
       .get(deviceId);
     return row?.seq ?? 0;
+  }
+
+  listDevices() {
+    return this.db
+      .prepare(
+        `SELECT device_id,
+                COUNT(*)        AS event_count,
+                SUM(units)      AS total_units,
+                SUM(cost)       AS total_cost,
+                MAX(ledger)     AS last_ledger,
+                MAX(ledger_ts)  AS last_activity
+           FROM meter_events
+          GROUP BY device_id
+          ORDER BY last_ledger DESC`,
+      )
+      .all();
   }
 
   close() {

@@ -13,6 +13,9 @@ pub enum Error {
     ZeroReading = 6,
     Overflow = 7,
     InvalidSignature = 8,
+    InvalidSequence = 9,
+    InsufficientEarnings = 10,
+    DeviceNotActive = 11,
 }
 
 /// Operational status of a registered device.

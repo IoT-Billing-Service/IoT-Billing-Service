@@ -2,6 +2,7 @@ import { Server } from '@stellar/stellar-sdk/rpc';
 import { scvalToBigInt, scvalToString, unwrapVec } from './decode.js';
 
 const METER_TOPIC = 'meter';
+const PAGE_LIMIT = 200;
 
 /**
  * Soroban RPC event poller.
@@ -10,6 +11,11 @@ const METER_TOPIC = 'meter';
  * billing events to the cache layer. Filtering on the leading topic is done
  * application-side because the public testnet RPC only matches full topic
  * lists, and the device address (second topic) varies per event.
+ *
+ * Pagination: when a full page is returned there may be more events at the
+ * same or subsequent ledgers. The poller loops with the returned cursor until
+ * fewer than PAGE_LIMIT events come back, only then advancing the persisted
+ * ledger watermark.
  */
 export class EventIndexer {
   constructor({ rpcUrl, contractId, storage, pollIntervalMs, onEvent }) {
@@ -20,7 +26,6 @@ export class EventIndexer {
     this.onEvent = onEvent || (() => {});
     this.timer = null;
     this.running = false;
-    this.cursor = null;
   }
 
   start() {
@@ -44,23 +49,52 @@ export class EventIndexer {
 
   async poll() {
     try {
-      const res = await this.rpc.getEvents({
-        startLedger: this.storage.getLastLedger() + 1,
-        filters: [
-          {
-            type: 'contract',
-            contractIds: [this.contractId],
-          },
-        ],
-        limit: 200,
-      });
+      let cursor = null;
+      let startLedger = this.storage.getLastLedger() + 1;
+      let lastProcessedLedger = this.storage.getLastLedger();
 
-      for (const event of res.events) {
-        await this.handleEvent(event);
-      }
+      // Fetch all pages before advancing the watermark.
+      while (true) {
+        const params = {
+          filters: [
+            {
+              type: 'contract',
+              contractIds: [this.contractId],
+            },
+          ],
+          limit: PAGE_LIMIT,
+        };
+        if (cursor) {
+          params.cursor = cursor;
+        } else {
+          params.startLedger = startLedger;
+        }
 
-      if (res.latestLedger > this.storage.getLastLedger()) {
-        this.storage.setLastLedger(res.latestLedger);
+        const res = await this.rpc.getEvents(params);
+
+        for (const event of res.events) {
+          await this.handleEvent(event);
+          const ledger = Number(event.ledger);
+          if (ledger > lastProcessedLedger) {
+            lastProcessedLedger = ledger;
+          }
+        }
+
+        // If we got fewer than a full page or no cursor, we're done.
+        if (res.events.length < PAGE_LIMIT || !res.cursor) {
+          // Advance watermark: if we processed any events use the last ledger,
+          // otherwise jump to latestLedger to avoid re-fetching an empty range.
+          const newWatermark =
+            lastProcessedLedger > this.storage.getLastLedger()
+              ? lastProcessedLedger
+              : res.latestLedger;
+          if (newWatermark > this.storage.getLastLedger()) {
+            this.storage.setLastLedger(newWatermark);
+          }
+          break;
+        }
+
+        cursor = res.cursor;
       }
     } catch (err) {
       console.error('[indexer] poll failed:', err.message);
@@ -75,9 +109,9 @@ export class EventIndexer {
     }
     const deviceId = topics[1] ?? null;
 
-    // Data: (delta_units, total_cost, ledger_ts)
+    // Data: (delta_units, total_cost, balance_after, seq, ledger_ts)
     const data = unwrapVec(event.value) ?? [];
-    const [deltaUnits, cost, ts] = data;
+    const [deltaUnits, cost, balanceAfter, seq, ts] = data;
 
     const row = {
       topic: METER_TOPIC,
@@ -89,8 +123,8 @@ export class EventIndexer {
       units: deltaUnits ? scvalToBigInt(deltaUnits) : 0n,
       rate_per_unit: 0n,
       cost: cost ? scvalToBigInt(cost) : 0n,
-      balance_after: null,
-      seq: null,
+      balance_after: balanceAfter ? scvalToBigInt(balanceAfter) : null,
+      seq: seq ? Number(scvalToBigInt(seq)) : null,
       ledger_ts: ts ? Number(scvalToBigInt(ts)) : null,
       emitted_at: new Date().toISOString(),
       raw: JSON.stringify(

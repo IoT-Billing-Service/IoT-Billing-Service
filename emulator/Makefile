@@ -19,7 +19,7 @@ run-meter:
 
 test-all:
 	@echo "Running local end-to-end integration test..."
-	./scripts/test_e2e.sh
+	../scripts/test_e2e.sh
 
 clean:
 	@echo "Cleaning emulator artifacts..."

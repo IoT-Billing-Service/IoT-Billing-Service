@@ -37,22 +37,31 @@ originate from the expected source branch.
 
 ## Contract
 
-The contract (`contracts/src/lib.rs`) implements four core entrypoints:
+The contract (`contracts/src/lib.rs`) implements the core entrypoints:
 
-- `register_device(device_id, operator, rate_per_unit)` — assigns billing rules.
+- `register_device(device_id, device_pubkey, operator, rate_per_unit)` — assigns
+  billing rules and binds the device's ed25519 public key (32 bytes) for reading
+  signature verification. Requires auth from both `device_id` and `operator`.
 - `deposit_funds(device_id, amount)` — pre-funds escrow.
-- `submit_reading(device_id, delta_units, sig)` — verifies the device signature,
-  computes `cost = delta_units * rate`, deducts escrow, credits the operator,
-  and emits a `meter` event with data `(delta_units, total_cost, timestamp)`.
-- `settle_balance(operator, amount)` — operator settlement withdrawal.
+- `submit_reading(device_id, delta_units, data_seq, timestamp, sig)` — verifies
+  the device's ed25519 signature over
+  `"iot-billing-v1" || device_pubkey || data_seq || delta_units || timestamp`
+  (big-endian u64 fields), enforces `data_seq == last_seq + 1` for replay
+  protection, computes `cost = delta_units * rate`, deducts escrow, credits the
+  operator's earnings, and emits a `meter` event with data
+  `(delta_units, total_cost, balance_after, data_seq, ledger_timestamp)`.
+  Does not require transaction auth (out-of-band relay pattern).
+- `settle_balance(operator, amount)` — operator settlement withdrawal, limited
+  to `total_earned - total_settled` (runs on the operator's own signature).
+- `get_balance`, `get_operator_balance` — read-only queries.
 
 State storage keys (`contracts/src/storage.rs`):
 
-- `DeviceRegistration(address)` — operator, status, registered-at.
-- `TariffRate(address)` — stroops per unit.
-- `DepositBalance(address)` — escrow deposit per device.
-- `ReadingCounter(address)` — latest sequence + cumulative metric units (replay
+- `Device(Address)` — operator, device pubkey, status, registered-at.
+- `DepositBalance(Address)` — escrow deposit per device.
+- `ReadingCounter(Address)` — latest sequence + cumulative metric units (replay
   protection).
+- `OperatorBalance(Address)` — `total_earned` / `total_settled` for settlement.
 
 Run the suite:
 
@@ -63,7 +72,8 @@ cargo test --manifest-path contracts/Cargo.toml
 ## Backend indexer
 
 The backend polls the Soroban RPC `getEvents` endpoint for `meter` events from
-the deployed contract, decodes the `(delta_units, total_cost, timestamp)` data
+the deployed contract, decodes the
+`(delta_units, total_cost, balance_after, data_seq, ledger_timestamp)` data
 into a relational cache (SQLite locally, PostgreSQL in production), and serves:
 
 - `GET /api/devices/:id/metrics` — aggregated consumption over time.

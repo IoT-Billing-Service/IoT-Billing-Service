@@ -1,0 +1,74 @@
+name: Deploy Contract
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: 'Stellar network to deploy to'
+        required: true
+        default: 'testnet'
+        type: choice
+        options:
+          - testnet
+          - futurenet
+
+concurrency:
+  group: deploy-contract-${{ inputs.network }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build + deploy Soroban contract
+    runs-on: ubuntu-latest
+    environment:
+      name: contract-${{ inputs.network }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Check deployer credentials
+        id: creds
+        env:
+          DEPLOYER_SECRET: ${{ secrets.DEPLOYER_SECRET }}
+        run: |
+          if [ -n "$DEPLOYER_SECRET" ]; then
+            echo "credentials_ready=true" >> "$GITHUB_OUTPUT"
+            echo "Deployer secret configured: yes"
+          else
+            echo "credentials_ready=false" >> "$GITHUB_OUTPUT"
+            echo "Deployer secret configured: no"
+          fi
+
+      - name: Build release wasm
+        run: cargo build --manifest-path contracts/Cargo.toml --release --target wasm32-unknown-unknown
+
+      - name: Install stellar CLI
+        if: steps.creds.outputs.credentials_ready == 'true'
+        run: |
+          curl -sSL https://raw.githubusercontent.com/stellar/stellar-cli/v27.1.0/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Deploy contract to ${{ inputs.network }}
+        id: deploy
+        if: steps.creds.outputs.credentials_ready == 'true'
+        env:
+          DEPLOYER_SECRET: ${{ secrets.DEPLOYER_SECRET }}
+          NETWORK: ${{ inputs.network }}
+        run: |
+          WASM="contracts/target/wasm32-unknown-unknown/release/iot_billing_contract.wasm"
+          OUT=$(stellar contract deploy \
+            --source "$DEPLOYER_SECRET" \
+            --wasm "$WASM" \
+            --network "$NETWORK")
+          echo "CONTRACT_ID=$OUT" >> "$GITHUB_OUTPUT"
+          echo "Deployed contract: $OUT"
+
+      - name: Post-deploy note
+        if: steps.creds.outputs.credentials_ready != 'true'
+        run: |
+          echo "Skipping deployment: DEPLOYER_SECRET not configured."
+          echo "Add the DEPLOYER_SECRET repo secret (a funded testnet keypair) to enable."
