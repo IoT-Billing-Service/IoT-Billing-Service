@@ -43,13 +43,15 @@ The contract (`contracts/src/lib.rs`) implements four core entrypoints:
 - `deposit_funds(device_id, amount)` — pre-funds escrow.
 - `submit_reading(device_id, delta_units, sig)` — verifies the device signature,
   computes `cost = delta_units * rate`, deducts escrow, credits the operator,
-  and emits a `MeterBilled` event.
-- `withdraw(recipient, amount)` — operator settlement withdrawal.
+  and emits a `meter` event with data `(delta_units, total_cost, timestamp)`.
+- `settle_balance(operator, amount)` — operator settlement withdrawal.
 
 State storage keys (`contracts/src/storage.rs`):
 
-- `Device(address)` — operator, rate, status, deposit balance.
-- `Reading(address)` — latest sequence + cumulative metric units (replay
+- `DeviceRegistration(address)` — operator, status, registered-at.
+- `TariffRate(address)` — stroops per unit.
+- `DepositBalance(address)` — escrow deposit per device.
+- `ReadingCounter(address)` — latest sequence + cumulative metric units (replay
   protection).
 
 Run the suite:
@@ -60,9 +62,9 @@ cargo test --manifest-path contracts/Cargo.toml
 
 ## Backend indexer
 
-The backend polls the Soroban RPC `getEvents` endpoint for `MeterBilled`
-events from the deployed contract, decodes arguments into a relational cache
-(SQLite locally, PostgreSQL in production), and serves:
+The backend polls the Soroban RPC `getEvents` endpoint for `meter` events from
+the deployed contract, decodes the `(delta_units, total_cost, timestamp)` data
+into a relational cache (SQLite locally, PostgreSQL in production), and serves:
 
 - `GET /api/devices/:id/metrics` — aggregated consumption over time.
 - `GET /api/devices/:id/balance` — on-chain balance + pending units.

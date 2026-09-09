@@ -5,20 +5,30 @@
 //! Devices are registered with a fixed tariff rate (stroops per unit of work).
 //! Operators pre-fund an escrow deposit; each verified `submit_reading` deducts
 //! `delta_units * rate` from the deposit and credits the utility operator.
+//! `settle_balance` lets the operator withdraw settled funds.
 
 #![no_std]
 
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
 
-pub use crate::storage::{Device, Reading};
-pub use crate::types::Error;
+use crate::storage::{
+    deposit, reading, registration, tariff, verify_signature, write_deposit, write_reading,
+    write_registration, write_tariff, DepositBalance, DeviceRegistration, ReadingCounter,
+    TariffRate,
+};
+use crate::types::{DeviceStatus, Error};
 
 mod storage;
 mod test;
 mod types;
 
 /// Event topic symbols emitted by the contract.
-/// The backend indexer subscribes to `MeterBilled` and `FundsDeposited`.
+/// The backend indexer subscribes to the `meter` topic for billing events.
+pub const TOPIC_METER: &str = "meter";
+pub const TOPIC_DEVICE_REGISTERED: &str = "device_registered";
+pub const TOPIC_DEPOSIT: &str = "deposit";
+pub const TOPIC_SETTLEMENT: &str = "settlement";
+
 fn topic(env: &Env, name: &str) -> Symbol {
     Symbol::new(env, name)
 }
@@ -46,25 +56,25 @@ impl IotBillingContract {
         if rate_per_unit < 0 {
             return Err(Error::InvalidRate);
         }
-        if storage::device(&env, &device_id).is_some() {
+        if registration(&env, &device_id).is_some() {
             return Err(Error::AlreadyRegistered);
         }
 
-        storage::write_device(
+        write_registration(
             &env,
             &device_id,
-            &Device {
+            &DeviceRegistration {
                 operator: operator.clone(),
-                rate_per_unit,
-                balance: 0,
-                status: types::DeviceStatus::Active,
+                status: DeviceStatus::Active,
                 registered_at: env.ledger().timestamp(),
             },
         );
+        write_tariff(&env, &device_id, &TariffRate { rate_per_unit });
+        write_deposit(&env, &device_id, &DepositBalance { amount: 0 });
 
         env.events().publish(
             (
-                topic(&env, "DeviceRegistered"),
+                topic(&env, TOPIC_DEVICE_REGISTERED),
                 device_id,
                 operator,
                 rate_per_unit,
@@ -79,23 +89,20 @@ impl IotBillingContract {
     pub fn deposit_funds(env: Env, device_id: Address, amount: i128) -> Result<bool, Error> {
         device_id.require_auth();
 
-        let mut dev = storage::device(&env, &device_id).ok_or(Error::NotRegistered)?;
-
+        if registration(&env, &device_id).is_none() {
+            return Err(Error::NotRegistered);
+        }
         if amount <= 0 {
             return Err(Error::InvalidAmount);
         }
 
-        dev.balance = dev.balance.checked_add(amount).ok_or(Error::Overflow)?;
-        let new_balance = dev.balance;
-        storage::write_device(&env, &device_id, &dev);
+        let mut bal = deposit(&env, &device_id).unwrap_or(DepositBalance { amount: 0 });
+        bal.amount = bal.amount.checked_add(amount).ok_or(Error::Overflow)?;
+        let new_balance = bal.amount;
+        write_deposit(&env, &device_id, &bal);
 
         env.events().publish(
-            (
-                topic(&env, "FundsDeposited"),
-                device_id,
-                amount,
-                new_balance,
-            ),
+            (topic(&env, TOPIC_DEPOSIT), device_id, amount, new_balance),
             (),
         );
 
@@ -105,8 +112,10 @@ impl IotBillingContract {
     /// Submit a signed telemetry reading for a device.
     ///
     /// Verifies the device's signature over `(seq || delta_units || timestamp)`,
-    /// computes `cost = delta_units * rate_per_unit`, deducts from the deposit
-    /// and credits the operator. Emits a `MeterBilled` event for the indexer.
+    /// computes `total_cost = delta_units * rate_per_unit`, deducts from the
+    /// deposit and credits the operator. Emits a ticker event with topics
+    /// `[Symbol("meter"), device_id]` and data `(delta_units, total_cost,
+    /// timestamp)` for the indexer.
     pub fn submit_reading(
         env: Env,
         device_id: Address,
@@ -115,80 +124,87 @@ impl IotBillingContract {
     ) -> Result<i128, Error> {
         device_id.require_auth();
 
-        let mut dev = storage::device(&env, &device_id).ok_or(Error::NotRegistered)?;
-        let mut rdg = storage::reading(&env, &device_id).unwrap_or(Reading {
-            last_seq: 0,
-            last_ts: 0,
-            cumulative_units: 0,
-        });
-
-        // Replay protection: sequence must increase monotonically.
-        let current_seq = rdg.last_seq.checked_add(1).ok_or(Error::Overflow)?;
-
-        // Skeleton signature gate: a production build would recover the signer
-        // from a domain-separated hash via `env.crypto().recover_ed25519_ph`.
-        // Here we confirm the signature is a well-formed non-null 64-byte blob.
-        storage::verify_signature(&env, &device_id, &sig)?;
-        let _ = &current_seq;
-
+        if registration(&env, &device_id).is_none() {
+            return Err(Error::NotRegistered);
+        }
         if delta_units == 0 {
             return Err(Error::ZeroReading);
         }
 
-        let cost = (i128::from(delta_units))
-            .checked_mul(dev.rate_per_unit)
+        // Replay protection: sequence must increase monotonically.
+        let mut rdg = reading(&env, &device_id).unwrap_or(ReadingCounter {
+            last_seq: 0,
+            last_ts: 0,
+            cumulative_units: 0,
+        });
+        let current_seq = rdg.last_seq.checked_add(1).ok_or(Error::Overflow)?;
+
+        let tp = tariff(&env, &device_id).ok_or(Error::NotRegistered)?;
+        if tp.rate_per_unit < 0 {
+            return Err(Error::InvalidRate);
+        }
+
+        let total_cost = i128::from(delta_units)
+            .checked_mul(tp.rate_per_unit)
             .ok_or(Error::Overflow)?;
-        if cost > dev.balance {
+
+        let mut bal = deposit(&env, &device_id).ok_or(Error::NotRegistered)?;
+        if total_cost > bal.amount {
             return Err(Error::InsufficientBalance);
         }
 
-        dev.balance -= cost;
-        let balance_after = dev.balance;
+        // Skeleton signature gate: a production build would recover the signer
+        // from a domain-separated hash via `env.crypto().recover_ed25519_ph`.
+        verify_signature(&env, &device_id, &sig)?;
+
+        bal.amount -= total_cost;
+        write_deposit(&env, &device_id, &bal);
+
+        let now = env.ledger().timestamp();
         rdg.last_seq = current_seq;
-        rdg.last_ts = env.ledger().timestamp();
+        rdg.last_ts = now;
         rdg.cumulative_units += delta_units;
+        write_reading(&env, &device_id, &rdg);
 
-        storage::write_device(&env, &device_id, &dev);
-        storage::write_reading(&env, &device_id, &rdg);
-
+        // Typed billing event consumed by the backend indexer.
         env.events().publish(
-            (
-                topic(&env, "MeterBilled"),
-                device_id,
-                dev.operator.clone(),
-                delta_units,
-                dev.rate_per_unit,
-                cost,
-                balance_after,
-                current_seq,
-            ),
-            (),
+            (topic(&env, TOPIC_METER), device_id),
+            (delta_units, total_cost, now),
         );
 
-        Ok(cost)
+        Ok(total_cost)
     }
 
     /// Operator settlement withdrawal from escrow.
-    pub fn withdraw(env: Env, recipient: Address, amount: i128) -> Result<bool, Error> {
-        recipient.require_auth();
+    pub fn settle_balance(env: Env, operator: Address, amount: i128) -> Result<bool, Error> {
+        operator.require_auth();
+
         if amount <= 0 {
             return Err(Error::InvalidAmount);
         }
+
+        // A ledger-bound settlement ledger per operator would be deducted here;
+        // the skeleton authorizes and records the withdrawal event.
         env.events()
-            .publish((topic(&env, "Withdrawal"), recipient, amount), ());
+            .publish((topic(&env, TOPIC_SETTLEMENT), operator, amount), ());
+
         Ok(true)
     }
 
-    /// Read-only helpers
-    pub fn get_device(env: Env, device_id: Address) -> Option<Device> {
-        storage::device(&env, &device_id)
+    /// ---- Read-only helpers ----
+    pub fn get_registration(env: Env, device_id: Address) -> Option<DeviceRegistration> {
+        registration(&env, &device_id)
     }
 
-    pub fn get_reading(env: Env, device_id: Address) -> Option<Reading> {
-        storage::reading(&env, &device_id)
+    pub fn get_tariff(env: Env, device_id: Address) -> Option<TariffRate> {
+        tariff(&env, &device_id)
     }
 
     pub fn get_balance(env: Env, device_id: Address) -> Option<i128> {
-        storage::device(&env, &device_id).map(|d| d.balance)
+        deposit(&env, &device_id).map(|d| d.amount)
+    }
+
+    pub fn get_reading(env: Env, device_id: Address) -> Option<ReadingCounter> {
+        reading(&env, &device_id)
     }
 }

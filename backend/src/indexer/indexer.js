@@ -1,12 +1,15 @@
 import { Server } from '@stellar/stellar-sdk/rpc';
-import { scvalToBigInt, scvalToString } from './decode.js';
+import { scvalToBigInt, scvalToString, unwrapVec } from './decode.js';
+
+const METER_TOPIC = 'meter';
 
 /**
  * Soroban RPC event poller.
  *
- * Subscribes to `getEvents` filtered on the deployed contract's
- * `MeterBilled` / `FundsDeposited` topics and forwards decoded rows to the
- * cache layer.
+ * Polls `getEvents` for the deployed contract and forwards decoded `meter`
+ * billing events to the cache layer. Filtering on the leading topic is done
+ * application-side because the public testnet RPC only matches full topic
+ * lists, and the device address (second topic) varies per event.
  */
 export class EventIndexer {
   constructor({ rpcUrl, contractId, storage, pollIntervalMs, onEvent }) {
@@ -47,10 +50,9 @@ export class EventIndexer {
           {
             type: 'contract',
             contractIds: [this.contractId],
-            topics: [[{ type: 'scv_symbol', value: 'MeterBilled' }]],
           },
         ],
-        pagination: { limit: 200 },
+        limit: 200,
       });
 
       for (const event of res.events) {
@@ -66,25 +68,35 @@ export class EventIndexer {
   }
 
   async handleEvent(event) {
-    // Topic[1..]: device_id, operator, units, rate, cost, balance_after, seq
-    const [deviceId_t, operator_t, units_t, rate_t, cost_t, balance_t, seq_t] =
-      event.topic ?? [];
+    // Topics: [Symbol("meter"), device_id]
+    const topics = (event.topic ?? []).map(scvalToString);
+    if (topics[0] !== METER_TOPIC) {
+      return; // not a billing event
+    }
+    const deviceId = topics[1] ?? null;
+
+    // Data: (delta_units, total_cost, ledger_ts)
+    const data = unwrapVec(event.value) ?? [];
+    const [deltaUnits, cost, ts] = data;
 
     const row = {
-      topic: event.type,
+      topic: METER_TOPIC,
       event_id: String(event.id),
       contract_id: this.contractId,
       ledger: Number(event.ledger),
-      device_id: deviceId_t ? scvalToString(deviceId_t) : null,
-      operator: operator_t ? scvalToString(operator_t) : null,
-      units: units_t ? scvalToBigInt(units_t) : 0n,
-      rate_per_unit: rate_t ? scvalToBigInt(rate_t) : 0n,
-      cost: cost_t ? scvalToBigInt(cost_t) : 0n,
-      balance_after: balance_t ? scvalToBigInt(balance_t) : 0n,
-      seq: seq_t ? scvalToBigInt(seq_t) : 0n,
-      contract_event: event.value,
+      device_id: deviceId ? String(deviceId) : null,
+      operator: null,
+      units: deltaUnits ? scvalToBigInt(deltaUnits) : 0n,
+      rate_per_unit: 0n,
+      cost: cost ? scvalToBigInt(cost) : 0n,
+      balance_after: null,
+      seq: null,
+      ledger_ts: ts ? Number(scvalToBigInt(ts)) : null,
       emitted_at: new Date().toISOString(),
-      raw: JSON.stringify(event),
+      raw: JSON.stringify(
+        event,
+        (_k, v) => (typeof v === 'bigint' ? v.toString() : v),
+      ),
     };
 
     this.storage.ingest(row);
