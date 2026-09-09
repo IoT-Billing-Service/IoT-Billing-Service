@@ -1,0 +1,9 @@
+{
+  "device_type": "solar",
+  "device_id": "mock-solar-001",
+  "seq": 1,
+  "delta_units": 5,
+  "cumulative_units": 5,
+  "timestamp_ms": 1740000000000,
+  "signature": "1c1c1c1c2f5f4a0ab3f3b3c3d3e3f303132333435363738393a3b3c3d3e3f40"
+}

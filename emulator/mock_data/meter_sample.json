@@ -1,0 +1,9 @@
+{
+  "device_type": "meter",
+  "device_id": "mock-meter-001",
+  "seq": 12,
+  "delta_units": 1,
+  "cumulative_units": 18,
+  "timestamp_ms": 1740000006000,
+  "signature": "2c2c2c2c0d1e2f3a4b5c6d7e8f901a2b3c4d5e6f708192a3b4c5d6e7f8091a2"
+}

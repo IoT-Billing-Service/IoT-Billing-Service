@@ -1,0 +1,33 @@
+{
+  "name": "@iot-billing/backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Soroban event indexer, cache API, and WebSocket telemetry stream",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "lint": "eslint src",
+    "format:check": "prettier --check src",
+    "typecheck": "node --check src/**/*.js && echo 'JS typecheck ok'",
+    "test": "node --test src/**/*.test.js",
+    "db:migrate": "node src/db/migrate.js"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^12.2.0",
+    "better-sqlite3": "^11.0.0",
+    "express": "^4.19.0",
+    "ws": "^8.17.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "socket.io": "^4.7.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "prettier": "^3.2.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
