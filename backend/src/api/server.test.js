@@ -65,3 +65,14 @@ test('aggregate buckets by day and hour', () => {
   const hourly = store.aggregate('D1', { granularity: 'hour' });
   assert.equal(hourly.length, 1);
 });
+
+test('GET /api/devices returns ingested devices', async () => {
+  const port = server.address().port;
+  const res = await fetch(`http://127.0.0.1:${port}/api/devices`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(Array.isArray(body.devices));
+  assert.equal(body.devices.length, 1);
+  assert.equal(body.devices[0].device_id, 'D1');
+  assert.equal(body.devices[0].event_count, 1);
+});

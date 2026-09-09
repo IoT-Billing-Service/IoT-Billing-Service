@@ -1,19 +1,28 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'node:fs';
+import path from 'node:path';
+import createReadingsRouter from './readings.js';
 
 /**
  * REST + WebSocket API over the event cache.
  *
- * GET /api/devices/:id/metrics   — aggregated consumption over time
- * GET /api/devices/:id/balance   — latest on-chain balance + pending units
- * WS  /stream/telemetry          — live device heartbeats
+ * POST /api/readings              — device telemetry gateway (sig-verified relay)
+ * GET  /api/devices               — listed devices observed by the indexer
+ * GET  /api/devices/:id/metrics   — aggregated consumption over time
+ * GET  /api/devices/:id/balance   — latest on-chain balance + pending units
+ * WS   /stream/telemetry          — live device heartbeats
  */
-export function createApi({ storage, telemetryBus: _telemetryBus }) {
+export function createApi({ storage, telemetryBus: _telemetryBus, config }) {
   const app = express();
   app.use(cors());
   app.use(express.json());
 
   app.get('/health', (_req, res) => res.json({ ok: true }));
+
+  if (config) {
+    app.use(createReadingsRouter({ config, storage }));
+  }
 
   app.get('/api/devices/:id/metrics', (req, res) => {
     const { from, to, granularity } = req.query;
@@ -43,8 +52,16 @@ export function createApi({ storage, telemetryBus: _telemetryBus }) {
   });
 
   app.get('/api/devices', (_req, res) => {
-    res.json({ devices: [] }); // populated from device registry later
+    res.json({ devices: storage.listDevices() });
   });
+
+  if (config && config.frontendDist && fs.existsSync(config.frontendDist)) {
+    const dist = path.resolve(config.frontendDist);
+    app.use(express.static(dist));
+    app.get(/^(?!\/api|\/health|\/stream).*/, (_req, res) => {
+      res.sendFile(path.join(dist, 'index.html'));
+    });
+  }
 
   return app;
 }
