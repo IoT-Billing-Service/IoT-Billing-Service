@@ -15,6 +15,15 @@ export class CacheStore {
     this.db = new Database(dbPath || ':memory:');
     this.db.pragma('journal_mode = WAL');
     this.migrate();
+    this.migrateCompat();
+  }
+
+  migrateCompat() {
+    // Older local caches predate the ledger_ts column.
+    const cols = this.db.prepare('PRAGMA table_info(meter_events)').all();
+    if (!cols.some((c) => c.name === 'ledger_ts')) {
+      this.db.exec('ALTER TABLE meter_events ADD COLUMN ledger_ts INTEGER');
+    }
   }
 
   migrate() {
@@ -36,6 +45,7 @@ export class CacheStore {
         cost           INTEGER NOT NULL DEFAULT 0,
         balance_after  INTEGER,
         seq            INTEGER,
+        ledger_ts      INTEGER,
         emitted_at     TEXT,
         raw            TEXT
       );
@@ -67,12 +77,20 @@ export class CacheStore {
       .prepare(
         `INSERT OR IGNORE INTO meter_events
            (event_id, contract_id, ledger, device_id, operator, units,
-            rate_per_unit, cost, balance_after, seq, emitted_at, raw)
+            rate_per_unit, cost, balance_after, seq, ledger_ts, emitted_at, raw)
          VALUES
            (@event_id, @contract_id, @ledger, @device_id, @operator, @units,
-            @rate_per_unit, @cost, @balance_after, @seq, @emitted_at, @raw)`,
+            @rate_per_unit, @cost, @balance_after, @seq, @ledger_ts, @emitted_at, @raw)`,
       )
-      .run(row);
+      .run({
+        ...row,
+        ledger_ts: row.ledger_ts ?? null,
+        seq: row.seq ?? null,
+        balance_after: row.balance_after ?? null,
+        operator: row.operator ?? null,
+        rate_per_unit: row.rate_per_unit ?? 0,
+        emitted_at: row.emitted_at ?? null,
+      });
   }
 
   metricsFor(deviceId, { from, to } = {}) {
