@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+target/
+dist/
+test_snapshots/
+*.egg-info/
+__pycache__/
+*.pyc
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Data & logs
+backend/data/
+*.log
+*.db
+*.db-shm
+*.db-wal
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Emulator
+emulator/.emulator_sessions/
+emulator/.emulator.log

@@ -1,0 +1,50 @@
+name: Validate Promotion PRs
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches:
+      - staging
+      - main
+
+jobs:
+  validate_source_branch:
+    name: Validate source branch
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      contents: read
+
+    steps:
+      - name: Validate PR base and head
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const baseBranch = pr.base.ref;
+            const headBranch = pr.head.ref;
+
+            console.log(`PR targets: ${baseBranch}`);
+            console.log(`PR originates from: ${headBranch}`);
+
+            if (baseBranch === 'staging') {
+              if (headBranch !== 'dev') {
+                core.setFailed(
+                  `PRs targeting 'staging' must originate from 'dev'. ` +
+                  `This PR originates from '${headBranch}'.`
+                );
+                return;
+              }
+              console.log('Valid: PR correctly originates from dev -> staging');
+            }
+
+            if (baseBranch === 'main') {
+              if (headBranch !== 'staging') {
+                core.setFailed(
+                  `PRs targeting 'main' must originate from 'staging'. ` +
+                  `This PR originates from '${headBranch}'.`
+                );
+                return;
+              }
+              console.log('Valid: PR correctly originates from staging -> main');
+            }
