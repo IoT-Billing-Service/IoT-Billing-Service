@@ -61,7 +61,7 @@ jobs:
           ssh -i ~/.ssh/staging_key \
             -o StrictHostKeyChecking=yes \
             "${STAGING_USER}@${STAGING_SERVER_IP}" \
-            "cd ${STAGING_PATH} && git pull origin staging && npm ci && npm run build --workspace frontend && pm2 restart iot-billing-staging"
+            "cd ${STAGING_PATH} && git pull origin staging && npm ci && npm run build --workspace frontend && pm2 startOrReload ecosystem.config.cjs --only iot-billing-backend"
 
           echo "deploy_url=http://${STAGING_SERVER_IP}" >> "$GITHUB_OUTPUT"
 

@@ -50,8 +50,8 @@ export class EventIndexer {
   async poll() {
     try {
       let cursor = null;
-      let startLedger = this.storage.getLastLedger() + 1;
-      let lastProcessedLedger = this.storage.getLastLedger();
+      let startLedger = (await this.storage.getLastLedger()) + 1;
+      let lastProcessedLedger = await this.storage.getLastLedger();
 
       // Fetch all pages before advancing the watermark.
       while (true) {
@@ -84,12 +84,13 @@ export class EventIndexer {
         if (res.events.length < PAGE_LIMIT || !res.cursor) {
           // Advance watermark: if we processed any events use the last ledger,
           // otherwise jump to latestLedger to avoid re-fetching an empty range.
+          const lastLedger = await this.storage.getLastLedger();
           const newWatermark =
-            lastProcessedLedger > this.storage.getLastLedger()
+            lastProcessedLedger > lastLedger
               ? lastProcessedLedger
               : res.latestLedger;
-          if (newWatermark > this.storage.getLastLedger()) {
-            this.storage.setLastLedger(newWatermark);
+          if (newWatermark > lastLedger) {
+            await this.storage.setLastLedger(newWatermark);
           }
           break;
         }
@@ -127,13 +128,12 @@ export class EventIndexer {
       seq: seq ? Number(scvalToBigInt(seq)) : null,
       ledger_ts: ts ? Number(scvalToBigInt(ts)) : null,
       emitted_at: new Date().toISOString(),
-      raw: JSON.stringify(
-        event,
-        (_k, v) => (typeof v === 'bigint' ? v.toString() : v),
+      raw: JSON.stringify(event, (_k, v) =>
+        typeof v === 'bigint' ? v.toString() : v,
       ),
     };
 
-    this.storage.ingest(row);
+    await this.storage.ingest(row);
     this.onEvent(row);
   }
 }

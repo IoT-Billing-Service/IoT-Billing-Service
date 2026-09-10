@@ -13,11 +13,17 @@ export function scvalToString(val) {
       return null;
     }
   }
-  if (val.type === 'address' || val.type === 'scv_string' || val.type === 'symbol') {
+  if (
+    val.type === 'address' ||
+    val.type === 'scv_string' ||
+    val.type === 'symbol'
+  ) {
     return val.value ?? null;
   }
   const raw = val.value;
-  return typeof raw === 'string' || typeof raw === 'number' ? String(raw) : null;
+  return typeof raw === 'string' || typeof raw === 'number'
+    ? String(raw)
+    : null;
 }
 
 export function scvalToBigInt(val) {

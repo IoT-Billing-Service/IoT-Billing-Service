@@ -38,7 +38,7 @@ let keys;
 let port;
 
 before(async () => {
-  store = new CacheStore(':memory:');
+  store = await new CacheStore({ dbPath: ':memory:' }).ready();
   keys = deriveKeys();
   const app = createApi({
     storage: store,
@@ -50,9 +50,9 @@ before(async () => {
   port = server.address().port;
 });
 
-after(() => {
+after(async () => {
   server.close();
-  store.close();
+  await store.close();
 });
 
 test('POST /api/readings accepts a valid signed reading (202, not relayed)', async () => {
@@ -105,8 +105,6 @@ test('POST /api/readings rejects missing fields', async () => {
 });
 
 test('readings persisted to pending_readings for audit trail', async () => {
-  const result = store.db
-    .prepare('SELECT COUNT(*) AS n FROM pending_readings')
-    .get();
-  assert.equal(result.n, 1);
+  const rows = await store.pendingReadings();
+  assert.equal(rows.length, 1);
 });

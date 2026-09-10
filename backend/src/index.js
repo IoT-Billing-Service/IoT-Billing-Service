@@ -6,7 +6,10 @@ import { createApi, TelemetryBus } from './api/server.js';
 import { WebSocketHub } from './api/ws.js';
 
 // 1. Cache layer
-const storage = new CacheStore(config.dbPath);
+const storage = await new CacheStore({
+  dbPath: config.dbPath,
+  databaseUrl: config.databaseUrl,
+}).ready();
 
 // 2. Telemetry bus: indexer -> WS clients
 const bus = new TelemetryBus();
@@ -32,10 +35,10 @@ server.listen(config.httpPort, () => {
   console.log(`[api] listening on :${config.httpPort} (ws /stream/telemetry)`);
 });
 
-const shutdown = () => {
+const shutdown = async () => {
   indexer.stop();
   hub.close();
-  storage.close();
+  await storage.close();
   server.close(() => process.exit(0));
 };
 process.on('SIGINT', shutdown);
