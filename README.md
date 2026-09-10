@@ -39,10 +39,14 @@ originate from the expected source branch.
 
 The contract (`contracts/src/lib.rs`) implements the core entrypoints:
 
+- `__constructor(billing_token)` — required once at deploy time; configures the
+  SEP-41 Stellar Asset Contract that backs deposits and settlements.
 - `register_device(device_id, device_pubkey, operator, rate_per_unit)` — assigns
   billing rules and binds the device's ed25519 public key (32 bytes) for reading
   signature verification. Requires auth from both `device_id` and `operator`.
-- `deposit_funds(device_id, amount)` — pre-funds escrow.
+- `deposit_funds(device_id, amount)` — executes a real `transfer` of the
+  configured SEP-41 token from the device into contract custody, crediting the
+  device's escrow deposit ledger.
 - `submit_reading(device_id, delta_units, data_seq, timestamp, sig)` — verifies
   the device's ed25519 signature over
   `"iot-billing-v1" || device_pubkey || data_seq || delta_units || timestamp`
@@ -52,16 +56,23 @@ The contract (`contracts/src/lib.rs`) implements the core entrypoints:
   `(delta_units, total_cost, balance_after, data_seq, ledger_timestamp)`.
   Does not require transaction auth (out-of-band relay pattern).
 - `settle_balance(operator, amount)` — operator settlement withdrawal, limited
-  to `total_earned - total_settled` (runs on the operator's own signature).
+  to `total_earned - total_settled`; pays out by transferring earned SEP-41
+  token units out of contract custody to the operator (runs on the operator's
+  own signature).
 - `get_balance`, `get_operator_balance` — read-only queries.
 
 State storage keys (`contracts/src/storage.rs`):
 
+- `Token() — instance-stored SEP-41 billing token set by the constructor.
 - `Device(Address)` — operator, device pubkey, status, registered-at.
 - `DepositBalance(Address)` — escrow deposit per device.
 - `ReadingCounter(Address)` — latest sequence + cumulative metric units (replay
   protection).
 - `OperatorBalance(Address)` — `total_earned` / `total_settled` for settlement.
+
+Deploying against a live network therefore requires, first, an SEP-41 asset
+(e.g. `stellar contract asset deploy`) and deploy args
+`--init-fn __constructor --init-args '<address>'`.
 
 Run the suite:
 
@@ -74,11 +85,18 @@ cargo test --manifest-path contracts/Cargo.toml
 The backend polls the Soroban RPC `getEvents` endpoint for `meter` events from
 the deployed contract, decodes the
 `(delta_units, total_cost, balance_after, data_seq, ledger_timestamp)` data
-into a relational cache (SQLite locally, PostgreSQL in production), and serves:
+into a relational cache (SQLite locally via `DB_PATH`, PostgreSQL in production
+via `DATABASE_URL`), and serves:
 
+- `POST /api/readings` — signature-verified device telemetry gateway
+  (rate-limited; see `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX`).
 - `GET /api/devices/:id/metrics` — aggregated consumption over time.
 - `GET /api/devices/:id/balance` — on-chain balance + pending units.
-- `WS /stream/telemetry` — real-time device heartbeats for the dashboard.
+- `GET /api/devices` — devices observed by the indexer.
+- `WS /stream/telemetry` — real-time device heartbeats for the dashboard; a
+  client may subscribe to one device's channel with
+  `?device=<G...>`. Browser cross-origin access is gated by the `CORS_ORIGIN`
+  allowlist (empty = any origin).
 
 ```sh
 npm ci --workspace backend

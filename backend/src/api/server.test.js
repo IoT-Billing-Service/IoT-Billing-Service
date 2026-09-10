@@ -8,8 +8,8 @@ let store;
 let server;
 
 before(async () => {
-  store = new CacheStore(':memory:');
-  store.ingest({
+  store = await new CacheStore({ dbPath: ':memory:' }).ready();
+  await store.ingest({
     event_id: 'e1',
     contract_id: 'c1',
     ledger: 100,
@@ -28,9 +28,9 @@ before(async () => {
   await new Promise((r) => server.listen(0, r));
 });
 
-after(() => {
+after(async () => {
   server.close();
-  store.close();
+  await store.close();
 });
 
 test('GET /api/devices/D1/metrics returns series', async () => {
@@ -59,10 +59,10 @@ test('GET /health returns ok', async () => {
   assert.deepEqual(await res.json(), { ok: true });
 });
 
-test('aggregate buckets by day and hour', () => {
-  const daily = store.aggregate('D1', { granularity: 'day' });
+test('aggregate buckets by day and hour', async () => {
+  const daily = await store.aggregate('D1', { granularity: 'day' });
   assert.equal(daily.length, 1);
-  const hourly = store.aggregate('D1', { granularity: 'hour' });
+  const hourly = await store.aggregate('D1', { granularity: 'hour' });
   assert.equal(hourly.length, 1);
 });
 

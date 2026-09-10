@@ -4,19 +4,22 @@
 //!
 //! Devices are registered with a fixed tariff rate (stroops per unit of work)
 //! and an ed25519 public key used to authorize telemetry. Operators pre-fund an
-//! escrow deposit; each signature-verified `submit_reading` deducts
-//! `delta_units * rate` from the deposit and credits the utility operator's
-//! settlement ledger. `settle_balance` lets the operator withdraw *earned* funds
-//! only — it cannot touch device deposits.
+//! escrow deposit *in the contract's SEP-41 token* (moved from the device into
+//! contract custody on `deposit_funds`); each signature-verified
+//! `submit_reading` deducts `delta_units * rate` from the deposit and credits
+//! the utility operator's settlement ledger. `settle_balance` transfers earned
+//! funds back out to the operator in that same token — it cannot touch device
+//! deposits.
 
 #![no_std]
 
+use soroban_sdk::token;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
 
 use crate::storage::{
-    deposit, read_operator_balance, reading, registration, tariff, verify_signature, write_deposit,
-    write_operator_balance, write_reading, write_registration, write_tariff, DepositBalance,
-    DeviceRegistration, OperatorBalance, ReadingCounter, TariffRate,
+    deposit, read_operator_balance, reading, registration, set_token, tariff, token,
+    verify_signature, write_deposit, write_operator_balance, write_reading, write_registration,
+    write_tariff, DepositBalance, DeviceRegistration, OperatorBalance, ReadingCounter, TariffRate,
 };
 use crate::types::{DeviceStatus, Error};
 
@@ -40,6 +43,12 @@ pub struct IotBillingContract;
 
 #[contractimpl]
 impl IotBillingContract {
+    /// Configure the contract with the SEP-41 token used for deposits and
+    /// settlements. Invoked once at deployment.
+    pub fn __constructor(env: Env, billing_token: Address) {
+        set_token(&env, &billing_token);
+    }
+
     /// Register a hardware device with a billing rate.
     ///
     /// # Arguments
@@ -91,6 +100,11 @@ impl IotBillingContract {
     }
 
     /// Pre-fund the escrow deposit balance for a device.
+    ///
+    /// Transfers `amount` of the contract's SEP-41 billing token from the
+    /// device into contract custody, then credits the device's internal deposit
+    /// ledger. The device must authorize both the escrow entry and the token
+    /// transfer (same signature covers `device_id.require_auth()` in both).
     pub fn deposit_funds(env: Env, device_id: Address, amount: i128) -> Result<bool, Error> {
         device_id.require_auth();
 
@@ -104,6 +118,14 @@ impl IotBillingContract {
         let mut bal = deposit(&env, &device_id).unwrap_or(DepositBalance { amount: 0 });
         bal.amount = bal.amount.checked_add(amount).ok_or(Error::Overflow)?;
         let new_balance = bal.amount;
+
+        let billing_token = token(&env).ok_or(Error::NotInitialized)?;
+        token::Client::new(&env, &billing_token).transfer(
+            &device_id,
+            &env.current_contract_address(),
+            &amount,
+        );
+
         write_deposit(&env, &device_id, &bal);
 
         env.events().publish(
@@ -207,7 +229,10 @@ impl IotBillingContract {
     }
 
     /// Operator settlement withdrawal — moves *earned* fees out of the operator
-    /// settlement ledger. Device deposits are never withdrawable by operators.
+    /// settlement ledger and pays them in the contract's SEP-41 billing token.
+    /// Device deposits are never withdrawable by operators. If the contract's
+    /// token custody is drained below the requested amount, the transfer fails
+    /// and the entire transaction reverts.
     pub fn settle_balance(env: Env, operator: Address, amount: i128) -> Result<bool, Error> {
         operator.require_auth();
 
@@ -220,6 +245,13 @@ impl IotBillingContract {
         if amount > withdrawable {
             return Err(Error::InsufficientEarnings);
         }
+
+        let billing_token = token(&env).ok_or(Error::NotInitialized)?;
+        token::Client::new(&env, &billing_token).transfer(
+            &env.current_contract_address(),
+            &operator,
+            &amount,
+        );
 
         bal.total_settled = bal
             .total_settled

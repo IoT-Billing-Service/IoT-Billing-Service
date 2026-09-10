@@ -14,8 +14,8 @@ interface Sample {
   cost: number;
 }
 
-export function LiveStream() {
-  const event = useTelemetry();
+export function LiveStream({ deviceId }: { deviceId?: string }) {
+  const event = useTelemetry(undefined, deviceId);
   const [samples, setSamples] = useState<Sample[]>([]);
 
   useEffect(() => {
