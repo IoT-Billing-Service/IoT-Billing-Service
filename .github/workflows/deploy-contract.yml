@@ -11,6 +11,10 @@ on:
         options:
           - testnet
           - futurenet
+      billing-token:
+        description: 'SEP-41 token contract ID to configure via __constructor (optional)'
+        required: false
+        type: string
 
 concurrency:
   group: deploy-contract-${{ inputs.network }}
@@ -59,12 +63,21 @@ jobs:
         env:
           DEPLOYER_SECRET: ${{ secrets.DEPLOYER_SECRET }}
           NETWORK: ${{ inputs.network }}
+          BILLING_TOKEN: ${{ inputs.billing-token }}
         run: |
           WASM="target/wasm32v1-none/release/iot_billing_contract.wasm"
-          OUT=$(stellar contract deploy \
-            --source "$DEPLOYER_SECRET" \
-            --wasm "$WASM" \
-            --network "$NETWORK")
+          if [ -n "$BILLING_TOKEN" ]; then
+            OUT=$(stellar contract deploy \
+              --source "$DEPLOYER_SECRET" \
+              --wasm "$WASM" \
+              --network "$NETWORK" \
+              -- --billing-token "$BILLING_TOKEN")
+          else
+            OUT=$(stellar contract deploy \
+              --source "$DEPLOYER_SECRET" \
+              --wasm "$WASM" \
+              --network "$NETWORK")
+          fi
           echo "CONTRACT_ID=$OUT" >> "$GITHUB_OUTPUT"
           echo "Deployed contract: $OUT"
 

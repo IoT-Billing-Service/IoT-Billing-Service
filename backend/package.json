@@ -21,6 +21,8 @@
     "ws": "^8.17.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",
+    "express-rate-limit": "^7.4.0",
+    "pg": "^8.13.0",
     "socket.io": "^4.7.0"
   },
   "devDependencies": {

@@ -5,6 +5,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use ed25519_dalek::{Signer, SigningKey};
 use soroban_sdk::testutils::{Address as _, Ledger as _};
+use soroban_sdk::token::{StellarAssetClient, TokenClient};
 use soroban_sdk::{Address, BytesN, Env};
 
 use crate::storage::OperatorBalance;
@@ -13,6 +14,7 @@ use crate::{IotBillingContract, IotBillingContractClient};
 
 const RATE: i128 = 10; // stroops per unit
 const FUNDS: i128 = 1_000_000;
+const MINT: i128 = i128::MAX;
 const TS: u64 = 1_700_000_000;
 /// Must match `storage::SIGNING_DOMAIN`.
 const SIGNING_DOMAIN: &[u8] = b"iot-billing-v1";
@@ -21,6 +23,8 @@ struct TestCtx {
     env: Env,
     device: Address,
     operator: Address,
+    contract_id: Address,
+    token: Address,
     client: IotBillingContractClient<'static>,
     pubkey: [u8; 32],
     sk: SigningKey,
@@ -51,12 +55,19 @@ fn setup() -> TestCtx {
     let sk = signer(1);
     let device = Address::generate(&env);
     let operator = Address::generate(&env);
-    let contract = env.register(IotBillingContract, ());
+    let admin = Address::generate(&env);
+    let token = env.register_stellar_asset_contract_v2(admin).address();
+    let contract = env.register(IotBillingContract, (&token,));
     let client = IotBillingContractClient::new(&env, &contract);
+    // Give the device real SEP-41 token units so `deposit_funds` actually
+    // moves funds out of its SAC balance into contract custody.
+    StellarAssetClient::new(&env, &token).mint(&device, &MINT);
     TestCtx {
         env,
         device,
         operator,
+        contract_id: contract,
+        token,
         client,
         pubkey: pubkey_of(&sk),
         sk,
@@ -164,6 +175,12 @@ fn deposits_funds() {
 
     ctx.client.deposit_funds(&ctx.device, &FUNDS);
     assert_eq!(ctx.client.get_balance(&ctx.device).unwrap(), FUNDS);
+
+    // Real SEP-41 custody: FUNDS leaves the device wallet...
+    let tokens = TokenClient::new(&ctx.env, &ctx.token);
+    assert_eq!(tokens.balance(&ctx.device), MINT - FUNDS);
+    // ...and lands in the billing contract's own token balance.
+    assert_eq!(tokens.balance(&ctx.contract_id), FUNDS);
 }
 
 #[test]
@@ -400,6 +417,12 @@ fn operator_settles_earned_funds() {
     );
     // Device escrow is untouched by operator settlement.
     assert_eq!(ctx.client.get_balance(&ctx.device).unwrap(), FUNDS - 1000);
+
+    // Real SEP-41 custody: the settlement moved token units out of the
+    // contract into the operator's wallet.
+    let tokens = TokenClient::new(&ctx.env, &ctx.token);
+    assert_eq!(tokens.balance(&ctx.contract_id), FUNDS - 1000 + 500);
+    assert_eq!(tokens.balance(&ctx.operator), 500);
 }
 
 #[test]
@@ -446,7 +469,8 @@ fn denies_unauthenticated_registration() {
     let sk = signer(1);
     let device = Address::generate(&env);
     let operator = Address::generate(&env);
-    let contract = env.register(IotBillingContract, ());
+    let token = Address::generate(&env);
+    let contract = env.register(IotBillingContract, (&token,));
     let client = IotBillingContractClient::new(&env, &contract);
 
     let res = client.try_register_device(
@@ -463,7 +487,8 @@ fn denies_unauthenticated_settlement() {
     // No mock_all_auths: operator.require_auth() must reject the call.
     let env = Env::default();
     let operator = Address::generate(&env);
-    let contract = env.register(IotBillingContract, ());
+    let token = Address::generate(&env);
+    let contract = env.register(IotBillingContract, (&token,));
     let client = IotBillingContractClient::new(&env, &contract);
 
     let res = client.try_settle_balance(&operator, &5000);

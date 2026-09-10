@@ -13,6 +13,11 @@ const config = {
   httpPort: Number(process.env.HTTP_PORT || 8080),
   wsPort: Number(process.env.WS_PORT || 8080),
   frontendDist: process.env.FRONTEND_DIST || '../frontend/dist',
+  // Comma-separated browser origins allowed to call the API (empty = any).
+  corsOrigin: process.env.CORS_ORIGIN || '',
+  // Ingest throttle for POST /api/readings.
+  rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000),
+  rateLimitMax: Number(process.env.RATE_LIMIT_MAX || 60),
   get pollEnabled() {
     return Boolean(this.contractId);
   },
