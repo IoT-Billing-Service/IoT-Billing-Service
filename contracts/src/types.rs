@@ -16,6 +16,7 @@ pub enum Error {
     InvalidSequence = 9,
     InsufficientEarnings = 10,
     DeviceNotActive = 11,
+    NotInitialized = 12,
 }
 
 /// Operational status of a registered device.

@@ -52,11 +52,26 @@ pub struct OperatorBalance {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StorageKey {
+    /// Singular SEP-41 billing token configured at construction.
+    Token,
     DeviceRegistration(Address),
     TariffRate(Address),
     DepositBalance(Address),
     ReadingCounter(Address),
     OperatorBalance(Address),
+}
+
+/// Initialized exactly once by the contract constructor with the SEP-41 Stellar
+/// Asset Contract that backs deposits and settlements. Stored in instance
+/// storage because it is immutable configuration, not per-entity state.
+pub fn set_token(env: &Env, token: &Address) {
+    env.storage().instance().set(&StorageKey::Token, token);
+}
+
+pub fn token(env: &Env) -> Option<Address> {
+    env.storage()
+        .instance()
+        .get::<StorageKey, Address>(&StorageKey::Token)
 }
 
 /// Default persistent-TTL window. Entries are refreshed on every write; the

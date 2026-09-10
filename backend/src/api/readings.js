@@ -75,7 +75,13 @@ export function createReadingsRouter({ config, storage }) {
       signature: signatureHex,
     } = req.body ?? {};
 
-    const missing = ['device_pubkey', 'seq', 'delta_units', 'timestamp_ms', 'signature']
+    const missing = [
+      'device_pubkey',
+      'seq',
+      'delta_units',
+      'timestamp_ms',
+      'signature',
+    ]
       .filter((k) => req.body?.[k] === undefined)
       .join(', ');
     if (missing) {
@@ -128,7 +134,7 @@ export function createReadingsRouter({ config, storage }) {
           seq: seqN,
           timestampMs: tsN,
         });
-        storage.recordPendingReading({
+        await storage.recordPendingReading({
           device_id: deviceAddress,
           device_pubkey: devicePubkeyHex,
           seq: seqN,
@@ -136,14 +142,18 @@ export function createReadingsRouter({ config, storage }) {
           timestamp_ms: tsN,
           tx_hash: txHash,
         });
-        return res.json({ ok: true, tx_hash: txHash, device_id: deviceAddress });
+        return res.json({
+          ok: true,
+          tx_hash: txHash,
+          device_id: deviceAddress,
+        });
       } catch (e) {
         console.error('[gateway] relay failed:', e.message);
         return res.status(502).json({ error: `relay failed: ${e.message}` });
       }
     }
 
-    storage.recordPendingReading({
+    await storage.recordPendingReading({
       device_id: deviceAddress,
       device_pubkey: devicePubkeyHex,
       seq: seqN,
